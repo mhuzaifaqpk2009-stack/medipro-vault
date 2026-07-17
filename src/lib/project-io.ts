@@ -133,7 +133,7 @@ export async function writeToHandle(
   }
   if (handle.kind === "fsa" && handle.handle) {
     const writable = await handle.handle.createWritable();
-    await writable.write(bytes);
+    await writable.write(bytes as unknown as BufferSource);
     await writable.close();
     return;
   }
