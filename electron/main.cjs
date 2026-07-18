@@ -1,22 +1,25 @@
 /**
- * MediCore — Electron main process.
- * Loads the built Vite output. Provides native Save/Open dialogs and file I/O
- * via IPC bridged through preload.cjs.
- *
- * Build & package (from project root):
- *   npm i --save-dev electron @electron/packager
- *   npx vite build
- *   npx @electron/packager . "MediCore" --platform=win32 --arch=x64 \
- *     --out=electron-release --overwrite --ignore='^/src' --ignore='^/public'
+ * MediCore — Electron main.
+ * Owns the BrowserWindow, native dialogs, atomic file I/O, dirty-state
+ * tracking, close-guard prompt, and crash-recovery snapshots.
  */
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
+const fssync = require("fs");
 
 const isDev = !app.isPackaged;
-
 let mainWindow = null;
 
+/* -------- state -------- */
+let dirty = false;               // renderer-reported unsaved state
+let forceQuit = false;           // set once user confirmed close/quit
+let pendingCloseSource = null;   // "close" | "quit"
+
+const RECOVERY_DIR = path.join(app.getPath("userData"), "recovery");
+try { fssync.mkdirSync(RECOVERY_DIR, { recursive: true }); } catch {}
+
+/* -------- window -------- */
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -42,11 +45,23 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
-  // Prevent navigation to external URLs.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+  // Word-like close guard.
+  mainWindow.on("close", (e) => {
+    if (forceQuit || !dirty) return;
+    e.preventDefault();
+    handleUnsavedPrompt("close");
+  });
 
   Menu.setApplicationMenu(null);
 }
+
+app.on("before-quit", (e) => {
+  if (forceQuit || !dirty) return;
+  e.preventDefault();
+  handleUnsavedPrompt("quit");
+});
 
 app.whenReady().then(createWindow);
 app.on("window-all-closed", () => {
@@ -56,25 +71,49 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-/* -------- IPC handlers -------- */
+/* -------- unsaved prompt (native) -------- */
+async function handleUnsavedPrompt(source) {
+  if (pendingCloseSource) return;
+  pendingCloseSource = source;
+  const choice = await showUnsavedDialog();
+  if (choice === "cancel") { pendingCloseSource = null; return; }
+  if (choice === "discard") {
+    forceQuit = true;
+    pendingCloseSource = null;
+    if (mainWindow) mainWindow.destroy();
+    app.quit();
+    return;
+  }
+  // save → ask renderer to save, wait for result via IPC "app:save-completed"
+  if (mainWindow) mainWindow.webContents.send("app:save-and-quit");
+}
 
-ipcMain.handle("dialog:save", async (_e, options) => {
-  return dialog.showSaveDialog(mainWindow, options ?? {});
-});
+async function showUnsavedDialog(opts = {}) {
+  const res = await dialog.showMessageBox(mainWindow, {
+    type: "warning",
+    buttons: ["Save", "Don't Save", "Cancel"],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    title: opts.title || "MediCore",
+    message: opts.message || "Do you want to save changes to this project?",
+    detail: opts.detail || "Your changes will be lost if you don't save them.",
+  });
+  return ["save", "discard", "cancel"][res.response];
+}
 
-ipcMain.handle("dialog:open", async (_e, options) => {
-  return dialog.showOpenDialog(mainWindow, options ?? {});
-});
-
-ipcMain.handle("dialog:message", async (_e, options) => {
-  return dialog.showMessageBox(mainWindow, options ?? {});
-});
+/* -------- IPC -------- */
+ipcMain.handle("dialog:save", (_e, o) => dialog.showSaveDialog(mainWindow, o ?? {}));
+ipcMain.handle("dialog:open", (_e, o) => dialog.showOpenDialog(mainWindow, o ?? {}));
+ipcMain.handle("dialog:message", (_e, o) => dialog.showMessageBox(mainWindow, o ?? {}));
+ipcMain.handle("dialog:unsaved", (_e, o) => showUnsavedDialog(o ?? {}));
 
 ipcMain.handle("project:read", async (_e, filePath) => {
   const buf = await fs.readFile(filePath);
   return new Uint8Array(buf);
 });
 
+// Atomic write: <path>.tmp then rename.
 ipcMain.handle("project:write", async (_e, filePath, bytes) => {
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, Buffer.from(bytes));
@@ -82,4 +121,59 @@ ipcMain.handle("project:write", async (_e, filePath, bytes) => {
   return true;
 });
 
-ipcMain.handle("system:userData", async () => app.getPath("userData"));
+ipcMain.handle("app:setDirty", (_e, v) => { dirty = !!v; return true; });
+
+ipcMain.handle("app:save-completed", (_e, ok) => {
+  if (ok) {
+    dirty = false;
+    forceQuit = true;
+    const src = pendingCloseSource;
+    pendingCloseSource = null;
+    if (mainWindow) mainWindow.destroy();
+    if (src === "quit") app.quit();
+  } else {
+    // Save cancelled/failed → abort close.
+    pendingCloseSource = null;
+  }
+  return true;
+});
+
+/* -------- recovery snapshots -------- */
+ipcMain.handle("recovery:write", async (_e, id, snapshot) => {
+  const p = path.join(RECOVERY_DIR, `${sanitize(id)}.json`);
+  const tmp = `${p}.tmp`;
+  await fs.writeFile(tmp, snapshot);
+  await fs.rename(tmp, p);
+  return true;
+});
+ipcMain.handle("recovery:clear", async (_e, id) => {
+  const p = path.join(RECOVERY_DIR, `${sanitize(id)}.json`);
+  try { await fs.unlink(p); } catch {}
+  return true;
+});
+ipcMain.handle("recovery:list", async () => {
+  try {
+    const files = await fs.readdir(RECOVERY_DIR);
+    const out = [];
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const full = path.join(RECOVERY_DIR, f);
+      try {
+        const raw = await fs.readFile(full, "utf8");
+        const j = JSON.parse(raw);
+        const st = await fs.stat(full);
+        out.push({ id: j.id, name: j.name, fsPath: j.fsPath, savedAt: st.mtimeMs });
+      } catch {}
+    }
+    return out;
+  } catch { return []; }
+});
+ipcMain.handle("recovery:read", async (_e, id) => {
+  const p = path.join(RECOVERY_DIR, `${sanitize(id)}.json`);
+  const raw = await fs.readFile(p, "utf8");
+  return JSON.parse(raw);
+});
+
+ipcMain.handle("system:userData", () => app.getPath("userData"));
+
+function sanitize(s) { return String(s).replace(/[^\w.-]+/g, "_"); }
