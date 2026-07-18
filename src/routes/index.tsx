@@ -54,7 +54,7 @@ import {
   peekEncrypted,
   WrongPasswordError,
 } from "@/lib/project-codec";
-import { openProjectFromBytes } from "@/store/project-store";
+import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
 import type { ProjectData } from "@/domain/schema";
 
 export const Route = createFileRoute("/")({
@@ -91,7 +91,26 @@ function ProjectManagerPage() {
 
   useEffect(() => {
     setRecents(readRecents());
-  }, []);
+    // Crash recovery: offer to restore any orphaned snapshots.
+    (async () => {
+      const { listRecovery, readRecovery, clearRecovery } = await import("@/lib/electron-bridge");
+      const entries = await listRecovery();
+      for (const e of entries) {
+        if (window.confirm(`Recover unsaved changes for "${e.name}"?\n\nLast auto-snapshot: ${new Date(e.savedAt).toLocaleString()}\n\nOK to recover, Cancel to discard.`)) {
+          const snap = await readRecovery(e.id);
+          if (snap?.data) {
+            const handle = e.fsPath ? { kind: "electron" as const, name: e.name, path: e.fsPath, fsPath: e.fsPath } : null;
+            useProjectStore.getState().load(snap.data as any, handle);
+            useProjectStore.getState().markDirty();
+            toast.success(`Recovered "${e.name}" — save to persist`);
+            navigate({ to: "/app" });
+            return;
+          }
+        }
+        await clearRecovery(e.id);
+      }
+    })();
+  }, [navigate]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
