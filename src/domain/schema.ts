@@ -14,6 +14,8 @@ export interface PharmacySettings {
   currencySymbol: string;
   receiptFooter: string;
   receiptLogoDataUrl?: string;
+  billFooter1: string;
+  billFooter2: string;
   autoSaveEnabled: boolean;
   autoSaveIntervalMinutes: 1 | 2 | 5 | 10 | 15;
   theme: "light" | "dark";
@@ -158,6 +160,8 @@ export function createEmptyProject(name: string, passwordProtected: boolean): Pr
       currency: "USD",
       currencySymbol: "$",
       receiptFooter: "Thank you for your purchase",
+      billFooter1: "Thanks for purchasing",
+      billFooter2: "Please check & verify your medicines. Medicines will be returned within 15 days. Fridge items are not returnable. Pharmacy is not responsible after this period.",
       autoSaveEnabled: true,
       autoSaveIntervalMinutes: 5,
       theme: "light",

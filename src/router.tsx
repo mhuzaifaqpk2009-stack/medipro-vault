@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { createRouter } from "@tanstack/react-router";
+import { createRouter, createHashHistory } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
 let queryClient: QueryClient | undefined;
@@ -14,6 +14,7 @@ export function getRouter() {
     context: { queryClient: getQueryClient() },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    history: createHashHistory(),
   });
 }
 

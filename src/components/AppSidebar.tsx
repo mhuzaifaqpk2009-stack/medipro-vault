@@ -11,6 +11,7 @@ import {
   BarChart3,
   Settings,
   Stethoscope,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +30,7 @@ import {
 const primary = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart },
+  { to: "/app/bills", label: "Bills", icon: Receipt },
   { to: "/app/medicines", label: "Medicines", icon: Pill },
   { to: "/app/inventory", label: "Inventory", icon: Boxes },
 ] as const;

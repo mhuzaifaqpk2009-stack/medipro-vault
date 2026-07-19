@@ -3,485 +3,339 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  FolderOpen,
-  Plus,
-  Search,
-  Lock,
-  Clock,
-  Trash2,
-  Pencil,
-  Copy,
-  Stethoscope,
-  ShieldCheck,
-  Zap,
+  FolderOpen, Plus, Lock, Stethoscope, ShieldCheck, Zap, LogIn, Sparkles,
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-import { CreateProjectDialog } from "@/components/CreateProjectDialog";
-import { PasswordDialog } from "@/components/PasswordDialog";
-import { RenameDialog } from "@/components/RenameDialog";
-
-import {
-  readRecents,
-  removeRecent,
-  renameRecent,
-  upsertRecent,
-  type RecentProject,
-} from "@/lib/recents";
+import { Label } from "@/components/ui/label";
 import { pickOpenFile, pickSaveFile, writeToHandle } from "@/lib/project-io";
-import {
-  decodeProject,
-  encodeProject,
-  peekEncrypted,
-  WrongPasswordError,
-} from "@/lib/project-codec";
+import { decodeProject, encodeProject, WrongPasswordError } from "@/lib/project-codec";
 import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
-import type { ProjectData } from "@/domain/schema";
+import {
+  readInstall, writeInstall, updateInstall, hashPassword, verifyPassword, clearInstall,
+} from "@/lib/install";
+import { createEmptyProject, type ProjectData } from "@/domain/schema";
+import { upsertRecent } from "@/lib/recents";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "MediCore — Projects" },
-      {
-        name: "description",
-        content: "Open or create a pharmacy project. Everything is stored locally.",
-      },
+      { title: "MediCore — Sign in" },
+      { name: "description", content: "Local pharmacy management, fully offline." },
     ],
   }),
-  component: ProjectManagerPage,
+  component: LandingPage,
 });
 
-function ProjectManagerPage() {
+type Screen = "setup" | "login" | "not-found";
+
+function LandingPage() {
   const navigate = useNavigate();
-  const [recents, setRecents] = useState<RecentProject[]>([]);
-  const [query, setQuery] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [screen, setScreen] = useState<Screen>(() =>
+    readInstall() ? "login" : "setup",
+  );
 
-  const [pwState, setPwState] = useState<{
-    open: boolean;
-    bytes?: Uint8Array;
-    handle?: any;
-    name: string;
-    error?: string;
-    busy?: boolean;
-    onCancel?: () => void;
-  }>({ open: false, name: "" });
+  // Setup form
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [renameTarget, setRenameTarget] = useState<RecentProject | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<RecentProject | null>(null);
+  const install = useMemo(() => readInstall(), [screen]);
+  const inElectron = typeof window !== "undefined" && !!(window as any).medicore;
 
-  useEffect(() => {
-    setRecents(readRecents());
-    // Crash recovery: offer to restore any orphaned snapshots.
-    (async () => {
-      const { listRecovery, readRecovery, clearRecovery } = await import("@/lib/electron-bridge");
-      const entries = await listRecovery();
-      for (const e of entries) {
-        if (window.confirm(`Recover unsaved changes for "${e.name}"?\n\nLast auto-snapshot: ${new Date(e.savedAt).toLocaleString()}\n\nOK to recover, Cancel to discard.`)) {
-          const snap = await readRecovery(e.id);
-          if (snap?.data) {
-            const handle = e.fsPath ? { kind: "electron" as const, name: e.name, path: e.fsPath, fsPath: e.fsPath } : null;
-            useProjectStore.getState().load(snap.data as any, handle);
-            useProjectStore.getState().markDirty();
-            toast.success(`Recovered "${e.name}" — save to persist`);
-            navigate({ to: "/app" });
-            return;
-          }
-        }
-        await clearRecovery(e.id);
+  async function doSetup() {
+    setError(null);
+    if (!name.trim()) return setError("Pharmacy name is required");
+    if (!address.trim()) return setError("Address is required");
+    if (pw.length < 4) return setError("Password must be at least 4 characters");
+    if (pw !== pw2) return setError("Passwords do not match");
+    setBusy(true);
+    try {
+      const handle = await pickSaveFile(name.trim());
+      if (!handle) { setBusy(false); return; }
+      const project = createEmptyProject(name.trim(), true);
+      project.settings.pharmacyName = name.trim();
+      project.settings.address = address.trim();
+      const bytes = await encodeProject(project as unknown as Record<string, unknown>, pw);
+      await writeToHandle(handle, bytes);
+
+      const { saltHex, hashHex } = await hashPassword(pw);
+      writeInstall({
+        setupDone: true,
+        pharmacyName: name.trim(),
+        address: address.trim(),
+        saltHex, hashHex,
+        lastFsPath: handle.fsPath,
+        lastPath: handle.path,
+      });
+      useProjectStore.getState().load(project, handle, pw);
+      upsertRecent({
+        name: project.meta.name, path: handle.path,
+        fsPath: handle.fsPath, encrypted: true,
+      });
+      toast.success("Pharmacy created");
+      navigate({ to: "/app" });
+    } catch (e: any) {
+      setError(e?.message ?? "Setup failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function tryLoad(fsPath: string, password: string): Promise<ProjectData | "missing" | "wrong"> {
+    try {
+      const bytes: Uint8Array = await (window as any).medicore.project.readFile(fsPath);
+      try {
+        const data = await openProjectFromBytes(
+          bytes,
+          { kind: "electron", name: fsPath.split(/[\\/]/).pop() || fsPath, path: fsPath, fsPath },
+          password,
+        );
+        return data;
+      } catch (e) {
+        if (e instanceof WrongPasswordError) return "wrong";
+        return "missing";
       }
-    })();
-  }, [navigate]);
+    } catch {
+      return "missing";
+    }
+  }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return recents;
-    return recents.filter(
-      (r) => r.name.toLowerCase().includes(q) || r.path.toLowerCase().includes(q),
-    );
-  }, [recents, query]);
+  async function doLogin() {
+    setError(null);
+    const rec = readInstall();
+    if (!rec) { setScreen("setup"); return; }
+    setBusy(true);
+    try {
+      const ok = await verifyPassword(pw, rec.saltHex, rec.hashHex);
+      if (!ok) { setError("Wrong password"); setBusy(false); return; }
 
-  async function handleOpen() {
+      // Try to auto-load the last data file (Electron only).
+      if (inElectron && rec.lastFsPath) {
+        const res = await tryLoad(rec.lastFsPath, pw);
+        if (res === "missing") {
+          setScreen("not-found");
+          setBusy(false);
+          return;
+        }
+        if (res === "wrong") {
+          // Password was changed for the file; user must Load Data manually.
+          setScreen("not-found");
+          setBusy(false);
+          return;
+        }
+        toast.success(`Welcome back, ${rec.pharmacyName}`);
+        navigate({ to: "/app" });
+        return;
+      }
+
+      // Browser fallback: cannot auto-load, always ask to pick.
+      setScreen("not-found");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadFromDisk() {
+    setError(null);
     try {
       const picked = await pickOpenFile();
       if (!picked) return;
-      await ingestBytes(picked.bytes, picked.handle);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not open project");
-    }
-  }
-
-  async function ingestBytes(bytes: Uint8Array, handle: any) {
-    const enc = await peekEncrypted(bytes).catch(() => {
-      throw new Error("Not a MediCore project file");
-    });
-    if (!enc) {
-      const data = await openProjectFromBytes(bytes, handle);
-      toast.success(`Opened “${data.meta.name}”`);
-      navigate({ to: "/app" });
-      return;
-    }
-    setPwState({
-      open: true,
-      bytes,
-      handle,
-      name: handle?.name ?? "project",
-      onCancel: () => setPwState({ open: false, name: "" }),
-    });
-  }
-
-  async function submitPassword(pw: string) {
-    if (!pwState.bytes) return;
-    setPwState((s) => ({ ...s, busy: true, error: undefined }));
-    try {
-      const { payload } = await decodeProject(pwState.bytes, pw);
-      const data = payload as unknown as ProjectData;
-      await openProjectFromBytes(pwState.bytes, pwState.handle, pw).catch(() => data);
-      toast.success(`Opened “${data.meta.name}”`);
-      setPwState({ open: false, name: "" });
-      navigate({ to: "/app" });
-    } catch (e) {
-      if (e instanceof WrongPasswordError) {
-        setPwState((s) => ({ ...s, busy: false, error: "Incorrect password" }));
-      } else {
-        setPwState({ open: false, name: "" });
-        toast.error("Could not open project");
-      }
-    }
-  }
-
-  async function openRecent(r: RecentProject) {
-    // Browser cannot re-open by remembered path — always ask user to pick.
-    // In Electron, main process reads by fsPath directly.
-    if (typeof window !== "undefined" && (window as any).medicore && r.fsPath) {
       try {
-        const bytes: Uint8Array = await (window as any).medicore.project.readFile(r.fsPath);
-        await ingestBytes(bytes, {
-          kind: "electron",
-          name: r.name,
-          path: r.fsPath,
-          fsPath: r.fsPath,
+        const data = await openProjectFromBytes(picked.bytes, picked.handle, pw);
+        if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
+        upsertRecent({
+          name: data.meta.name, path: picked.handle.path,
+          fsPath: picked.handle.fsPath, encrypted: true,
         });
-      } catch (e: any) {
-        toast.error(e?.message ?? "Missing file");
-        removeRecent(r.id);
-        setRecents(readRecents());
+        toast.success(`Loaded ${data.meta.name}`);
+        navigate({ to: "/app" });
+      } catch (e) {
+        if (e instanceof WrongPasswordError) {
+          // Try without password (unencrypted file)
+          try {
+            const { payload } = await decodeProject(picked.bytes);
+            await openProjectFromBytes(picked.bytes, picked.handle);
+            const data = payload as unknown as ProjectData;
+            if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
+            toast.success(`Loaded ${data.meta.name}`);
+            navigate({ to: "/app" });
+          } catch {
+            toast.error("Wrong password for this file");
+          }
+        } else {
+          toast.error("Could not load file");
+        }
       }
-      return;
-    }
-    toast.message("Locate the project file", {
-      description: "Browsers can't reopen files silently. Please pick the file.",
-    });
-    handleOpen();
-  }
-
-  async function duplicateProject(r: RecentProject) {
-    // Only possible in Electron with a real fsPath. Otherwise, ask user to pick then re-save.
-    try {
-      let bytes: Uint8Array | null = null;
-      if ((window as any).medicore && r.fsPath) {
-        bytes = await (window as any).medicore.project.readFile(r.fsPath);
-      } else {
-        toast.message("Pick the source file to duplicate");
-        const picked = await pickOpenFile();
-        if (!picked) return;
-        bytes = picked.bytes;
-      }
-      // Save-As
-      const handle = await pickSaveFile(`${r.name} (Copy)`);
-      if (!handle) return;
-      await writeToHandle(handle, bytes!);
-      upsertRecent({
-        name: `${r.name} (Copy)`,
-        path: handle.path,
-        fsPath: handle.fsPath,
-        encrypted: r.encrypted,
-      });
-      setRecents(readRecents());
-      toast.success("Duplicated project");
     } catch (e: any) {
-      toast.error(e?.message ?? "Duplicate failed");
+      toast.error(e?.message ?? "Load failed");
     }
   }
 
-  function doRename(name: string) {
-    if (!renameTarget) return;
-    renameRecent(renameTarget.id, name);
-    setRenameTarget(null);
-    setRecents(readRecents());
-  }
-
-  function doDelete() {
-    if (!deleteTarget) return;
-    removeRecent(deleteTarget.id);
-    setDeleteTarget(null);
-    setRecents(readRecents());
-    toast.success("Removed from list");
+  async function makeNewFromNotFound() {
+    // Rebuild a fresh project with existing install credentials.
+    const rec = readInstall();
+    if (!rec) { setScreen("setup"); return; }
+    try {
+      const handle = await pickSaveFile(rec.pharmacyName);
+      if (!handle) return;
+      const project = createEmptyProject(rec.pharmacyName, true);
+      project.settings.pharmacyName = rec.pharmacyName;
+      project.settings.address = rec.address;
+      const bytes = await encodeProject(project as unknown as Record<string, unknown>, pw);
+      await writeToHandle(handle, bytes);
+      updateInstall({ lastFsPath: handle.fsPath, lastPath: handle.path });
+      useProjectStore.getState().load(project, handle, pw);
+      upsertRecent({
+        name: project.meta.name, path: handle.path,
+        fsPath: handle.fsPath, encrypted: true,
+      });
+      toast.success("Created new pharmacy data");
+      navigate({ to: "/app" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not create");
+    }
   }
 
   return (
     <div className="hero-bg min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-6 py-12">
-        <header className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1 text-xs backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-              <span className="font-medium text-muted-foreground">Offline · Local storage</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-elevated">
-                <Stethoscope className="h-6 w-6" />
-              </div>
-              <div>
-                <h1 className="font-display text-4xl font-bold tracking-tight">MediCore</h1>
-                <p className="text-sm text-muted-foreground">
-                  Professional pharmacy management — every project is one portable file.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="lg" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Create project
-            </Button>
-            <Button size="lg" variant="outline" onClick={handleOpen}>
-              <FolderOpen className="mr-2 h-4 w-4" /> Open project
-            </Button>
+      <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-8 px-6 py-12">
+        <motion.header
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex items-center gap-3"
+        >
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-elevated">
+            <Stethoscope className="h-6 w-6" />
           </div>
-        </header>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <FeatureCard
-            icon={<ShieldCheck className="h-4 w-4" />}
-            title="Fully offline"
-            body="No cloud, no accounts. Your data never leaves the machine you save it on."
-          />
-          <FeatureCard
-            icon={<Lock className="h-4 w-4" />}
-            title="Optional encryption"
-            body="Protect a project with a password. AES-256 encrypts the entire file."
-          />
-          <FeatureCard
-            icon={<Zap className="h-4 w-4" />}
-            title="Portable file"
-            body="Copy the .medicore file to another computer and pick up where you left off."
-          />
-        </div>
-
-        <section className="surface-card p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-display text-lg font-semibold">Recent projects</h2>
-              <p className="text-xs text-muted-foreground">
-                {recents.length} project{recents.length === 1 ? "" : "s"} remembered on this device.
-              </p>
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search recent projects"
-                className="h-9 w-64 pl-8"
-              />
-            </div>
+          <div>
+            <h1 className="font-display text-3xl font-bold tracking-tight">MediCore</h1>
+            <p className="text-sm text-muted-foreground">Offline pharmacy management</p>
           </div>
+        </motion.header>
 
-          {recents.length === 0 ? (
-            <EmptyState onCreate={() => setCreateOpen(true)} onOpen={handleOpen} />
-          ) : filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No projects match “{query}”.
+        {screen === "setup" && (
+          <section className="surface-card p-8">
+            <div className="mb-6 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">First-time setup</h2>
+            </div>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Enter your pharmacy details. You'll then choose where to save the encrypted data file.
             </p>
-          ) : (
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {filtered.map((r) => (
-                <RecentCard
-                  key={r.id}
-                  project={r}
-                  onOpen={() => openRecent(r)}
-                  onRename={() => setRenameTarget(r)}
-                  onDelete={() => setDeleteTarget(r)}
-                  onDuplicate={() => duplicateProject(r)}
+            <div className="grid gap-4">
+              <Field label="Pharmacy name">
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jalal & Brothers Pharmacy" />
+              </Field>
+              <Field label="Address / Location">
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Gill Road, Gujranwala" />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Password">
+                  <Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+                </Field>
+                <Field label="Confirm password">
+                  <Input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+                </Field>
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button size="lg" onClick={doSetup} disabled={busy} className="mt-2">
+                <Plus className="mr-2 h-4 w-4" /> {busy ? "Creating…" : "Create pharmacy"}
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {screen === "login" && install && (
+          <section className="surface-card p-8">
+            <div className="mb-4 flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Welcome back</h2>
+            </div>
+            <p className="mb-6 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{install.pharmacyName}</span> — enter password to unlock.
+            </p>
+            <form
+              onSubmit={(e) => { e.preventDefault(); void doLogin(); }}
+              className="grid gap-4"
+            >
+              <Field label="Password">
+                <Input
+                  type="password" value={pw} autoFocus
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="••••••••"
                 />
-              ))}
-            </ul>
-          )}
-        </section>
+              </Field>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button size="lg" type="submit" disabled={busy || !pw}>
+                <LogIn className="mr-2 h-4 w-4" /> {busy ? "Unlocking…" : "Sign in"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Reset the pharmacy setup? You'll need to run first-time setup again. Your data file is not deleted.")) {
+                    clearInstall();
+                    setScreen("setup");
+                    setPw(""); setPw2("");
+                  }
+                }}
+                className="mt-2 text-center text-xs text-muted-foreground hover:text-foreground"
+              >
+                Reset setup
+              </button>
+            </form>
+          </section>
+        )}
 
-        <footer className="mt-auto pt-4 text-center text-xs text-muted-foreground">
-          MediCore · Offline pharmacy management · v0.1
-        </footer>
+        {screen === "not-found" && (
+          <section className="surface-card p-8">
+            <h2 className="font-display text-xl font-semibold">Data not found</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We couldn't open the saved data file{install?.lastFsPath ? ` at ${install.lastFsPath}` : ""}. Choose an option below.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button onClick={loadFromDisk}>
+                <FolderOpen className="mr-2 h-4 w-4" /> Load Data
+              </Button>
+              <Button variant="outline" onClick={() => setScreen("login")}>Cancel</Button>
+              <Button variant="secondary" onClick={makeNewFromNotFound}>
+                <Plus className="mr-2 h-4 w-4" /> Make New
+              </Button>
+            </div>
+          </section>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MiniCard icon={<ShieldCheck className="h-4 w-4" />} title="Offline" body="No cloud. Local only." />
+          <MiniCard icon={<Lock className="h-4 w-4" />} title="Encrypted" body="AES-256 protected." />
+          <MiniCard icon={<Zap className="h-4 w-4" />} title="Portable" body="Single .medicore file." />
+        </div>
       </div>
-
-      <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
-
-      <PasswordDialog
-        open={pwState.open}
-        projectName={pwState.name}
-        onCancel={() => setPwState({ open: false, name: "" })}
-        onSubmit={submitPassword}
-        error={pwState.error}
-        busy={pwState.busy}
-      />
-
-      <RenameDialog
-        open={!!renameTarget}
-        initial={renameTarget?.name ?? ""}
-        onCancel={() => setRenameTarget(null)}
-        onSubmit={doRename}
-      />
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove from recent list?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This only removes the reference from MediCore. The project file at{" "}
-              <span className="font-mono">{deleteTarget?.path}</span> is not deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={doDelete}>Remove</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  body,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-1.5">
+      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function MiniCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
     <div className="surface-card p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/10 text-primary">
-          {icon}
-        </span>
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">{icon}</span>
         <p className="text-sm font-semibold">{title}</p>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">{body}</p>
+      <p className="text-xs text-muted-foreground">{body}</p>
     </div>
-  );
-}
-
-function EmptyState({ onCreate, onOpen }: { onCreate: () => void; onOpen: () => void }) {
-  return (
-    <div className="grid place-items-center gap-3 rounded-lg border border-dashed py-14 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary">
-        <FolderOpen className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="font-display text-base font-semibold">No projects yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create your first pharmacy or open an existing project file.
-        </p>
-      </div>
-      <div className="mt-2 flex gap-2">
-        <Button onClick={onCreate}>
-          <Plus className="mr-2 h-4 w-4" /> Create
-        </Button>
-        <Button variant="outline" onClick={onOpen}>
-          <FolderOpen className="mr-2 h-4 w-4" /> Open
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function RecentCard({
-  project,
-  onOpen,
-  onRename,
-  onDelete,
-  onDuplicate,
-}: {
-  project: RecentProject;
-  onOpen: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-}) {
-  return (
-    <motion.li
-      whileHover={{ y: -2 }}
-      className="group flex items-start justify-between gap-3 rounded-xl border bg-card p-4 shadow-soft transition-shadow hover:shadow-elevated"
-    >
-      <button onClick={onOpen} className="flex flex-1 items-start gap-3 text-left">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft">
-          <Stethoscope className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate font-display text-sm font-semibold">{project.name}</p>
-            {project.encrypted && (
-              <Lock className="h-3 w-3 text-muted-foreground" />
-            )}
-          </div>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-            {project.path}
-          </p>
-          <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {new Date(project.lastOpened).toLocaleString()}
-          </p>
-        </div>
-      </button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="opacity-60 group-hover:opacity-100">
-            <span className="text-lg leading-none">⋯</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onOpen}>
-            <FolderOpen className="mr-2 h-4 w-4" /> Open
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onRename}>
-            <Pencil className="mr-2 h-4 w-4" /> Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDuplicate}>
-            <Copy className="mr-2 h-4 w-4" /> Duplicate
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-            <Trash2 className="mr-2 h-4 w-4" /> Remove
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </motion.li>
   );
 }

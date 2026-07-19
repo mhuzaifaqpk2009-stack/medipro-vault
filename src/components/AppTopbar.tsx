@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Save, FolderOpen, Home, Sun, Moon, Search } from "lucide-react";
+import { Save, FolderOpen, Home, Sun, Moon, Search, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,10 @@ import { Separator } from "@/components/ui/separator";
 import { DirtyBadge } from "@/components/DirtyBadge";
 import { useProjectStore } from "@/store/project-store";
 import { confirmUnsaved } from "@/hooks/use-unsaved-guard";
+import { pickOpenFile } from "@/lib/project-io";
+import { openProjectFromBytes } from "@/store/project-store";
+import { WrongPasswordError, decodeProject } from "@/lib/project-codec";
+import { updateInstall } from "@/lib/install";
 
 export function AppTopbar() {
   const navigate = useNavigate();
@@ -41,6 +45,44 @@ export function AppTopbar() {
     navigate({ to: "/" });
   }
 
+  async function loadData() {
+    const choice = await confirmUnsaved();
+    if (choice === "cancel") return;
+    try {
+      const picked = await pickOpenFile();
+      if (!picked) return;
+      const currentPw = useProjectStore.getState().password;
+      try {
+        const d = await openProjectFromBytes(picked.bytes, picked.handle, currentPw);
+        if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
+        toast.success(`Loaded ${d.meta.name}`);
+      } catch (e) {
+        if (e instanceof WrongPasswordError) {
+          const pw = window.prompt("Enter password for this file:") || "";
+          if (!pw) return;
+          try {
+            const d = await openProjectFromBytes(picked.bytes, picked.handle, pw);
+            if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
+            toast.success(`Loaded ${d.meta.name}`);
+          } catch {
+            // Try unencrypted
+            try {
+              await decodeProject(picked.bytes);
+              await openProjectFromBytes(picked.bytes, picked.handle);
+              toast.success("Loaded");
+            } catch {
+              toast.error("Wrong password");
+            }
+          }
+        } else {
+          toast.error("Could not load file");
+        }
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Load failed");
+    }
+  }
+
   function toggleTheme() {
     const next = !isDark;
     setIsDark(next);
@@ -63,7 +105,7 @@ export function AppTopbar() {
         <div className="relative hidden md:block">
           <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            placeholder="Search everything…  (Ctrl+F)"
+            placeholder="Search everything…"
             className="h-9 w-72 rounded-md border bg-muted/40 pl-8 pr-3 text-sm outline-none transition-colors focus:border-ring focus:bg-background"
           />
         </div>
@@ -72,6 +114,9 @@ export function AppTopbar() {
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
+        <Button variant="ghost" size="sm" onClick={loadData} title="Load Data">
+          <Upload className="mr-1.5 h-4 w-4" /> Load Data
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -79,10 +124,9 @@ export function AppTopbar() {
             const ok = await save();
             if (ok) toast.success("Saved");
           }}
-          title="Save (Ctrl+S)"
+          title="Save Data (Ctrl+S)"
         >
-          <Save className="mr-1.5 h-4 w-4" />
-          Save
+          <Save className="mr-1.5 h-4 w-4" /> Save Data
         </Button>
         <Button
           variant="ghost"
@@ -93,13 +137,11 @@ export function AppTopbar() {
           }}
           title="Save As (Ctrl+Shift+S)"
         >
-          <FolderOpen className="mr-1.5 h-4 w-4" />
-          Save As
+          <FolderOpen className="mr-1.5 h-4 w-4" /> Save As
         </Button>
         <Separator orientation="vertical" className="mx-1 h-6" />
         <Button variant="outline" size="sm" onClick={goHome}>
-          <Home className="mr-1.5 h-4 w-4" />
-          Projects
+          <Home className="mr-1.5 h-4 w-4" /> Sign out
         </Button>
       </div>
     </header>
