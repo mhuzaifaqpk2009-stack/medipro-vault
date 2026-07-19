@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/select";
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
-import type { SaleItem, PaymentMethod } from "@/domain/schema";
+import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
+import type { SaleItem, PaymentMethod, Sale } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/sales")({ component: SalesPage });
 
@@ -64,31 +65,34 @@ function SalesPage() {
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
     if (method === "cash" && received < total) { toast.error("Insufficient cash received"); return; }
-    const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+    const invoiceNumber = nextInvoiceNumber(data.sales);
+    const newSale: Sale = {
+      id: uid("sale_"),
+      invoiceNumber,
+      date: new Date().toISOString(),
+      customerId: customerId || undefined,
+      items: cart.map(({ name: _n, ...rest }) => rest),
+      discount,
+      taxPercent: data.settings.taxPercent,
+      payments: [{ method: method === "mixed" ? "cash" : method, amount: total }],
+      status: "completed",
+    };
 
     mutate((d) => {
-      // deduct stock
       for (const line of cart) {
         const m = d.medicines.find((x) => x.id === line.medicineId);
         if (m) m.stockQuantity = Math.max(0, m.stockQuantity - line.quantity);
       }
-      // loyalty: 1 point per whole currency unit
       if (customerId) {
         const c = d.customers.find((x) => x.id === customerId);
         if (c) c.loyaltyPoints = (c.loyaltyPoints ?? 0) + Math.floor(total);
       }
-      d.sales.push({
-        id: uid("sale_"),
-        invoiceNumber,
-        date: new Date().toISOString(),
-        customerId: customerId || undefined,
-        items: cart.map(({ name: _n, ...rest }) => rest),
-        discount, taxPercent: d.settings.taxPercent,
-        payments: [{ method: method === "mixed" ? "cash" : method, amount: total }],
-        status: "completed",
-      });
+      d.sales.push(newSale);
     });
     toast.success(`Sale complete · ${invoiceNumber}`);
+    // Print receipt with the latest data (includes the new sale)
+    const latest = useProjectStore.getState().data!;
+    printReceipt(newSale, latest);
     setCart([]); setDiscount(0); setReceived(0); setCustomerId("");
   }
 
