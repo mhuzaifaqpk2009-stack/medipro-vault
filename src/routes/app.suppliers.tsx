@@ -9,9 +9,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
 import { uid } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 import type { Supplier } from "@/domain/schema";
 
-export const Route = createFileRoute("/app/suppliers")({ component: SuppliersPage });
+export const Route = createFileRoute("/app/suppliers")({
+  component: () => <PermissionGate perm="suppliers"><SuppliersPage /></PermissionGate>,
+});
 
 const empty = (): Supplier => ({ id: "", name: "", phone: "", email: "", address: "", company: "", balance: 0 });
 

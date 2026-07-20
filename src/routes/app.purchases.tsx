@@ -10,9 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 import type { PurchaseItem } from "@/domain/schema";
 
-export const Route = createFileRoute("/app/purchases")({ component: PurchasesPage });
+export const Route = createFileRoute("/app/purchases")({
+  component: () => <PermissionGate perm="purchases"><PurchasesPage /></PermissionGate>,
+});
 
 function PurchasesPage() {
   const data = useProjectStore((s) => s.data!);

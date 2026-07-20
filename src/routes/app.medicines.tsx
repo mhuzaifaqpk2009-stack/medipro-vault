@@ -13,9 +13,12 @@ import {
 } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol, daysUntil } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 import type { Medicine } from "@/domain/schema";
 
-export const Route = createFileRoute("/app/medicines")({ component: MedicinesPage });
+export const Route = createFileRoute("/app/medicines")({
+  component: () => <PermissionGate perm="medicines"><MedicinesPage /></PermissionGate>,
+});
 
 const empty = (): Medicine => ({
   id: "", name: "", genericName: "", company: "", batchNumber: "", barcode: "",
