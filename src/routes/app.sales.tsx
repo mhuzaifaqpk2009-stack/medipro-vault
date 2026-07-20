@@ -1,32 +1,43 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ShoppingCart, Search, Trash2, Receipt } from "lucide-react";
+import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
 import type { SaleItem, PaymentMethod, Sale } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/sales")({ component: SalesPage });
 
-interface CartLine extends SaleItem { name: string; }
+interface CartLine extends SaleItem { name: string; forced?: boolean }
 
 function SalesPage() {
   const data = useProjectStore((s) => s.data!);
   const mutate = useProjectStore((s) => s.mutate);
   const sym = useCurrencySymbol();
+  const user = useSession((s) => s.user);
+  const isAdmin = user?.role === "admin";
+  const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
+  const canChangeTax = isAdmin || !!user?.permissions.changeTax;
+  const canForceSale = isAdmin || !!user?.permissions.forceSale;
+
   const [q, setQ] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customerId, setCustomerId] = useState<string>("");
+  const [remark, setRemark] = useState("");
   const [discount, setDiscount] = useState(0);
+  const [taxPercent, setTaxPercent] = useState<number>(data.settings.taxPercent);
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [received, setReceived] = useState(0);
+  const [printBill, setPrintBill] = useState(true);
 
   const results = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -39,16 +50,25 @@ function SalesPage() {
   function add(medId: string) {
     const med = data.medicines.find((m) => m.id === medId);
     if (!med) return;
-    if (med.stockQuantity <= 0) { toast.error("Out of stock"); return; }
+    const outOfStock = med.stockQuantity <= 0;
+    if (outOfStock && !canForceSale) { toast.error("Out of stock"); return; }
+    if (outOfStock && canForceSale) {
+      const ok = window.confirm(`"${med.name}" is out of stock. Force sell anyway?`);
+      if (!ok) return;
+    }
     setCart((c) => {
       const i = c.findIndex((l) => l.medicineId === medId);
       if (i >= 0) {
         const copy = [...c];
-        if (copy[i].quantity + 1 > med.stockQuantity) { toast.error("Not enough stock"); return c; }
-        copy[i] = { ...copy[i], quantity: copy[i].quantity + 1 };
+        const nextQty = copy[i].quantity + 1;
+        if (nextQty > med.stockQuantity && !canForceSale) { toast.error("Not enough stock"); return c; }
+        copy[i] = { ...copy[i], quantity: nextQty, forced: nextQty > med.stockQuantity ? true : copy[i].forced };
         return copy;
       }
-      return [...c, { medicineId: medId, quantity: 1, salePrice: med.salePrice, discountPercent: 0, name: med.name }];
+      return [...c, {
+        medicineId: medId, quantity: 1, salePrice: med.salePrice,
+        discountPercent: 0, name: med.name, forced: outOfStock,
+      }];
     });
     setQ("");
   }
@@ -58,7 +78,7 @@ function SalesPage() {
   }
 
   const subtotal = cart.reduce((s, l) => s + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0);
-  const taxAmt = subtotal * (data.settings.taxPercent / 100);
+  const taxAmt = subtotal * (taxPercent / 100);
   const total = Math.max(0, subtotal + taxAmt - discount);
   const change = Math.max(0, received - total);
 
@@ -71,11 +91,13 @@ function SalesPage() {
       invoiceNumber,
       date: new Date().toISOString(),
       customerId: customerId || undefined,
-      items: cart.map(({ name: _n, ...rest }) => rest),
-      discount,
-      taxPercent: data.settings.taxPercent,
+      remark: remark.trim() || undefined,
+      items: cart.map(({ name: _n, forced: _f, ...rest }) => rest),
+      discount: canDiscount ? discount : 0,
+      taxPercent: canChangeTax ? taxPercent : data.settings.taxPercent,
       payments: [{ method: method === "mixed" ? "cash" : method, amount: total }],
       status: "completed",
+      createdBy: user?.username,
     };
 
     mutate((d) => {
@@ -90,11 +112,14 @@ function SalesPage() {
       d.sales.push(newSale);
     });
     toast.success(`Sale complete · ${invoiceNumber}`);
-    // Print receipt with the latest data (includes the new sale)
-    const latest = useProjectStore.getState().data!;
-    printReceipt(newSale, latest);
-    setCart([]); setDiscount(0); setReceived(0); setCustomerId("");
+    if (printBill) {
+      const latest = useProjectStore.getState().data!;
+      printReceipt(newSale, latest);
+    }
+    setCart([]); setDiscount(0); setReceived(0); setCustomerId(""); setRemark("");
   }
+
+  const hasForced = cart.some((l) => l.forced);
 
   return (
     <div className="grid h-full grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr,380px]">
@@ -102,6 +127,11 @@ function SalesPage() {
         <div className="flex items-center gap-3 border-b p-4">
           <ShoppingCart className="h-5 w-5 text-primary" />
           <h1 className="font-display text-lg font-semibold">Point of Sale</h1>
+          {hasForced && (
+            <span className="ml-auto flex items-center gap-1 rounded bg-warning/15 px-2 py-1 text-[11px] font-medium text-warning">
+              <AlertTriangle className="h-3 w-3" /> Contains force-sold items
+            </span>
+          )}
         </div>
         <div className="relative border-b p-3">
           <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -123,7 +153,9 @@ function SalesPage() {
                     <span className="font-medium">{m.name}</span>
                     <span className="ml-2 text-xs text-muted-foreground">{m.barcode || m.genericName || ""}</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">Stock {m.stockQuantity} · {money(m.salePrice, sym)}</span>
+                  <span className={`text-xs ${m.stockQuantity <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    Stock {m.stockQuantity} · {money(m.salePrice, sym)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -143,10 +175,20 @@ function SalesPage() {
                   const line = l.salePrice * l.quantity * (1 - l.discountPercent / 100);
                   return (
                     <tr key={l.medicineId} className="border-b last:border-0">
-                      <td className="p-2">{l.name}</td>
+                      <td className="p-2">
+                        {l.name}
+                        {l.forced && <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">FORCED</span>}
+                      </td>
                       <td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => updLine(i, { quantity: Math.max(1, +e.target.value || 1) })} /></td>
                       <td className="p-2"><Input type="number" className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>
-                      <td className="p-2"><Input type="number" className="h-8 text-right" value={l.discountPercent || ""} onChange={(e) => updLine(i, { discountPercent: Math.min(100, Math.max(0, +e.target.value || 0)) })} /></td>
+                      <td className="p-2">
+                        <Input
+                          type="number" className="h-8 text-right"
+                          value={l.discountPercent || ""}
+                          disabled={!canDiscount}
+                          onChange={(e) => updLine(i, { discountPercent: Math.min(100, Math.max(0, +e.target.value || 0)) })}
+                        />
+                      </td>
                       <td className="p-2 text-right tabular-nums">{money(line, sym)}</td>
                       <td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                     </tr>
@@ -170,12 +212,30 @@ function SalesPage() {
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label className="text-xs">Remark (optional)</Label>
+          <Input value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="e.g. MUZAMMIL SB" />
+        </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />
-          <Row k={`Tax (${data.settings.taxPercent}%)`} v={money(taxAmt, sym)} />
+          <div className="mt-2 flex items-center gap-2">
+            <Label className="text-xs">Tax %</Label>
+            <Input
+              type="number" className="h-8"
+              disabled={!canChangeTax}
+              value={taxPercent || ""}
+              onChange={(e) => setTaxPercent(Math.max(0, +e.target.value || 0))}
+            />
+          </div>
+          <Row k={`Tax`} v={money(taxAmt, sym)} />
           <div className="mt-2 flex items-center gap-2">
             <Label className="text-xs">Discount</Label>
-            <Input type="number" className="h-8" value={discount || ""} onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))} />
+            <Input
+              type="number" className="h-8"
+              disabled={!canDiscount}
+              value={discount || ""}
+              onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))}
+            />
           </div>
           <div className="mt-3 flex items-center justify-between border-t pt-2">
             <span className="font-display font-semibold">Total</span>
@@ -202,7 +262,11 @@ function SalesPage() {
             <Row k="Change" v={money(change, sym)} />
           </>
         )}
-        <Button size="lg" className="mt-auto" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
+        <label className="mt-auto flex items-center gap-2 text-sm">
+          <Checkbox checked={printBill} onCheckedChange={(v) => setPrintBill(v === true)} />
+          <span>Print bill</span>
+        </label>
+        <Button size="lg" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
       </aside>
     </div>
   );
