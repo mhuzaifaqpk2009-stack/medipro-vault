@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  FolderOpen, Plus, Lock, Stethoscope, ShieldCheck, Zap, LogIn, Sparkles,
+  FolderOpen, Plus, Lock, Stethoscope, LogIn, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
