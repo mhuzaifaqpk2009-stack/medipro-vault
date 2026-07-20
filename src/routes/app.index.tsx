@@ -6,6 +6,8 @@ import {
   ShoppingCart, ArrowUpRight,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
+import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
 
 export const Route = createFileRoute("/app/")({ component: Dashboard });
@@ -84,16 +86,20 @@ function Dashboard() {
     };
   }, [data]);
 
-  const kpis = [
-    { label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
-    { label: "Low Stock", value: stats.lowStock, icon: AlertTriangle, tone: "warning" },
-    { label: "Expired", value: stats.expired, icon: CalendarX, tone: "destructive" },
-    { label: "Today's Sales", value: money(stats.todayRevenue, sym), icon: ShoppingCart, tone: "info" },
-    { label: "Today's Profit", value: money(stats.todayProfit, sym), icon: TrendingUp, tone: "success" },
-    { label: "Monthly Sales", value: money(stats.monthRevenue, sym), icon: DollarSign, tone: "primary" },
-    { label: "Customers", value: data.customers.length, icon: Users, tone: "info" },
-    { label: "Suppliers", value: data.suppliers.length, icon: Building2, tone: "primary" },
-  ] as const;
+  const user = useSession((st) => st.user);
+  const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
+    { id: "totalMedicines", label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
+    { id: "lowStock", label: "Low Stock", value: stats.lowStock, icon: AlertTriangle, tone: "warning" },
+    { id: "expired", label: "Expired", value: stats.expired, icon: CalendarX, tone: "destructive" },
+    { id: "todayRevenue", label: "Today's Sales", value: money(stats.todayRevenue, sym), icon: ShoppingCart, tone: "info" },
+    { id: "todayProfit", label: "Today's Profit", value: money(stats.todayProfit, sym), icon: TrendingUp, tone: "success" },
+    { id: "monthRevenue", label: "Monthly Sales", value: money(stats.monthRevenue, sym), icon: DollarSign, tone: "primary" },
+    { id: "customers", label: "Customers", value: data.customers.length, icon: Users, tone: "info" },
+    { id: "suppliers", label: "Suppliers", value: data.suppliers.length, icon: Building2, tone: "primary" },
+  ];
+  const kpis = allKpis.filter((k) => isCounterVisible(user, k.id));
+  const showTrend = isCounterVisible(user, "salesTrend");
+  const showMostSold = isCounterVisible(user, "mostSold");
 
   const toneMap: Record<string, string> = {
     primary: "from-primary/15 to-primary/0 text-primary",

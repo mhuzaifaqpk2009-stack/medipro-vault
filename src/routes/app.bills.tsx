@@ -111,6 +111,16 @@ function BillsPage() {
             <p className="mt-2 text-xs text-muted-foreground">
               {new Date(selected.date).toLocaleString()}
             </p>
+            <p className="text-xs">
+              <span className="text-muted-foreground">Customer: </span>
+              {data.customers.find((c) => c.id === selected.customerId)?.name ?? "Walk-in"}
+            </p>
+            {selected.remark && (
+              <p className="text-xs">
+                <span className="text-muted-foreground">Remarks: </span>
+                {selected.remark}
+              </p>
+            )}
             <div className="mt-4 flex-1 overflow-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="bg-muted/40 text-muted-foreground">

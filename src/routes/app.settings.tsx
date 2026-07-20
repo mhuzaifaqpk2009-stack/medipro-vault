@@ -1,33 +1,60 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Save } from "lucide-react";
+import { Settings as SettingsIcon, Save, Plus, Trash2, Pencil, Users as UsersIcon, ShieldCheck } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { AdminGate } from "@/components/PermissionGate";
+import {
+  readInstall, createUser, upsertUser, removeUser, hashPassword,
+} from "@/lib/install";
+import {
+  defaultPermissions, ALL_COUNTERS,
+  type StoredUser, type UserPermissions, type CounterId,
+} from "@/lib/users";
 
 export const Route = createFileRoute("/app/settings")({
-  component: SettingsPage,
+  component: () => <AdminGate><SettingsPage /></AdminGate>,
 });
+
+const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
+  { key: "medicines", label: "Access Medicines page" },
+  { key: "inventory", label: "Access Inventory page" },
+  { key: "purchases", label: "Access Purchases page" },
+  { key: "reports", label: "Access Reports page" },
+  { key: "suppliers", label: "Access Suppliers page" },
+  { key: "categories", label: "Access Categories page" },
+  { key: "applyDiscount", label: "Apply discount at checkout" },
+  { key: "changeTax", label: "Change tax at checkout" },
+  { key: "forceSale", label: "Force-sell out-of-stock items" },
+];
 
 function SettingsPage() {
   const data = useProjectStore((s) => s.data)!;
   const mutate = useProjectStore((s) => s.mutate);
   const save = useProjectStore((s) => s.save);
   const s = data.settings;
+  const currentUser = useSession((st) => st.user);
+  const setSessionUser = useSession((st) => st.setUser);
+
+  const [usersTick, setUsersTick] = useState(0);
+  const users = readInstall()?.users ?? [];
+  const [editing, setEditing] = useState<StoredUser | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
-    mutate((d) => {
-      (d.settings as any)[key] = value;
-    });
+    mutate((d) => { (d.settings as any)[key] = value; });
 
   return (
     <div className="mx-auto max-w-4xl p-6 md:p-10">
@@ -38,66 +65,83 @@ function SettingsPage() {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Configure your pharmacy details, taxes, and workspace behaviour.
+            Admin-only. Manage pharmacy details, users, and workspace behaviour.
           </p>
         </div>
-        <Button
-          className="ml-auto"
-          onClick={async () => (await save()) && toast.success("Saved")}
-        >
+        <Button className="ml-auto" onClick={async () => (await save()) && toast.success("Saved")}>
           <Save className="mr-2 h-4 w-4" /> Save now
         </Button>
       </header>
 
+      {/* Users */}
       <section className="surface-card p-6">
-        <h2 className="font-display text-base font-semibold">Pharmacy details</h2>
+        <div className="mb-4 flex items-center gap-2">
+          <UsersIcon className="h-4 w-4 text-primary" />
+          <h2 className="font-display text-base font-semibold">Users</h2>
+          <Button size="sm" className="ml-auto" onClick={() => setShowNew(true)}>
+            <Plus className="mr-1.5 h-4 w-4" /> Add user
+          </Button>
+        </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Appears on receipts and printed invoices.
+          Each user signs in with their own username & password. Admins have full access;
+          other users get only the toggles you set below.
         </p>
+        <div className="divide-y rounded-md border">
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 p-3">
+              <div className={`grid h-8 w-8 place-items-center rounded-full ${u.role === "admin" ? "bg-primary/15 text-primary" : "bg-muted"}`}>
+                {u.role === "admin" ? <ShieldCheck className="h-4 w-4" /> : <UsersIcon className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{u.username}</p>
+                <p className="text-xs text-muted-foreground capitalize">{u.role}</p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(u)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm" variant="ghost"
+                disabled={u.role === "admin" && users.filter((x) => x.role === "admin").length === 1}
+                onClick={() => {
+                  if (u.id === currentUser?.id) { toast.error("You cannot remove your own account"); return; }
+                  if (!window.confirm(`Remove user "${u.username}"?`)) return;
+                  removeUser(u.id);
+                  setUsersTick((n) => n + 1);
+                  toast.success("User removed");
+                }}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          {users.length === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">No users yet.</div>
+          )}
+        </div>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Tick users: {usersTick}
+        </p>
+      </section>
+
+      {/* Pharmacy details */}
+      <section className="surface-card mt-4 p-6">
+        <h2 className="font-display text-base font-semibold">Pharmacy details</h2>
+        <p className="mb-4 text-xs text-muted-foreground">Appears on receipts and printed invoices.</p>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Pharmacy name">
-            <Input value={s.pharmacyName} onChange={(e) => set("pharmacyName", e.target.value)} />
-          </Field>
-          <Field label="Owner name">
-            <Input value={s.ownerName} onChange={(e) => set("ownerName", e.target.value)} />
-          </Field>
-          <Field label="Phone">
-            <Input value={s.phone} onChange={(e) => set("phone", e.target.value)} />
-          </Field>
-          <Field label="Email">
-            <Input value={s.email} onChange={(e) => set("email", e.target.value)} />
-          </Field>
-          <Field label="Address" className="md:col-span-2">
-            <Input value={s.address} onChange={(e) => set("address", e.target.value)} />
-          </Field>
+          <Field label="Pharmacy name"><Input value={s.pharmacyName} onChange={(e) => set("pharmacyName", e.target.value)} /></Field>
+          <Field label="Owner name"><Input value={s.ownerName} onChange={(e) => set("ownerName", e.target.value)} /></Field>
+          <Field label="Phone"><Input value={s.phone} onChange={(e) => set("phone", e.target.value)} /></Field>
+          <Field label="Email"><Input value={s.email} onChange={(e) => set("email", e.target.value)} /></Field>
+          <Field label="Address" className="md:col-span-2"><Input value={s.address} onChange={(e) => set("address", e.target.value)} /></Field>
         </div>
       </section>
 
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Billing</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Field label="Tax %">
-            <Input
-              type="number"
-              value={s.taxPercent || ""}
-              onChange={(e) => set("taxPercent", Number(e.target.value) || 0)}
-            />
-          </Field>
-          <Field label="Currency code">
-            <Input value={s.currency} onChange={(e) => set("currency", e.target.value)} />
-          </Field>
-          <Field label="Currency symbol">
-            <Input
-              value={s.currencySymbol}
-              onChange={(e) => set("currencySymbol", e.target.value)}
-            />
-          </Field>
-          <Field label="Receipt footer" className="md:col-span-3">
-            <Input
-              value={s.receiptFooter}
-              onChange={(e) => set("receiptFooter", e.target.value)}
-            />
-          </Field>
+          <Field label="Tax %"><Input type="number" value={s.taxPercent || ""} onChange={(e) => set("taxPercent", Number(e.target.value) || 0)} /></Field>
+          <Field label="Currency code"><Input value={s.currency} onChange={(e) => set("currency", e.target.value)} /></Field>
+          <Field label="Currency symbol"><Input value={s.currencySymbol} onChange={(e) => set("currencySymbol", e.target.value)} /></Field>
         </div>
       </section>
 
@@ -108,82 +152,167 @@ function SettingsPage() {
         </p>
         <div className="grid gap-4">
           <Field label="Footer line 1 (thank-you message, max ~60 words)">
-            <Input
-              value={s.billFooter1}
-              onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))}
-              placeholder="Thanks for purchasing"
-            />
+            <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} placeholder="Thanks for purchasing" />
           </Field>
           <Field label="Footer line 2 (return / exchange policy)">
-            <Input
-              value={s.billFooter2}
-              onChange={(e) => set("billFooter2", e.target.value)}
-              placeholder="Please check & verify your medicines…"
-            />
+            <Input value={s.billFooter2} onChange={(e) => set("billFooter2", e.target.value)} />
           </Field>
           <div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={async () => (await save()) && toast.success("Settings saved")}
-            >
+            <Button size="sm" variant="secondary" onClick={async () => (await save()) && toast.success("Settings saved")}>
               <Save className="mr-2 h-4 w-4" /> Save settings
             </Button>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Saves only from this settings screen — separate from the main Save Data action.
-            </p>
           </div>
         </div>
       </section>
 
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Auto save</h2>
-        <p className="text-xs text-muted-foreground">
-          Only runs after the project has a save location.
-        </p>
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <label className="flex items-center gap-3">
-            <Switch
-              checked={s.autoSaveEnabled}
-              onCheckedChange={(v) => set("autoSaveEnabled", v)}
-            />
+            <Switch checked={s.autoSaveEnabled} onCheckedChange={(v) => set("autoSaveEnabled", v)} />
             <span className="text-sm font-medium">Enable auto save</span>
           </label>
           <div className="flex items-center gap-2">
             <Label className="text-sm">Interval</Label>
-            <Select
-              value={String(s.autoSaveIntervalMinutes)}
-              onValueChange={(v) =>
-                set("autoSaveIntervalMinutes", Number(v) as typeof s.autoSaveIntervalMinutes)
-              }
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 5, 10, 15].map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} minute{n === 1 ? "" : "s"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+            <Select value={String(s.autoSaveIntervalMinutes)} onValueChange={(v) => set("autoSaveIntervalMinutes", Number(v) as typeof s.autoSaveIntervalMinutes)}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>{[1, 2, 5, 10, 15].map((n) => <SelectItem key={n} value={String(n)}>{n} minute{n === 1 ? "" : "s"}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>
       </section>
+
+      {showNew && (
+        <UserDialog
+          onClose={() => setShowNew(false)}
+          onSaved={() => { setShowNew(false); setUsersTick((n) => n + 1); }}
+        />
+      )}
+      {editing && (
+        <UserDialog
+          existing={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(u) => {
+            setEditing(null);
+            setUsersTick((n) => n + 1);
+            if (u && u.id === currentUser?.id) setSessionUser(u);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
-  className,
+function UserDialog({
+  existing, onClose, onSaved,
 }: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
+  existing?: StoredUser;
+  onClose: () => void;
+  onSaved: (u?: StoredUser) => void;
 }) {
+  const [username, setUsername] = useState(existing?.username ?? "");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "user">(existing?.role ?? "user");
+  const [perms, setPerms] = useState<UserPermissions>(existing?.permissions ?? defaultPermissions("user"));
+  const [visibility, setVisibility] = useState<Partial<Record<CounterId, boolean>>>(existing?.dashboardVisibility ?? {});
+
+  async function submit() {
+    if (!username.trim()) { toast.error("Username required"); return; }
+    if (!existing && password.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+
+    if (existing) {
+      let saltHex = existing.saltHex, hashHex = existing.hashHex;
+      if (password) {
+        const h = await hashPassword(password);
+        saltHex = h.saltHex; hashHex = h.hashHex;
+      }
+      const updated: StoredUser = {
+        ...existing,
+        username: username.trim(),
+        role,
+        saltHex, hashHex,
+        permissions: role === "admin" ? defaultPermissions("admin") : perms,
+        dashboardVisibility: visibility,
+      };
+      upsertUser(updated);
+      toast.success("User updated");
+      onSaved(updated);
+    } else {
+      const u = await createUser({ username, password, role, permissions: role === "admin" ? undefined : perms });
+      u.dashboardVisibility = visibility;
+      upsertUser(u);
+      toast.success("User created");
+      onSaved(u);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{existing ? "Edit user" : "Add user"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} /></Field>
+          <Field label={existing ? "New password (leave blank to keep current)" : "Password"}>
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+          <Field label="Role">
+            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User (limited)</SelectItem>
+                <SelectItem value="admin">Admin (full access)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {role !== "admin" && (
+            <>
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
+                <div className="grid gap-2 rounded-md border p-3">
+                  {PERM_LABELS.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={perms[key]}
+                        onCheckedChange={(v) => setPerms((p) => ({ ...p, [key]: v === true }))}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Dashboard counters visible to this user</p>
+                <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+                  {ALL_COUNTERS.map((c) => {
+                    const visible = visibility[c.id] !== false;
+                    return (
+                      <label key={c.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={visible}
+                          onCheckedChange={(v) => setVisibility((old) => ({ ...old, [c.id]: v === true }))}
+                        />
+                        <span>{c.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit}>{existing ? "Save changes" : "Create user"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
       <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">{label}</Label>
