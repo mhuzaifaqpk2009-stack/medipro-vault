@@ -85,8 +85,8 @@ function Editor({ value, onCancel, onSave }: { value: Customer; onCancel: () => 
           <div><Label className="text-xs">Phone</Label><Input value={c.phone ?? ""} onChange={(e) => upd("phone", e.target.value)} /></div>
           <div><Label className="text-xs">Email</Label><Input value={c.email ?? ""} onChange={(e) => upd("email", e.target.value)} /></div>
           <div><Label className="text-xs">Address</Label><Input value={c.address ?? ""} onChange={(e) => upd("address", e.target.value)} /></div>
-          <div><Label className="text-xs">Points</Label><Input type="number" value={c.loyaltyPoints} onChange={(e) => upd("loyaltyPoints", +e.target.value || 0)} /></div>
-          <div><Label className="text-xs">Balance</Label><Input type="number" value={c.balance} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Points</Label><Input type="number" value={c.loyaltyPoints || ""} onChange={(e) => upd("loyaltyPoints", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Balance</Label><Input type="number" value={c.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
         </div>
         <DialogFooter><Button variant="ghost" onClick={onCancel}>Cancel</Button><Button onClick={() => onSave(c)}>Save</Button></DialogFooter>
       </DialogContent>

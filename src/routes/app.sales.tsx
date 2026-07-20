@@ -144,9 +144,9 @@ function SalesPage() {
                   return (
                     <tr key={l.medicineId} className="border-b last:border-0">
                       <td className="p-2">{l.name}</td>
-                      <td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity} onChange={(e) => updLine(i, { quantity: Math.max(1, +e.target.value || 1) })} /></td>
-                      <td className="p-2"><Input type="number" className="h-8 text-right" value={l.salePrice} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>
-                      <td className="p-2"><Input type="number" className="h-8 text-right" value={l.discountPercent} onChange={(e) => updLine(i, { discountPercent: Math.min(100, Math.max(0, +e.target.value || 0)) })} /></td>
+                      <td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => updLine(i, { quantity: Math.max(1, +e.target.value || 1) })} /></td>
+                      <td className="p-2"><Input type="number" className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>
+                      <td className="p-2"><Input type="number" className="h-8 text-right" value={l.discountPercent || ""} onChange={(e) => updLine(i, { discountPercent: Math.min(100, Math.max(0, +e.target.value || 0)) })} /></td>
                       <td className="p-2 text-right tabular-nums">{money(line, sym)}</td>
                       <td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                     </tr>
@@ -175,7 +175,7 @@ function SalesPage() {
           <Row k={`Tax (${data.settings.taxPercent}%)`} v={money(taxAmt, sym)} />
           <div className="mt-2 flex items-center gap-2">
             <Label className="text-xs">Discount</Label>
-            <Input type="number" className="h-8" value={discount} onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))} />
+            <Input type="number" className="h-8" value={discount || ""} onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))} />
           </div>
           <div className="mt-3 flex items-center justify-between border-t pt-2">
             <span className="font-display font-semibold">Total</span>
@@ -197,7 +197,7 @@ function SalesPage() {
           <>
             <div>
               <Label className="text-xs">Cash received</Label>
-              <Input type="number" value={received} onChange={(e) => setReceived(+e.target.value || 0)} />
+              <Input type="number" value={received || ""} onChange={(e) => setReceived(+e.target.value || 0)} />
             </div>
             <Row k="Change" v={money(change, sym)} />
           </>

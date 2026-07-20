@@ -86,7 +86,7 @@ function Editor({ value, onCancel, onSave }: { value: Supplier; onCancel: () => 
           <div><Label className="text-xs">Phone</Label><Input value={v.phone ?? ""} onChange={(e) => upd("phone", e.target.value)} /></div>
           <div><Label className="text-xs">Email</Label><Input value={v.email ?? ""} onChange={(e) => upd("email", e.target.value)} /></div>
           <div className="sm:col-span-2"><Label className="text-xs">Address</Label><Input value={v.address ?? ""} onChange={(e) => upd("address", e.target.value)} /></div>
-          <div><Label className="text-xs">Balance</Label><Input type="number" value={v.balance} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Balance</Label><Input type="number" value={v.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
         </div>
         <DialogFooter><Button variant="ghost" onClick={onCancel}>Cancel</Button><Button onClick={() => onSave(v)}>Save</Button></DialogFooter>
       </DialogContent>
