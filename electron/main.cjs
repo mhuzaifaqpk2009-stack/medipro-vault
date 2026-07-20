@@ -176,4 +176,44 @@ ipcMain.handle("recovery:read", async (_e, id) => {
 
 ipcMain.handle("system:userData", () => app.getPath("userData"));
 
+/* -------- printing -------- */
+ipcMain.handle("app:print-html", async (_e, html) => {
+  if (typeof html !== "string" || !html) {
+    console.error("[print] empty html payload");
+    return { ok: false, error: "empty html" };
+  }
+  let win = null;
+  try {
+    win = new BrowserWindow({
+      show: false,
+      webPreferences: { offscreen: false, sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false },
+    });
+    await new Promise((resolve, reject) => {
+      const onFail = (_ev, code, desc) => reject(new Error(`load failed ${code}: ${desc}`));
+      win.webContents.once("did-finish-load", resolve);
+      win.webContents.once("did-fail-load", onFail);
+      const dataUrl = "data:text/html;charset=utf-8," + encodeURIComponent(html);
+      win.loadURL(dataUrl).catch(reject);
+    });
+    // give layout a tick
+    await new Promise((r) => setTimeout(r, 120));
+    const result = await new Promise((resolve) => {
+      win.webContents.print(
+        { silent: false, printBackground: true, margins: { marginType: "minimum" } },
+        (success, failureReason) => resolve({ success, failureReason }),
+      );
+    });
+    if (!result.success && result.failureReason && result.failureReason !== "cancelled") {
+      console.error("[print] webContents.print failed:", result.failureReason);
+      return { ok: false, error: result.failureReason };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[print] error:", err);
+    return { ok: false, error: String(err && err.message || err) };
+  } finally {
+    try { if (win && !win.isDestroyed()) win.destroy(); } catch {}
+  }
+});
+
 function sanitize(s) { return String(s).replace(/[^\w.-]+/g, "_"); }
