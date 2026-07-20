@@ -309,11 +309,6 @@ function LandingPage() {
           </section>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <MiniCard icon={<ShieldCheck className="h-4 w-4" />} title="Offline" body="No cloud. Local only." />
-          <MiniCard icon={<Lock className="h-4 w-4" />} title="Encrypted" body="AES-256 protected." />
-          <MiniCard icon={<Zap className="h-4 w-4" />} title="Portable" body="Single .medicore file." />
-        </div>
       </div>
     </div>
   );
