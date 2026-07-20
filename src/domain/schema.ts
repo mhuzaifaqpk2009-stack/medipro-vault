@@ -104,12 +104,16 @@ export interface Sale {
   invoiceNumber: string;
   date: string;
   customerId?: string;
+  /** Cashier-entered free-text note printed on the receipt. */
+  remark?: string;
   items: SaleItem[];
   discount: number;
   taxPercent: number;
   payments: SalePayment[];
   status: "completed" | "cancelled" | "returned";
   notes?: string;
+  /** Username of the cashier who created the sale (for audit). */
+  createdBy?: string;
 }
 
 export interface StockAdjustment {
