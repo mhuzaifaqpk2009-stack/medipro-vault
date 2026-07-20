@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopbar } from "@/components/AppTopbar";
 import { useAutoSave } from "@/hooks/use-autosave";
 import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -13,9 +14,9 @@ export const Route = createFileRoute("/app")({
     ],
   }),
   beforeLoad: () => {
-    // SSR-safe: skip on server; on client redirect to project manager if no project loaded.
-    if (typeof window !== "undefined" && !useProjectStore.getState().data) {
-      throw redirect({ to: "/" });
+    if (typeof window !== "undefined") {
+      if (!useSession.getState().user) throw redirect({ to: "/" });
+      if (!useProjectStore.getState().data) throw redirect({ to: "/" });
     }
   },
   component: AppLayout,
