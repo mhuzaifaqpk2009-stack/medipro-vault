@@ -6,6 +6,8 @@ import {
   ShoppingCart, ArrowUpRight,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
+import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
 
 export const Route = createFileRoute("/app/")({ component: Dashboard });
@@ -84,16 +86,20 @@ function Dashboard() {
     };
   }, [data]);
 
-  const kpis = [
-    { label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
-    { label: "Low Stock", value: stats.lowStock, icon: AlertTriangle, tone: "warning" },
-    { label: "Expired", value: stats.expired, icon: CalendarX, tone: "destructive" },
-    { label: "Today's Sales", value: money(stats.todayRevenue, sym), icon: ShoppingCart, tone: "info" },
-    { label: "Today's Profit", value: money(stats.todayProfit, sym), icon: TrendingUp, tone: "success" },
-    { label: "Monthly Sales", value: money(stats.monthRevenue, sym), icon: DollarSign, tone: "primary" },
-    { label: "Customers", value: data.customers.length, icon: Users, tone: "info" },
-    { label: "Suppliers", value: data.suppliers.length, icon: Building2, tone: "primary" },
-  ] as const;
+  const user = useSession((st) => st.user);
+  const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
+    { id: "totalMedicines", label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
+    { id: "lowStock", label: "Low Stock", value: stats.lowStock, icon: AlertTriangle, tone: "warning" },
+    { id: "expired", label: "Expired", value: stats.expired, icon: CalendarX, tone: "destructive" },
+    { id: "todayRevenue", label: "Today's Sales", value: money(stats.todayRevenue, sym), icon: ShoppingCart, tone: "info" },
+    { id: "todayProfit", label: "Today's Profit", value: money(stats.todayProfit, sym), icon: TrendingUp, tone: "success" },
+    { id: "monthRevenue", label: "Monthly Sales", value: money(stats.monthRevenue, sym), icon: DollarSign, tone: "primary" },
+    { id: "customers", label: "Customers", value: data.customers.length, icon: Users, tone: "info" },
+    { id: "suppliers", label: "Suppliers", value: data.suppliers.length, icon: Building2, tone: "primary" },
+  ];
+  const kpis = allKpis.filter((k) => isCounterVisible(user, k.id));
+  const showTrend = isCounterVisible(user, "salesTrend");
+  const showMostSold = isCounterVisible(user, "mostSold");
 
   const toneMap: Record<string, string> = {
     primary: "from-primary/15 to-primary/0 text-primary",
@@ -152,65 +158,71 @@ function Dashboard() {
         })}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="surface-card p-6 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-display text-base font-semibold">Sales trend</h2>
-              <p className="text-xs text-muted-foreground">Last 14 days</p>
-            </div>
-          </div>
-          <div className="flex h-56 items-end gap-2">
-            {stats.days.map((d, i) => {
-              const h = (d.value / stats.maxDay) * 100;
-              return (
-                <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: `${Math.max(2, h)}%` }}
-                    transition={{ duration: 0.5, delay: i * 0.03 }}
-                    className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
-                    title={`${d.label}: ${money(d.value, sym)}`}
-                  />
+      {(showTrend || showMostSold) && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {showTrend && (
+            <div className="surface-card p-6 lg:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="font-display text-base font-semibold">Sales trend</h2>
+                  <p className="text-xs text-muted-foreground">Last 14 days</p>
                 </div>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-            <span>{stats.days[0]?.label}</span>
-            <span>{stats.days[stats.days.length - 1]?.label}</span>
-          </div>
-        </div>
+              </div>
+              <div className="flex h-56 items-end gap-2">
+                {stats.days.map((d, i) => {
+                  const h = (d.value / stats.maxDay) * 100;
+                  return (
+                    <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${Math.max(2, h)}%` }}
+                        transition={{ duration: 0.5, delay: i * 0.03 }}
+                        className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
+                        title={`${d.label}: ${money(d.value, sym)}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                <span>{stats.days[0]?.label}</span>
+                <span>{stats.days[stats.days.length - 1]?.label}</span>
+              </div>
+            </div>
+          )}
 
-        <div className="surface-card p-6">
-          <h2 className="font-display text-base font-semibold">Most sold</h2>
-          <p className="text-xs text-muted-foreground">All-time top movers</p>
-          {stats.top.length === 0 ? (
-            <div className="mt-6 grid place-items-center py-12 text-center text-sm text-muted-foreground">
-              <Pill className="mb-2 h-8 w-8 text-muted-foreground/40" />
-              Start selling to populate this list.
-            </div>
-          ) : (
-            <>
-              {stats.mostSold && (
-                <div className="mt-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/0 p-3">
-                  <p className="text-[11px] uppercase tracking-widest text-primary">Best seller</p>
-                  <p className="mt-1 font-display text-lg font-bold">{stats.mostSold.name}</p>
-                  <p className="text-xs text-muted-foreground">{stats.mostSold.qty} units sold</p>
+          {showMostSold && (
+            <div className="surface-card p-6">
+              <h2 className="font-display text-base font-semibold">Most sold</h2>
+              <p className="text-xs text-muted-foreground">All-time top movers</p>
+              {stats.top.length === 0 ? (
+                <div className="mt-6 grid place-items-center py-12 text-center text-sm text-muted-foreground">
+                  <Pill className="mb-2 h-8 w-8 text-muted-foreground/40" />
+                  Start selling to populate this list.
                 </div>
+              ) : (
+                <>
+                  {stats.mostSold && (
+                    <div className="mt-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/0 p-3">
+                      <p className="text-[11px] uppercase tracking-widest text-primary">Best seller</p>
+                      <p className="mt-1 font-display text-lg font-bold">{stats.mostSold.name}</p>
+                      <p className="text-xs text-muted-foreground">{stats.mostSold.qty} units sold</p>
+                    </div>
+                  )}
+                  <ul className="mt-4 space-y-2">
+                    {stats.top.slice(1).map((t) => (
+                      <li key={t.id} className="flex items-center justify-between text-sm">
+                        <span className="truncate">{t.name}</span>
+                        <span className="ml-2 tabular-nums text-muted-foreground">{t.qty}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
-              <ul className="mt-4 space-y-2">
-                {stats.top.slice(1).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate">{t.name}</span>
-                    <span className="ml-2 tabular-nums text-muted-foreground">{t.qty}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

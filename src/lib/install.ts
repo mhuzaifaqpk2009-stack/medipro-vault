@@ -1,19 +1,25 @@
 /**
  * First-run installation record kept in localStorage.
- * Stores a PBKDF2 hash of the app password + the last known data file path
- * (Electron only) so the app can auto-load on subsequent launches.
+ * Holds: users (with permissions), file-encryption password, last file path.
  */
 
+import { defaultPermissions, type StoredUser, type UserRole } from "./users";
+
 const KEY = "medicore.install";
+const LEGACY_SINGLE_USER_NAME = "admin";
 
 export interface InstallRecord {
   setupDone: true;
   pharmacyName: string;
   address: string;
-  saltHex: string;
-  hashHex: string;
-  lastFsPath?: string; // Electron-only path to the .medicore file
-  lastPath?: string; // display path (browser)
+  users: StoredUser[];
+  /** Raw file-encryption password. Local desktop app; kept only in localStorage. */
+  filePassword?: string;
+  lastFsPath?: string;
+  lastPath?: string;
+  // Legacy fields (kept for migration): saltHex/hashHex of single admin
+  saltHex?: string;
+  hashHex?: string;
 }
 
 const enc = new TextEncoder();
@@ -30,25 +36,46 @@ function fromHex(hex: string) {
 
 async function derive(password: string, salt: Uint8Array) {
   const material = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"],
   );
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", salt: salt as BufferSource, iterations: 200_000, hash: "SHA-256" },
-    material,
-    256,
+    material, 256,
   );
   return new Uint8Array(bits);
+}
+
+export async function hashPassword(password: string) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await derive(password, salt);
+  return { saltHex: toHex(salt), hashHex: toHex(bits) };
+}
+
+export async function verifyPassword(password: string, saltHex: string, hashHex: string) {
+  const bits = await derive(password, fromHex(saltHex));
+  return toHex(bits) === hashHex;
 }
 
 export function readInstall(): InstallRecord | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as InstallRecord) : null;
+    if (!raw) return null;
+    const rec = JSON.parse(raw) as InstallRecord;
+    // Migrate legacy single-user record: promote to admin user.
+    if ((!rec.users || rec.users.length === 0) && rec.saltHex && rec.hashHex) {
+      const admin: StoredUser = {
+        id: crypto.randomUUID(),
+        username: LEGACY_SINGLE_USER_NAME,
+        role: "admin",
+        saltHex: rec.saltHex,
+        hashHex: rec.hashHex,
+        permissions: defaultPermissions("admin"),
+      };
+      rec.users = [admin];
+      writeInstall(rec);
+    }
+    return rec;
   } catch {
     return null;
   }
@@ -57,24 +84,58 @@ export function readInstall(): InstallRecord | null {
 export function writeInstall(rec: InstallRecord) {
   localStorage.setItem(KEY, JSON.stringify(rec));
 }
-
 export function updateInstall(patch: Partial<InstallRecord>) {
   const cur = readInstall();
   if (!cur) return;
   writeInstall({ ...cur, ...patch });
 }
-
 export function clearInstall() {
   localStorage.removeItem(KEY);
 }
 
-export async function hashPassword(password: string): Promise<{ saltHex: string; hashHex: string }> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const bits = await derive(password, salt);
-  return { saltHex: toHex(salt), hashHex: toHex(bits) };
+export async function createUser(input: {
+  username: string;
+  password: string;
+  role: UserRole;
+  permissions?: Partial<import("./users").UserPermissions>;
+}): Promise<StoredUser> {
+  const { saltHex, hashHex } = await hashPassword(input.password);
+  return {
+    id: crypto.randomUUID(),
+    username: input.username.trim(),
+    role: input.role,
+    saltHex, hashHex,
+    permissions: { ...defaultPermissions(input.role), ...(input.permissions ?? {}) },
+  };
 }
 
-export async function verifyPassword(password: string, saltHex: string, hashHex: string): Promise<boolean> {
-  const bits = await derive(password, fromHex(saltHex));
-  return toHex(bits) === hashHex;
+export async function findUserByLogin(
+  username: string,
+  password: string,
+): Promise<StoredUser | null> {
+  const rec = readInstall();
+  if (!rec) return null;
+  const u = rec.users?.find((x) => x.username.toLowerCase() === username.trim().toLowerCase());
+  if (!u) return null;
+  const ok = await verifyPassword(password, u.saltHex, u.hashHex);
+  return ok ? u : null;
+}
+
+export function upsertUser(u: StoredUser) {
+  const rec = readInstall();
+  if (!rec) return;
+  const users = rec.users ?? [];
+  const i = users.findIndex((x) => x.id === u.id);
+  if (i >= 0) users[i] = u;
+  else users.push(u);
+  writeInstall({ ...rec, users });
+}
+
+export function removeUser(id: string) {
+  const rec = readInstall();
+  if (!rec) return;
+  const users = (rec.users ?? []).filter((x) => x.id !== id);
+  // Never remove the last admin.
+  if (!users.some((x) => x.role === "admin")) return;
+  writeInstall({ ...rec, users });
 }

@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProjectStore } from "@/store/project-store";
 import { uid } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/categories")({ component: CategoriesPage });
+export const Route = createFileRoute("/app/categories")({
+  component: () => <PermissionGate perm="categories"><CategoriesPage /></PermissionGate>,
+});
 
 function CategoriesPage() {
   const list = useProjectStore((s) => s.data!.categories);

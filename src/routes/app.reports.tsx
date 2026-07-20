@@ -4,8 +4,11 @@ import { BarChart3, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
 import { money, useCurrencySymbol } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/reports")({ component: ReportsPage });
+export const Route = createFileRoute("/app/reports")({
+  component: () => <PermissionGate perm="reports"><ReportsPage /></PermissionGate>,
+});
 
 function ReportsPage() {
   const data = useProjectStore((s) => s.data!);

@@ -12,6 +12,7 @@ import { pickOpenFile } from "@/lib/project-io";
 import { openProjectFromBytes } from "@/store/project-store";
 import { WrongPasswordError, decodeProject } from "@/lib/project-codec";
 import { updateInstall } from "@/lib/install";
+import { useSession } from "@/store/session-store";
 
 export function AppTopbar() {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ export function AppTopbar() {
     const choice = await confirmUnsaved();
     if (choice === "cancel") return;
     useProjectStore.getState().close();
+    useSession.getState().clear();
     navigate({ to: "/" });
   }
 

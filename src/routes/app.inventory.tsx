@@ -4,8 +4,11 @@ import { Boxes, AlertTriangle, CalendarX, PackageX } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
 import { daysUntil } from "@/lib/format";
+import { PermissionGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/inventory")({ component: InventoryPage });
+export const Route = createFileRoute("/app/inventory")({
+  component: () => <PermissionGate perm="inventory"><InventoryPage /></PermissionGate>,
+});
 
 function InventoryPage() {
   const meds = useProjectStore((s) => s.data!.medicines);

@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  FolderOpen, Plus, Lock, Stethoscope, LogIn, Sparkles,
+  FolderOpen, Plus, Lock, Stethoscope, LogIn, Sparkles, User as UserIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,10 @@ import { pickOpenFile, pickSaveFile, writeToHandle } from "@/lib/project-io";
 import { decodeProject, encodeProject, WrongPasswordError } from "@/lib/project-codec";
 import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
 import {
-  readInstall, writeInstall, updateInstall, hashPassword, verifyPassword, clearInstall,
+  readInstall, writeInstall, updateInstall, clearInstall,
+  createUser, findUserByLogin,
 } from "@/lib/install";
+import { useSession } from "@/store/session-store";
 import { createEmptyProject, type ProjectData } from "@/domain/schema";
 import { upsertRecent } from "@/lib/recents";
 
@@ -31,6 +33,7 @@ type Screen = "setup" | "login" | "not-found";
 
 function LandingPage() {
   const navigate = useNavigate();
+  const setUser = useSession((s) => s.setUser);
   const [screen, setScreen] = useState<Screen>(() =>
     readInstall() ? "login" : "setup",
   );
@@ -38,8 +41,10 @@ function LandingPage() {
   // Setup form
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [username, setUsername] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const [loginUser, setLoginUser] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +55,7 @@ function LandingPage() {
     setError(null);
     if (!name.trim()) return setError("Pharmacy name is required");
     if (!address.trim()) return setError("Address is required");
+    if (!username.trim()) return setError("Admin username is required");
     if (pw.length < 4) return setError("Password must be at least 4 characters");
     if (pw !== pw2) return setError("Passwords do not match");
     setBusy(true);
@@ -62,16 +68,18 @@ function LandingPage() {
       const bytes = await encodeProject(project as unknown as Record<string, unknown>, pw);
       await writeToHandle(handle, bytes);
 
-      const { saltHex, hashHex } = await hashPassword(pw);
+      const admin = await createUser({ username: username.trim(), password: pw, role: "admin" });
       writeInstall({
         setupDone: true,
         pharmacyName: name.trim(),
         address: address.trim(),
-        saltHex, hashHex,
+        users: [admin],
+        filePassword: pw,
         lastFsPath: handle.fsPath,
         lastPath: handle.path,
       });
       useProjectStore.getState().load(project, handle, pw);
+      setUser(admin);
       upsertRecent({
         name: project.meta.name, path: handle.path,
         fsPath: handle.fsPath, encrypted: true,
@@ -110,29 +118,33 @@ function LandingPage() {
     if (!rec) { setScreen("setup"); return; }
     setBusy(true);
     try {
-      const ok = await verifyPassword(pw, rec.saltHex, rec.hashHex);
-      if (!ok) { setError("Wrong password"); setBusy(false); return; }
+      const u = await findUserByLogin(loginUser, pw);
+      if (!u) { setError("Wrong username or password"); setBusy(false); return; }
 
-      // Try to auto-load the last data file (Electron only).
+      const filePw = rec.filePassword ?? (u.role === "admin" ? pw : "");
+      if (!filePw && u.role !== "admin") {
+        setError("File password not set — an admin must sign in first.");
+        setBusy(false);
+        return;
+      }
+
       if (inElectron && rec.lastFsPath) {
-        const res = await tryLoad(rec.lastFsPath, pw);
-        if (res === "missing") {
+        const res = await tryLoad(rec.lastFsPath, filePw);
+        if (res === "missing" || res === "wrong") {
+          setUser(u); // still authenticate the user
           setScreen("not-found");
           setBusy(false);
           return;
         }
-        if (res === "wrong") {
-          // Password was changed for the file; user must Load Data manually.
-          setScreen("not-found");
-          setBusy(false);
-          return;
-        }
-        toast.success(`Welcome back, ${rec.pharmacyName}`);
+        // Persist the file password if admin logged in and it wasn't stored yet.
+        if (u.role === "admin" && !rec.filePassword) updateInstall({ filePassword: pw });
+        setUser(u);
+        toast.success(`Welcome, ${u.username}`);
         navigate({ to: "/app" });
         return;
       }
 
-      // Browser fallback: cannot auto-load, always ask to pick.
+      setUser(u);
       setScreen("not-found");
     } finally {
       setBusy(false);
@@ -144,8 +156,10 @@ function LandingPage() {
     try {
       const picked = await pickOpenFile();
       if (!picked) return;
+      const rec = readInstall();
+      const pwToUse = rec?.filePassword ?? pw;
       try {
-        const data = await openProjectFromBytes(picked.bytes, picked.handle, pw);
+        const data = await openProjectFromBytes(picked.bytes, picked.handle, pwToUse);
         if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
         upsertRecent({
           name: data.meta.name, path: picked.handle.path,
@@ -155,16 +169,22 @@ function LandingPage() {
         navigate({ to: "/app" });
       } catch (e) {
         if (e instanceof WrongPasswordError) {
-          // Try without password (unencrypted file)
+          const askPw = window.prompt("Enter password for this file:") || "";
+          if (!askPw) return;
           try {
-            const { payload } = await decodeProject(picked.bytes);
-            await openProjectFromBytes(picked.bytes, picked.handle);
-            const data = payload as unknown as ProjectData;
+            const data = await openProjectFromBytes(picked.bytes, picked.handle, askPw);
             if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
             toast.success(`Loaded ${data.meta.name}`);
             navigate({ to: "/app" });
           } catch {
-            toast.error("Wrong password for this file");
+            try {
+              await decodeProject(picked.bytes);
+              await openProjectFromBytes(picked.bytes, picked.handle);
+              toast.success("Loaded");
+              navigate({ to: "/app" });
+            } catch {
+              toast.error("Wrong password for this file");
+            }
           }
         } else {
           toast.error("Could not load file");
@@ -176,19 +196,19 @@ function LandingPage() {
   }
 
   async function makeNewFromNotFound() {
-    // Rebuild a fresh project with existing install credentials.
     const rec = readInstall();
     if (!rec) { setScreen("setup"); return; }
     try {
       const handle = await pickSaveFile(rec.pharmacyName);
       if (!handle) return;
+      const filePw = rec.filePassword ?? pw;
       const project = createEmptyProject(rec.pharmacyName, true);
       project.settings.pharmacyName = rec.pharmacyName;
       project.settings.address = rec.address;
-      const bytes = await encodeProject(project as unknown as Record<string, unknown>, pw);
+      const bytes = await encodeProject(project as unknown as Record<string, unknown>, filePw);
       await writeToHandle(handle, bytes);
-      updateInstall({ lastFsPath: handle.fsPath, lastPath: handle.path });
-      useProjectStore.getState().load(project, handle, pw);
+      updateInstall({ lastFsPath: handle.fsPath, lastPath: handle.path, filePassword: filePw });
+      useProjectStore.getState().load(project, handle, filePw);
       upsertRecent({
         name: project.meta.name, path: handle.path,
         fsPath: handle.fsPath, encrypted: true,
@@ -225,7 +245,7 @@ function LandingPage() {
               <h2 className="font-display text-xl font-semibold">First-time setup</h2>
             </div>
             <p className="mb-6 text-sm text-muted-foreground">
-              Enter your pharmacy details. You'll then choose where to save the encrypted data file.
+              Create the admin account. You can add more users (with limited permissions) later from Settings.
             </p>
             <div className="grid gap-4">
               <Field label="Pharmacy name">
@@ -234,8 +254,11 @@ function LandingPage() {
               <Field label="Address / Location">
                 <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Gill Road, Gujranwala" />
               </Field>
+              <Field label="Admin username">
+                <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" />
+              </Field>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Password">
+                <Field label="Admin password">
                   <Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </Field>
                 <Field label="Confirm password">
@@ -257,22 +280,33 @@ function LandingPage() {
               <h2 className="font-display text-xl font-semibold">Welcome back</h2>
             </div>
             <p className="mb-6 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{install.pharmacyName}</span> — enter password to unlock.
+              <span className="font-medium text-foreground">{install.pharmacyName}</span> — sign in to continue.
             </p>
             <form
               onSubmit={(e) => { e.preventDefault(); void doLogin(); }}
               className="grid gap-4"
             >
+              <Field label="Username">
+                <div className="relative">
+                  <UserIcon className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-8"
+                    value={loginUser} autoFocus
+                    onChange={(e) => setLoginUser(e.target.value)}
+                    placeholder="admin"
+                  />
+                </div>
+              </Field>
               <Field label="Password">
                 <Input
-                  type="password" value={pw} autoFocus
+                  type="password" value={pw}
                   onChange={(e) => setPw(e.target.value)}
                   placeholder="••••••••"
                 />
               </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button size="lg" type="submit" disabled={busy || !pw}>
-                <LogIn className="mr-2 h-4 w-4" /> {busy ? "Unlocking…" : "Sign in"}
+              <Button size="lg" type="submit" disabled={busy || !pw || !loginUser}>
+                <LogIn className="mr-2 h-4 w-4" /> {busy ? "Signing in…" : "Sign in"}
               </Button>
               <button
                 type="button"
@@ -280,7 +314,7 @@ function LandingPage() {
                   if (window.confirm("Reset the pharmacy setup? You'll need to run first-time setup again. Your data file is not deleted.")) {
                     clearInstall();
                     setScreen("setup");
-                    setPw(""); setPw2("");
+                    setPw(""); setPw2(""); setLoginUser("");
                   }
                 }}
                 className="mt-2 text-center text-xs text-muted-foreground hover:text-foreground"
@@ -308,7 +342,6 @@ function LandingPage() {
             </div>
           </section>
         )}
-
       </div>
     </div>
   );
@@ -322,4 +355,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-
