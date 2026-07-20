@@ -323,14 +323,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function MiniCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <div className="surface-card p-4">
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">{icon}</span>
-        <p className="text-sm font-semibold">{title}</p>
-      </div>
-      <p className="text-xs text-muted-foreground">{body}</p>
-    </div>
-  );
-}
