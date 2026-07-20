@@ -79,7 +79,7 @@ function SettingsPage() {
           <Field label="Tax %">
             <Input
               type="number"
-              value={s.taxPercent}
+              value={s.taxPercent || ""}
               onChange={(e) => set("taxPercent", Number(e.target.value) || 0)}
             />
           </Field>

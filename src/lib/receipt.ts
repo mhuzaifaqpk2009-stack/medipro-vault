@@ -72,14 +72,28 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
 </body></html>`;
 }
 
-export function printReceipt(sale: Sale, data: ProjectData) {
+export async function printReceipt(sale: Sale, data: ProjectData) {
   const html = buildReceiptHtml(sale, data);
+  const api = (typeof window !== "undefined" ? (window as any).medicore : null);
+  if (api?.print?.html) {
+    try {
+      const res = await api.print.html(html);
+      if (!res?.ok) {
+        console.error("[printReceipt] electron print failed:", res?.error);
+      }
+      return;
+    } catch (err) {
+      console.error("[printReceipt] IPC error:", err);
+      return;
+    }
+  }
+  // Browser / dev fallback
   const w = window.open("", "_blank", "width=380,height=640");
-  if (!w) return;
+  if (!w) { console.error("[printReceipt] window.open blocked"); return; }
   w.document.open();
   w.document.write(html);
   w.document.close();
-  setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 250);
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) { console.error(e); } }, 250);
 }
 
 export function nextInvoiceNumber(sales: { invoiceNumber: string }[]): string {

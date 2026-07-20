@@ -157,11 +157,11 @@ function MedicineEditor({ value, onCancel, onSave }: {
           <F label="Barcode"><Input value={cur.barcode ?? ""} onChange={(e) => upd("barcode", e.target.value)} /></F>
           <F label="Batch #"><Input value={cur.batchNumber ?? ""} onChange={(e) => upd("batchNumber", e.target.value)} /></F>
           <F label="Rack"><Input value={cur.rackNumber ?? ""} onChange={(e) => upd("rackNumber", e.target.value)} /></F>
-          <F label="Purchase price"><Input type="number" value={cur.purchasePrice} onChange={(e) => upd("purchasePrice", +e.target.value || 0)} /></F>
-          <F label="Sale price"><Input type="number" value={cur.salePrice} onChange={(e) => upd("salePrice", +e.target.value || 0)} /></F>
-          <F label="MRP"><Input type="number" value={cur.mrp} onChange={(e) => upd("mrp", +e.target.value || 0)} /></F>
-          <F label="Stock"><Input type="number" value={cur.stockQuantity} onChange={(e) => upd("stockQuantity", +e.target.value || 0)} /></F>
-          <F label="Minimum stock"><Input type="number" value={cur.minimumStock} onChange={(e) => upd("minimumStock", +e.target.value || 0)} /></F>
+          <F label="Purchase price"><Input type="number" value={cur.purchasePrice || ""} onChange={(e) => upd("purchasePrice", +e.target.value || 0)} /></F>
+          <F label="Sale price"><Input type="number" value={cur.salePrice || ""} onChange={(e) => upd("salePrice", +e.target.value || 0)} /></F>
+          <F label="MRP"><Input type="number" value={cur.mrp || ""} onChange={(e) => upd("mrp", +e.target.value || 0)} /></F>
+          <F label="Stock"><Input type="number" value={cur.stockQuantity || ""} onChange={(e) => upd("stockQuantity", +e.target.value || 0)} /></F>
+          <F label="Minimum stock"><Input type="number" value={cur.minimumStock || ""} onChange={(e) => upd("minimumStock", +e.target.value || 0)} /></F>
           <F label="Expiry (YYYY-MM-DD)"><Input type="date" value={cur.expiryDate ?? ""} onChange={(e) => upd("expiryDate", e.target.value)} /></F>
         </div>
         <DialogFooter>

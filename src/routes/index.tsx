@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  FolderOpen, Plus, Lock, Stethoscope, ShieldCheck, Zap, LogIn, Sparkles,
+  FolderOpen, Plus, Lock, Stethoscope, LogIn, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -309,11 +309,6 @@ function LandingPage() {
           </section>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <MiniCard icon={<ShieldCheck className="h-4 w-4" />} title="Offline" body="No cloud. Local only." />
-          <MiniCard icon={<Lock className="h-4 w-4" />} title="Encrypted" body="AES-256 protected." />
-          <MiniCard icon={<Zap className="h-4 w-4" />} title="Portable" body="Single .medicore file." />
-        </div>
       </div>
     </div>
   );
@@ -328,14 +323,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function MiniCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <div className="surface-card p-4">
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">{icon}</span>
-        <p className="text-sm font-semibold">{title}</p>
-      </div>
-      <p className="text-xs text-muted-foreground">{body}</p>
-    </div>
-  );
-}

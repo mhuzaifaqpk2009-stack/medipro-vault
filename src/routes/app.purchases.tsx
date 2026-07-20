@@ -110,8 +110,8 @@ function NewPurchase({ onClose, onSave }: {
                     <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>{data.medicines.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input type="number" className="h-8" value={r.quantity} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
-                  <Input type="number" className="h-8" value={r.purchasePrice} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                  <Input type="number" className="h-8" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
+                  <Input type="number" className="h-8" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
                   <Input className="h-8" placeholder="Batch" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
                   <Input type="date" className="h-8" value={r.expiryDate ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, expiryDate: e.target.value } : x))} />
                   <Button size="icon" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>

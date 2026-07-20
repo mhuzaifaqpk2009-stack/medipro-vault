@@ -33,4 +33,7 @@ contextBridge.exposeInMainWorld("medicore", {
     userDataPath: () => ipcRenderer.invoke("system:userData"),
     platform: process.platform,
   },
+  print: {
+    html: (html) => ipcRenderer.invoke("app:print-html", html),
+  },
 });
