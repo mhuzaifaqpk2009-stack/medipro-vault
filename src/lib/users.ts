@@ -60,15 +60,15 @@ export interface StoredUser {
 export function defaultPermissions(role: UserRole): UserPermissions {
   if (role === "admin") {
     return {
-      medicines: true, inventory: true, purchases: true, reports: true,
-      suppliers: true, categories: true,
-      applyDiscount: true, changeTax: true, forceSale: true,
+      sales: true, bills: true, medicines: true, inventory: true,
+      purchases: true, reports: true, suppliers: true, categories: true,
+      customers: true, applyDiscount: true, changeTax: true, forceSale: true,
     };
   }
   return {
-    medicines: false, inventory: false, purchases: false, reports: false,
-    suppliers: false, categories: false,
-    applyDiscount: false, changeTax: false, forceSale: false,
+    sales: true, bills: true, medicines: false, inventory: false,
+    purchases: false, reports: false, suppliers: false, categories: false,
+    customers: false, applyDiscount: false, changeTax: false, forceSale: false,
   };
 }
 
