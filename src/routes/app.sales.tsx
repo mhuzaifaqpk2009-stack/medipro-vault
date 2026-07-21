@@ -14,8 +14,11 @@ import { useSession } from "@/store/session-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
 import type { SaleItem, PaymentMethod, Sale } from "@/domain/schema";
+import { PermissionGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/sales")({ component: SalesPage });
+export const Route = createFileRoute("/app/sales")({
+  component: () => <PermissionGate perm="sales"><SalesPage /></PermissionGate>,
+});
 
 interface CartLine extends SaleItem { name: string; forced?: boolean }
 
@@ -84,7 +87,6 @@ function SalesPage() {
 
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
-    if (method === "cash" && received < total) { toast.error("Insufficient cash received"); return; }
     const invoiceNumber = nextInvoiceNumber(data.sales);
     const newSale: Sale = {
       id: uid("sale_"),
@@ -168,11 +170,11 @@ function SalesPage() {
           ) : (
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground">
-                <tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-20">Disc %</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr>
+                <tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr>
               </thead>
               <tbody>
                 {cart.map((l, i) => {
-                  const line = l.salePrice * l.quantity * (1 - l.discountPercent / 100);
+                  const line = l.salePrice * l.quantity;
                   return (
                     <tr key={l.medicineId} className="border-b last:border-0">
                       <td className="p-2">
@@ -181,14 +183,6 @@ function SalesPage() {
                       </td>
                       <td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => updLine(i, { quantity: Math.max(1, +e.target.value || 1) })} /></td>
                       <td className="p-2"><Input type="number" className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>
-                      <td className="p-2">
-                        <Input
-                          type="number" className="h-8 text-right"
-                          value={l.discountPercent || ""}
-                          disabled={!canDiscount}
-                          onChange={(e) => updLine(i, { discountPercent: Math.min(100, Math.max(0, +e.target.value || 0)) })}
-                        />
-                      </td>
                       <td className="p-2 text-right tabular-nums">{money(line, sym)}</td>
                       <td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                     </tr>
@@ -218,20 +212,20 @@ function SalesPage() {
         </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />
-          <div className="mt-2 flex items-center gap-2">
-            <Label className="text-xs">Tax %</Label>
+          <div className="mt-2 flex items-center gap-3">
+            <Label className="text-xs whitespace-nowrap w-16">Tax %</Label>
             <Input
-              type="number" className="h-8"
+              type="number" className="h-8 flex-1"
               disabled={!canChangeTax}
               value={taxPercent || ""}
               onChange={(e) => setTaxPercent(Math.max(0, +e.target.value || 0))}
             />
           </div>
           <Row k={`Tax`} v={money(taxAmt, sym)} />
-          <div className="mt-2 flex items-center gap-2">
-            <Label className="text-xs">Discount</Label>
+          <div className="mt-2 flex items-center gap-3">
+            <Label className="text-xs whitespace-nowrap w-16">Discount</Label>
             <Input
-              type="number" className="h-8"
+              type="number" className="h-8 flex-1"
               disabled={!canDiscount}
               value={discount || ""}
               onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))}
@@ -256,7 +250,7 @@ function SalesPage() {
         {method === "cash" && (
           <>
             <div>
-              <Label className="text-xs">Cash received</Label>
+              <Label className="text-xs">Cash received (optional)</Label>
               <Input type="number" value={received || ""} onChange={(e) => setReceived(+e.target.value || 0)} />
             </div>
             <Row k="Change" v={money(change, sym)} />

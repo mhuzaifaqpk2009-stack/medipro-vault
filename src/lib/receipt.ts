@@ -36,9 +36,7 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   const footer1 = (s as any).billFooter1 || "Thanks for purchasing";
   const footer2 = (s as any).billFooter2 || "Please check & verify your medicines. Medicines will be returned within 15 days. Fridge items are not returnable.";
 
-  const remarkLine = sale.remark
-    ? `<div class="meta-line"><strong>Remarks:</strong> ${esc(sale.remark)}</div>`
-    : "";
+  const remarkLine = `<div class="meta-line"><strong>Remarks:</strong> ${esc(sale.remark ?? "")}</div>`;
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(sale.invoiceNumber)}</title>
 <style>
@@ -55,11 +53,13 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   h1 { font-size: 15px; text-align: center; margin: 0 0 2px; letter-spacing: .5px; }
   .addr, .footer { text-align: center; font-size: 11px; line-height: 1.35; }
   .divider { border-top: 1px dashed #000; margin: 6px 0; }
+  .divider-solid { border-top: 1px solid #000; margin: 6px 0; }
   .meta-row { display: flex; justify-content: space-between; font-size: 11px; }
   .meta-line { font-size: 11px; margin-top: 2px; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   th, td { padding: 2px 3px; text-align: left; word-break: break-word; }
   th { border-bottom: 1px solid #000; }
+  tbody tr:last-child td { border-bottom: 1px solid #000; }
   .r { text-align: right; }
   .totals { margin-top: 6px; font-size: 12px; }
   .totals .row { display: flex; justify-content: space-between; padding: 1px 0; }
@@ -71,10 +71,10 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   <div class="addr">${esc(s.address || "")}</div>
   <div class="addr">${esc(s.phone ? "Ph: " + s.phone : "")}</div>
   <div class="divider"></div>
-  <div class="meta-row"><span>Bill #: ${esc(sale.invoiceNumber)}</span><span>${new Date(sale.date).toLocaleString()}</span></div>
+  <div class="meta-row"><span>Invoice #: ${esc(sale.invoiceNumber)}</span><span>${new Date(sale.date).toLocaleString()}</span></div>
   <div class="meta-line"><strong>Customer:</strong> ${esc(customerName)}</div>
   ${remarkLine}
-  <div class="divider"></div>
+  <div class="divider-solid"></div>
   <table>
     <thead><tr><th>#</th><th>Item</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead>
     <tbody>${rows}</tbody>

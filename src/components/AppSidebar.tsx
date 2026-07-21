@@ -39,9 +39,9 @@ type NavItem = {
 };
 
 const primary: NavItem[] = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart },
-  { to: "/app/bills", label: "Bills", icon: Receipt },
+  { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true, adminOnly: true },
+  { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart, perm: "sales" },
+  { to: "/app/bills", label: "Bills", icon: Receipt, perm: "bills" },
   { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines" },
   { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory" },
 ];
@@ -49,7 +49,7 @@ const primary: NavItem[] = [
 const secondary: NavItem[] = [
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers" },
-  { to: "/app/customers", label: "Customers", icon: Users },
+  { to: "/app/customers", label: "Customers", icon: Users, perm: "customers" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories" },
 ];
 

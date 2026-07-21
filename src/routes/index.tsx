@@ -23,7 +23,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "MediCore — Sign in" },
-      { name: "description", content: "Local pharmacy management, fully offline." },
+      { name: "description", content: "Pharmacy Management System." },
     ],
   }),
   component: LandingPage,
@@ -234,12 +234,12 @@ function LandingPage() {
           </div>
           <div>
             <h1 className="font-display text-3xl font-bold tracking-tight">MediCore</h1>
-            <p className="text-sm text-muted-foreground">Offline pharmacy management</p>
+            <p className="text-sm text-muted-foreground">Pharmacy Management System</p>
           </div>
         </motion.header>
 
         {screen === "setup" && (
-          <section className="surface-card p-8">
+          <section key="setup" className="surface-card p-8">
             <div className="mb-6 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               <h2 className="font-display text-xl font-semibold">First-time setup</h2>
@@ -313,8 +313,10 @@ function LandingPage() {
                 onClick={() => {
                   if (window.confirm("Reset the pharmacy setup? You'll need to run first-time setup again. Your data file is not deleted.")) {
                     clearInstall();
-                    setScreen("setup");
+                    setName(""); setAddress(""); setUsername("");
                     setPw(""); setPw2(""); setLoginUser("");
+                    setError(null); setBusy(false);
+                    setScreen("setup");
                   }
                 }}
                 className="mt-2 text-center text-xs text-muted-foreground hover:text-foreground"

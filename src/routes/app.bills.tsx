@@ -8,7 +8,11 @@ import { money, useCurrencySymbol } from "@/lib/format";
 import { printReceipt } from "@/lib/receipt";
 import type { Sale } from "@/domain/schema";
 
-export const Route = createFileRoute("/app/bills")({ component: BillsPage });
+import { PermissionGate } from "@/components/PermissionGate";
+
+export const Route = createFileRoute("/app/bills")({
+  component: () => <PermissionGate perm="bills"><BillsPage /></PermissionGate>,
+});
 
 function BillsPage() {
   const data = useProjectStore((s) => s.data!);

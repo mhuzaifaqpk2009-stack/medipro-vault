@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
+import { AdminGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/")({ component: Dashboard });
+export const Route = createFileRoute("/app/")({
+  component: () => <AdminGate><Dashboard /></AdminGate>,
+});
 
 function Dashboard() {
   const data = useProjectStore((s) => s.data)!;
@@ -87,6 +90,9 @@ function Dashboard() {
   }, [data]);
 
   const user = useSession((st) => st.user);
+  const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  const toggle = (k: string) => setHidden((h) => ({ ...h, [k]: !h[k] }));
+  const mask = "••••";
   const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
     { id: "totalMedicines", label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
     { id: "lowStock", label: "Low Stock", value: stats.lowStock, icon: AlertTriangle, tone: "warning" },
@@ -144,10 +150,15 @@ function Dashboard() {
               <div className="relative flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
-                  <p className="mt-2 font-display text-3xl font-bold tabular-nums">{k.value}</p>
+                  <p className="mt-2 font-display text-3xl font-bold tabular-nums">{hidden[k.id] ? mask : k.value}</p>
                 </div>
-                <div className={`grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br ${toneMap[k.tone]}`}>
-                  <Icon className="h-5 w-5" />
+                <div className="flex items-center gap-1">
+                  <button onClick={() => toggle(k.id)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted" title={hidden[k.id] ? "Show" : "Hide"}>
+                    {hidden[k.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <div className={`grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br ${toneMap[k.tone]}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
                 </div>
               </div>
               <div className="relative mt-4 flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -167,35 +178,53 @@ function Dashboard() {
                   <h2 className="font-display text-base font-semibold">Sales trend</h2>
                   <p className="text-xs text-muted-foreground">Last 14 days</p>
                 </div>
+                <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                  {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
-              <div className="flex h-56 items-end gap-2">
-                {stats.days.map((d, i) => {
-                  const h = (d.value / stats.maxDay) * 100;
-                  return (
-                    <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${Math.max(2, h)}%` }}
-                        transition={{ duration: 0.5, delay: i * 0.03 }}
-                        className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
-                        title={`${d.label}: ${money(d.value, sym)}`}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-                <span>{stats.days[0]?.label}</span>
-                <span>{stats.days[stats.days.length - 1]?.label}</span>
-              </div>
+              {hidden._trend ? (
+                <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
+              ) : (
+                <>
+                  <div className="flex h-56 items-end gap-2">
+                    {stats.days.map((d, i) => {
+                      const h = (d.value / stats.maxDay) * 100;
+                      return (
+                        <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${Math.max(2, h)}%` }}
+                            transition={{ duration: 0.5, delay: i * 0.03 }}
+                            className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
+                            title={`${d.label}: ${money(d.value, sym)}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+                    <span>{stats.days[0]?.label}</span>
+                    <span>{stats.days[stats.days.length - 1]?.label}</span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {showMostSold && (
             <div className="surface-card p-6">
-              <h2 className="font-display text-base font-semibold">Most sold</h2>
-              <p className="text-xs text-muted-foreground">All-time top movers</p>
-              {stats.top.length === 0 ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-display text-base font-semibold">Most sold</h2>
+                  <p className="text-xs text-muted-foreground">All-time top movers</p>
+                </div>
+                <button onClick={() => toggle("_top")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                  {hidden._top ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {hidden._top ? (
+                <div className="mt-6 grid place-items-center py-12 text-sm text-muted-foreground">Hidden</div>
+              ) : stats.top.length === 0 ? (
                 <div className="mt-6 grid place-items-center py-12 text-center text-sm text-muted-foreground">
                   <Pill className="mb-2 h-8 w-8 text-muted-foreground/40" />
                   Start selling to populate this list.

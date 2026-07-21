@@ -9,6 +9,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
@@ -142,6 +145,7 @@ function MedicinesPage() {
 function MedicineEditor({ value, onCancel, onSave }: {
   value: Medicine | null; onCancel: () => void; onSave: (m: Medicine) => void;
 }) {
+  const categories = useProjectStore((s) => s.data!.categories);
   const [m, setM] = useState<Medicine | null>(value);
   // reset when opening a new record
   if (value && (!m || m.id !== value.id)) setTimeout(() => setM(value), 0);
@@ -151,12 +155,21 @@ function MedicineEditor({ value, onCancel, onSave }: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{value.id ? "Edit medicine" : "New medicine"}</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <F label="Name *"><Input value={cur.name} onChange={(e) => upd("name", e.target.value)} autoFocus /></F>
           <F label="Generic name"><Input value={cur.genericName ?? ""} onChange={(e) => upd("genericName", e.target.value)} /></F>
           <F label="Company"><Input value={cur.company ?? ""} onChange={(e) => upd("company", e.target.value)} /></F>
+          <F label="Category (optional)">
+            <Select value={cur.categoryId || "none"} onValueChange={(v) => upd("categoryId", v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Uncategorised" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Uncategorised</SelectItem>
+                {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </F>
           <F label="Barcode"><Input value={cur.barcode ?? ""} onChange={(e) => upd("barcode", e.target.value)} /></F>
           <F label="Batch #"><Input value={cur.batchNumber ?? ""} onChange={(e) => upd("batchNumber", e.target.value)} /></F>
           <F label="Rack"><Input value={cur.rackNumber ?? ""} onChange={(e) => upd("rackNumber", e.target.value)} /></F>
