@@ -7,12 +7,15 @@
 export type UserRole = "admin" | "user";
 
 export interface UserPermissions {
+  sales: boolean;
+  bills: boolean;
   medicines: boolean;
   inventory: boolean;
   purchases: boolean;
   reports: boolean;
   suppliers: boolean;
   categories: boolean;
+  customers: boolean;
   applyDiscount: boolean;
   changeTax: boolean;
   forceSale: boolean;
