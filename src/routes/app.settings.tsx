@@ -29,11 +29,14 @@ export const Route = createFileRoute("/app/settings")({
 });
 
 const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
+  { key: "sales", label: "Access Sales (POS) panel" },
+  { key: "bills", label: "Access Bills panel" },
   { key: "medicines", label: "Access Medicines page" },
   { key: "inventory", label: "Access Inventory page" },
   { key: "purchases", label: "Access Purchases page" },
   { key: "reports", label: "Access Reports page" },
   { key: "suppliers", label: "Access Suppliers page" },
+  { key: "customers", label: "Access Customers page" },
   { key: "categories", label: "Access Categories page" },
   { key: "applyDiscount", label: "Apply discount at checkout" },
   { key: "changeTax", label: "Change tax at checkout" },
@@ -248,7 +251,7 @@ function UserDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{existing ? "Edit user" : "Add user"}</DialogTitle>
         </DialogHeader>
