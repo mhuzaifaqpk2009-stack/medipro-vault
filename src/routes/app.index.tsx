@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
+import { AdminGate } from "@/components/PermissionGate";
 
-export const Route = createFileRoute("/app/")({ component: Dashboard });
+export const Route = createFileRoute("/app/")({
+  component: () => <AdminGate><Dashboard /></AdminGate>,
+});
 
 function Dashboard() {
   const data = useProjectStore((s) => s.data)!;
