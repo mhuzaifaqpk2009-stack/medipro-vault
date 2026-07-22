@@ -12,7 +12,7 @@ import { pickOpenFile, pickSaveFile, writeToHandle } from "@/lib/project-io";
 import { decodeProject, encodeProject, WrongPasswordError } from "@/lib/project-codec";
 import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
 import {
-  readInstall, writeInstall, updateInstall, clearInstall,
+  readInstall, writeInstall, updateInstall,
   createUser, findUserByLogin,
 } from "@/lib/install";
 import { useSession } from "@/store/session-store";
