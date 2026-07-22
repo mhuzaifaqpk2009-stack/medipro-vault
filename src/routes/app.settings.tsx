@@ -1,7 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Save, Plus, Trash2, Pencil, Users as UsersIcon, ShieldCheck } from "lucide-react";
+import {
+  Settings as SettingsIcon, Save, Plus, Trash2, Pencil,
+  Users as UsersIcon, ShieldCheck, AlertTriangle, RotateCcw,
+} from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { Input } from "@/components/ui/input";
@@ -18,10 +21,11 @@ import {
 import { AdminGate } from "@/components/PermissionGate";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
+  verifyPassword, clearInstall,
 } from "@/lib/install";
 import {
-  defaultPermissions, ALL_COUNTERS,
-  type StoredUser, type UserPermissions, type CounterId,
+  defaultPermissions,
+  type StoredUser, type UserPermissions,
 } from "@/lib/users";
 
 export const Route = createFileRoute("/app/settings")({
@@ -44,6 +48,7 @@ const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
 ];
 
 function SettingsPage() {
+  const navigate = useNavigate();
   const data = useProjectStore((s) => s.data)!;
   const mutate = useProjectStore((s) => s.mutate);
   const save = useProjectStore((s) => s.save);
@@ -55,9 +60,30 @@ function SettingsPage() {
   const users = readInstall()?.users ?? [];
   const [editing, setEditing] = useState<StoredUser | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [resetPw, setResetPw] = useState("");
+  const [showReset, setShowReset] = useState(false);
 
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
     mutate((d) => { (d.settings as any)[key] = value; });
+
+  async function doResetSetup() {
+    if (!currentUser) return;
+    const ok = await verifyPassword(resetPw, currentUser.saltHex, currentUser.hashHex);
+    if (!ok) { toast.error("Wrong admin password"); return; }
+    if (!window.confirm("Reset the entire pharmacy setup? You'll return to first-time setup. Your data file on disk is not deleted.")) return;
+    clearInstall();
+    useProjectStore.getState().close();
+    useSession.getState().clear();
+    toast.success("Setup reset");
+    navigate({ to: "/" });
+  }
+
+  function clearBillHistory() {
+    if (!window.confirm("Are you sure you want to delete all bill history? This cannot be undone.")) return;
+    if (!window.confirm("This will permanently remove ALL sales/invoices. Continue?")) return;
+    mutate((d) => { d.sales = []; });
+    toast.success("Bill history cleared");
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-6 md:p-10">
@@ -121,9 +147,7 @@ function SettingsPage() {
             <div className="p-6 text-center text-sm text-muted-foreground">No users yet.</div>
           )}
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          Tick users: {usersTick}
-        </p>
+        <p className="mt-3 text-[11px] text-muted-foreground">Tick users: {usersTick}</p>
       </section>
 
       {/* Pharmacy details */}
@@ -145,6 +169,14 @@ function SettingsPage() {
           <Field label="Tax %"><Input type="number" value={s.taxPercent || ""} onChange={(e) => set("taxPercent", Number(e.target.value) || 0)} /></Field>
           <Field label="Currency code"><Input value={s.currency} onChange={(e) => set("currency", e.target.value)} /></Field>
           <Field label="Currency symbol"><Input value={s.currencySymbol} onChange={(e) => set("currencySymbol", e.target.value)} /></Field>
+          <Field label="Max discount for non-admin users (0 = unlimited)" className="md:col-span-3">
+            <Input
+              type="number"
+              value={s.maxDiscount || ""}
+              onChange={(e) => set("maxDiscount", Number(e.target.value) || 0)}
+              placeholder="e.g. 50"
+            />
+          </Field>
         </div>
       </section>
 
@@ -185,6 +217,36 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Danger zone */}
+      <section className="surface-card mt-4 border-destructive/40 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <h2 className="font-display text-base font-semibold text-destructive">Danger zone</h2>
+        </div>
+
+        <div className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">Clear all bill history</p>
+              <p className="text-xs text-muted-foreground">Permanently deletes every sale/invoice from this project.</p>
+            </div>
+            <Button variant="destructive" size="sm" onClick={clearBillHistory}>
+              <Trash2 className="mr-1.5 h-4 w-4" /> Clear bill history
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">Reset pharmacy setup</p>
+              <p className="text-xs text-muted-foreground">Requires admin password. Returns to first-time setup. Data file on disk is not deleted.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => { setResetPw(""); setShowReset(true); }}>
+              <RotateCcw className="mr-1.5 h-4 w-4" /> Reset setup
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {showNew && (
         <UserDialog
           onClose={() => setShowNew(false)}
@@ -202,6 +264,32 @@ function SettingsPage() {
           }}
         />
       )}
+
+      <Dialog open={showReset} onOpenChange={(o) => !o && setShowReset(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm admin password</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <p className="text-sm text-muted-foreground">
+              Enter your admin password to reset the pharmacy setup.
+            </p>
+            <Input
+              type="password"
+              autoFocus
+              value={resetPw}
+              onChange={(e) => setResetPw(e.target.value)}
+              placeholder="Admin password"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowReset(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={doResetSetup} disabled={!resetPw}>
+              Reset setup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -217,7 +305,6 @@ function UserDialog({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">(existing?.role ?? "user");
   const [perms, setPerms] = useState<UserPermissions>(existing?.permissions ?? defaultPermissions("user"));
-  const [visibility, setVisibility] = useState<Partial<Record<CounterId, boolean>>>(existing?.dashboardVisibility ?? {});
 
   async function submit() {
     if (!username.trim()) { toast.error("Username required"); return; }
@@ -235,14 +322,12 @@ function UserDialog({
         role,
         saltHex, hashHex,
         permissions: role === "admin" ? defaultPermissions("admin") : perms,
-        dashboardVisibility: visibility,
       };
       upsertUser(updated);
       toast.success("User updated");
       onSaved(updated);
     } else {
       const u = await createUser({ username, password, role, permissions: role === "admin" ? undefined : perms });
-      u.dashboardVisibility = visibility;
       upsertUser(u);
       toast.success("User created");
       onSaved(u);
@@ -271,39 +356,20 @@ function UserDialog({
           </Field>
 
           {role !== "admin" && (
-            <>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
-                <div className="grid gap-2 rounded-md border p-3">
-                  {PERM_LABELS.map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={perms[key]}
-                        onCheckedChange={(v) => setPerms((p) => ({ ...p, [key]: v === true }))}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
+              <div className="grid gap-2 rounded-md border p-3">
+                {PERM_LABELS.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={perms[key]}
+                      onCheckedChange={(v) => setPerms((p) => ({ ...p, [key]: v === true }))}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Dashboard counters visible to this user</p>
-                <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
-                  {ALL_COUNTERS.map((c) => {
-                    const visible = visibility[c.id] !== false;
-                    return (
-                      <label key={c.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={visible}
-                          onCheckedChange={(v) => setVisibility((old) => ({ ...old, [c.id]: v === true }))}
-                        />
-                        <span>{c.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
+            </div>
           )}
         </div>
         <DialogFooter>
