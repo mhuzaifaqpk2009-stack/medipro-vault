@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -51,9 +51,7 @@ function SalesPage() {
   const setPrintBill = useCartStore((s) => s.setPrintBill);
   const reset = useCartStore((s) => s.reset);
 
-  const q = useCartStore((s) => (s as any).__q ?? "");
-  // local-ish search input (kept in cart store so tab switches preserve it too)
-  const setQ = (v: string) => useCartStore.setState({ ...(useCartStore.getState() as any), __q: v } as any);
+  const [q, setQ] = useState("");
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
