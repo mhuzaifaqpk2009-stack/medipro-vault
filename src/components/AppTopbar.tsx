@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Save, FolderOpen, Home, Sun, Moon, Search, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -17,8 +17,11 @@ import { useSession } from "@/store/session-store";
 export function AppTopbar() {
   const navigate = useNavigate();
   const data = useProjectStore((s) => s.data);
+  const dirty = useProjectStore((s) => s.dirty);
   const save = useProjectStore((s) => s.save);
   const saveAs = useProjectStore((s) => s.saveAs);
+  const user = useSession((s) => s.user);
+  const isAdmin = user?.role === "admin";
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -26,6 +29,7 @@ export function AppTopbar() {
   }, []);
 
   useEffect(() => {
+    if (!isAdmin) return;
     const onKey = async (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
@@ -37,7 +41,21 @@ export function AppTopbar() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, saveAs]);
+  }, [save, saveAs, isAdmin]);
+
+  // Non-admin users: silent auto-save every change (debounced).
+  const timerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (isAdmin) return;
+    if (!dirty) return;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      void useProjectStore.getState().save();
+    }, 800);
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, [dirty, isAdmin]);
 
   async function goHome() {
     const choice = await confirmUnsaved();
@@ -67,7 +85,6 @@ export function AppTopbar() {
             if (picked.handle.fsPath) updateInstall({ lastFsPath: picked.handle.fsPath, lastPath: picked.handle.path });
             toast.success(`Loaded ${d.meta.name}`);
           } catch {
-            // Try unencrypted
             try {
               await decodeProject(picked.bytes);
               await openProjectFromBytes(picked.bytes, picked.handle);
@@ -104,44 +121,50 @@ export function AppTopbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        <div className="relative hidden md:block">
-          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            placeholder="Search everything…"
-            className="h-9 w-72 rounded-md border bg-muted/40 pl-8 pr-3 text-sm outline-none transition-colors focus:border-ring focus:bg-background"
-          />
-        </div>
+        {isAdmin && (
+          <div className="relative hidden md:block">
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              placeholder="Search everything…"
+              className="h-9 w-72 rounded-md border bg-muted/40 pl-8 pr-3 text-sm outline-none transition-colors focus:border-ring focus:bg-background"
+            />
+          </div>
+        )}
 
         <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle theme">
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={loadData} title="Load Data">
-          <Upload className="mr-1.5 h-4 w-4" /> Load Data
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={async () => {
-            const ok = await save();
-            if (ok) toast.success("Saved");
-          }}
-          title="Save Data (Ctrl+S)"
-        >
-          <Save className="mr-1.5 h-4 w-4" /> Save Data
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={async () => {
-            const ok = await saveAs();
-            if (ok) toast.success("Saved");
-          }}
-          title="Save As (Ctrl+Shift+S)"
-        >
-          <FolderOpen className="mr-1.5 h-4 w-4" /> Save As
-        </Button>
-        <Separator orientation="vertical" className="mx-1 h-6" />
+        {isAdmin && (
+          <>
+            <Button variant="ghost" size="sm" onClick={loadData} title="Load Data">
+              <Upload className="mr-1.5 h-4 w-4" /> Load Data
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                const ok = await save();
+                if (ok) toast.success("Saved");
+              }}
+              title="Save Data (Ctrl+S)"
+            >
+              <Save className="mr-1.5 h-4 w-4" /> Save Data
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                const ok = await saveAs();
+                if (ok) toast.success("Saved");
+              }}
+              title="Save As (Ctrl+Shift+S)"
+            >
+              <FolderOpen className="mr-1.5 h-4 w-4" /> Save As
+            </Button>
+            <Separator orientation="vertical" className="mx-1 h-6" />
+          </>
+        )}
         <Button variant="outline" size="sm" onClick={goHome}>
           <Home className="mr-1.5 h-4 w-4" /> Sign out
         </Button>

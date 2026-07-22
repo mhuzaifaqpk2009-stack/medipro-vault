@@ -12,7 +12,7 @@ import { pickOpenFile, pickSaveFile, writeToHandle } from "@/lib/project-io";
 import { decodeProject, encodeProject, WrongPasswordError } from "@/lib/project-codec";
 import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
 import {
-  readInstall, writeInstall, updateInstall, clearInstall,
+  readInstall, writeInstall, updateInstall,
   createUser, findUserByLogin,
 } from "@/lib/install";
 import { useSession } from "@/store/session-store";
@@ -308,21 +308,6 @@ function LandingPage() {
               <Button size="lg" type="submit" disabled={busy || !pw || !loginUser}>
                 <LogIn className="mr-2 h-4 w-4" /> {busy ? "Signing in…" : "Sign in"}
               </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm("Reset the pharmacy setup? You'll need to run first-time setup again. Your data file is not deleted.")) {
-                    clearInstall();
-                    setName(""); setAddress(""); setUsername("");
-                    setPw(""); setPw2(""); setLoginUser("");
-                    setError(null); setBusy(false);
-                    setScreen("setup");
-                  }
-                }}
-                className="mt-2 text-center text-xs text-muted-foreground hover:text-foreground"
-              >
-                Reset setup
-              </button>
             </form>
           </section>
         )}

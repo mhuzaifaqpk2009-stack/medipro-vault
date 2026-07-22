@@ -10,6 +10,8 @@ export interface PharmacySettings {
   email: string;
   address: string;
   taxPercent: number;
+  /** Cap on flat discount amount for non-admin users at checkout. 0/undefined = unlimited. */
+  maxDiscount?: number;
   currency: string;
   currencySymbol: string;
   receiptFooter: string;
@@ -161,6 +163,7 @@ export function createEmptyProject(name: string, passwordProtected: boolean): Pr
       email: "",
       address: "",
       taxPercent: 0,
+      maxDiscount: 0,
       currency: "USD",
       currencySymbol: "$",
       receiptFooter: "Thank you for your purchase",

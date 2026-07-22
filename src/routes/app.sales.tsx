@@ -11,16 +11,15 @@ import {
 } from "@/components/ui/select";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
+import { useCartStore } from "@/store/cart-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
-import type { SaleItem, PaymentMethod, Sale } from "@/domain/schema";
+import type { PaymentMethod, Sale } from "@/domain/schema";
 import { PermissionGate } from "@/components/PermissionGate";
 
 export const Route = createFileRoute("/app/sales")({
   component: () => <PermissionGate perm="sales"><SalesPage /></PermissionGate>,
 });
-
-interface CartLine extends SaleItem { name: string; forced?: boolean }
 
 function SalesPage() {
   const data = useProjectStore((s) => s.data!);
@@ -31,22 +30,34 @@ function SalesPage() {
   const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
   const canChangeTax = isAdmin || !!user?.permissions.changeTax;
   const canForceSale = isAdmin || !!user?.permissions.forceSale;
+  const maxDiscount = data.settings.maxDiscount ?? 0;
+
+  const cart = useCartStore((s) => s.cart);
+  const setCart = useCartStore((s) => s.setCart);
+  const customerId = useCartStore((s) => s.customerId);
+  const setCustomerId = useCartStore((s) => s.setCustomerId);
+  const remark = useCartStore((s) => s.remark);
+  const setRemark = useCartStore((s) => s.setRemark);
+  const discount = useCartStore((s) => s.discount);
+  const setDiscount = useCartStore((s) => s.setDiscount);
+  const taxPercentStore = useCartStore((s) => s.taxPercent);
+  const setTaxPercent = useCartStore((s) => s.setTaxPercent);
+  const taxPercent = taxPercentStore ?? data.settings.taxPercent;
+  const method = useCartStore((s) => s.method);
+  const setMethod = useCartStore((s) => s.setMethod);
+  const received = useCartStore((s) => s.received);
+  const setReceived = useCartStore((s) => s.setReceived);
+  const printBill = useCartStore((s) => s.printBill);
+  const setPrintBill = useCartStore((s) => s.setPrintBill);
+  const reset = useCartStore((s) => s.reset);
 
   const [q, setQ] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [customerId, setCustomerId] = useState<string>("");
-  const [remark, setRemark] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [taxPercent, setTaxPercent] = useState<number>(data.settings.taxPercent);
-  const [method, setMethod] = useState<PaymentMethod>("cash");
-  const [received, setReceived] = useState(0);
-  const [printBill, setPrintBill] = useState(true);
 
   const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return [];
+    const t = q.trim().toLowerCase();
+    if (!t) return [];
     return data.medicines
-      .filter((m) => [m.name, m.barcode, m.genericName].some((x) => (x ?? "").toLowerCase().includes(s)))
+      .filter((m) => [m.name, m.barcode, m.genericName].some((x) => (x ?? "").toLowerCase().includes(t)))
       .slice(0, 8);
   }, [q, data.medicines]);
 
@@ -76,7 +87,7 @@ function SalesPage() {
     setQ("");
   }
 
-  function updLine(i: number, patch: Partial<CartLine>) {
+  function updLine(i: number, patch: Partial<typeof cart[number]>) {
     setCart((c) => c.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
 
@@ -84,6 +95,16 @@ function SalesPage() {
   const taxAmt = subtotal * (taxPercent / 100);
   const total = Math.max(0, subtotal + taxAmt - discount);
   const change = Math.max(0, received - total);
+
+  function handleDiscountChange(v: number) {
+    const clean = Math.max(0, v || 0);
+    if (!isAdmin && maxDiscount > 0 && clean > maxDiscount) {
+      toast.error(`Max discount is ${money(maxDiscount, sym)}`);
+      setDiscount(maxDiscount);
+      return;
+    }
+    setDiscount(clean);
+  }
 
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
@@ -118,7 +139,7 @@ function SalesPage() {
       const latest = useProjectStore.getState().data!;
       printReceipt(newSale, latest);
     }
-    setCart([]); setDiscount(0); setReceived(0); setCustomerId(""); setRemark("");
+    reset();
   }
 
   const hasForced = cart.some((l) => l.forced);
@@ -228,9 +249,12 @@ function SalesPage() {
               type="number" className="h-8 flex-1"
               disabled={!canDiscount}
               value={discount || ""}
-              onChange={(e) => setDiscount(Math.max(0, +e.target.value || 0))}
+              onChange={(e) => handleDiscountChange(+e.target.value)}
             />
           </div>
+          {!isAdmin && maxDiscount > 0 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {money(maxDiscount, sym)}</p>
+          )}
           <div className="mt-3 flex items-center justify-between border-t pt-2">
             <span className="font-display font-semibold">Total</span>
             <span className="font-display text-xl font-bold tabular-nums">{money(total, sym)}</span>
