@@ -384,6 +384,18 @@ function UserDialog({
                   </label>
                 ))}
               </div>
+              {perms.applyDiscount && (
+                <div className="mt-3">
+                  <Field label="Max discount % for this user (0 = unlimited)">
+                    <Input
+                      type="number"
+                      value={userMaxDiscount || ""}
+                      onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
+                      placeholder="e.g. 20"
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
           )}
         </div>
