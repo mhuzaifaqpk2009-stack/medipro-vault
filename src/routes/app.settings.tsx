@@ -315,6 +315,7 @@ function UserDialog({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">(existing?.role ?? "user");
   const [perms, setPerms] = useState<UserPermissions>(existing?.permissions ?? defaultPermissions("user"));
+  const [userMaxDiscount, setUserMaxDiscount] = useState<number>(existing?.maxDiscount ?? 0);
 
   async function submit() {
     if (!username.trim()) { toast.error("Username required"); return; }
@@ -332,12 +333,16 @@ function UserDialog({
         role,
         saltHex, hashHex,
         permissions: role === "admin" ? defaultPermissions("admin") : perms,
+        maxDiscount: role !== "admin" && perms.applyDiscount ? (userMaxDiscount || 0) : undefined,
       };
       upsertUser(updated);
       toast.success("User updated");
       onSaved(updated);
     } else {
       const u = await createUser({ username, password, role, permissions: role === "admin" ? undefined : perms });
+      if (role !== "admin" && perms.applyDiscount && userMaxDiscount > 0) {
+        u.maxDiscount = userMaxDiscount;
+      }
       upsertUser(u);
       toast.success("User created");
       onSaved(u);
