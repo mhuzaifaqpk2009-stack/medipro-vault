@@ -22,6 +22,8 @@ export interface PharmacySettings {
   autoSaveIntervalMinutes: 1 | 2 | 5 | 10 | 15;
   theme: "light" | "dark";
   passwordProtected: boolean;
+  /** Enable Ctrl+1..9 / Ctrl+Tab / Ctrl+Shift+Tab shortcuts for switching workspace tabs. */
+  tabShortcutsEnabled?: boolean;
 }
 
 export interface Category {

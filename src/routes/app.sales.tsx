@@ -30,7 +30,9 @@ function SalesPage() {
   const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
   const canChangeTax = isAdmin || !!user?.permissions.changeTax;
   const canForceSale = isAdmin || !!user?.permissions.forceSale;
-  const maxDiscount = data.settings.maxDiscount ?? 0;
+  const maxDiscount = (user?.maxDiscount && user.maxDiscount > 0)
+    ? user.maxDiscount
+    : (data.settings.maxDiscount ?? 0);
 
   const cart = useCartStore((s) => s.cart);
   const setCart = useCartStore((s) => s.setCart);
@@ -220,9 +222,9 @@ function SalesPage() {
         <div>
           <Label className="text-xs">Customer (optional)</Label>
           <Select value={customerId || "none"} onValueChange={(v) => setCustomerId(v === "none" ? "" : v)}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Walk-in" /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Walk-in</SelectItem>
+              <SelectItem value="none">Walk-in customer</SelectItem>
               {data.customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
