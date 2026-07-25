@@ -169,7 +169,7 @@ function SettingsPage() {
           <Field label="Tax %"><Input type="number" value={s.taxPercent || ""} onChange={(e) => set("taxPercent", Number(e.target.value) || 0)} /></Field>
           <Field label="Currency code"><Input value={s.currency} onChange={(e) => set("currency", e.target.value)} /></Field>
           <Field label="Currency symbol"><Input value={s.currencySymbol} onChange={(e) => set("currencySymbol", e.target.value)} /></Field>
-          <Field label="Max discount for non-admin users (0 = unlimited)" className="md:col-span-3">
+          <Field label="Default max discount % (used when a user has no per-user override; 0 = unlimited)" className="md:col-span-3">
             <Input
               type="number"
               value={s.maxDiscount || ""}
@@ -201,7 +201,7 @@ function SettingsPage() {
       </section>
 
       <section className="surface-card mt-4 p-6">
-        <h2 className="font-display text-base font-semibold">Auto save</h2>
+        <h2 className="font-display text-base font-semibold">Auto save & shortcuts</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <label className="flex items-center gap-3">
             <Switch checked={s.autoSaveEnabled} onCheckedChange={(v) => set("autoSaveEnabled", v)} />
@@ -214,7 +214,17 @@ function SettingsPage() {
               <SelectContent>{[1, 2, 5, 10, 15].map((n) => <SelectItem key={n} value={String(n)}>{n} minute{n === 1 ? "" : "s"}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          <label className="flex items-center gap-3">
+            <Switch
+              checked={s.tabShortcutsEnabled !== false}
+              onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
+            />
+            <span className="text-sm font-medium">Tab shortcuts (Ctrl+1..9, Ctrl+Tab, Ctrl+Shift+Tab)</span>
+          </label>
         </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Ctrl+1 to Ctrl+9 jump to the Nth visible tab. Ctrl+Tab moves to the next tab; Ctrl+Shift+Tab moves to the previous.
+        </p>
       </section>
 
       {/* Danger zone */}
@@ -305,6 +315,7 @@ function UserDialog({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">(existing?.role ?? "user");
   const [perms, setPerms] = useState<UserPermissions>(existing?.permissions ?? defaultPermissions("user"));
+  const [userMaxDiscount, setUserMaxDiscount] = useState<number>(existing?.maxDiscount ?? 0);
 
   async function submit() {
     if (!username.trim()) { toast.error("Username required"); return; }
@@ -322,12 +333,16 @@ function UserDialog({
         role,
         saltHex, hashHex,
         permissions: role === "admin" ? defaultPermissions("admin") : perms,
+        maxDiscount: role !== "admin" && perms.applyDiscount ? (userMaxDiscount || 0) : undefined,
       };
       upsertUser(updated);
       toast.success("User updated");
       onSaved(updated);
     } else {
       const u = await createUser({ username, password, role, permissions: role === "admin" ? undefined : perms });
+      if (role !== "admin" && perms.applyDiscount && userMaxDiscount > 0) {
+        u.maxDiscount = userMaxDiscount;
+      }
       upsertUser(u);
       toast.success("User created");
       onSaved(u);
@@ -369,6 +384,18 @@ function UserDialog({
                   </label>
                 ))}
               </div>
+              {perms.applyDiscount && (
+                <div className="mt-3">
+                  <Field label="Max discount % for this user (0 = unlimited)">
+                    <Input
+                      type="number"
+                      value={userMaxDiscount || ""}
+                      onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
+                      placeholder="e.g. 20"
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
           )}
         </div>

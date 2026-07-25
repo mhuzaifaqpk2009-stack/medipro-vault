@@ -55,6 +55,8 @@ export interface StoredUser {
   permissions: UserPermissions;
   /** Which dashboard counters are visible to this user. Omitted = all visible. */
   dashboardVisibility?: Partial<Record<CounterId, boolean>>;
+  /** Per-user override for maximum discount amount. 0/undefined = fall back to settings. */
+  maxDiscount?: number;
 }
 
 export function defaultPermissions(role: UserRole): UserPermissions {
