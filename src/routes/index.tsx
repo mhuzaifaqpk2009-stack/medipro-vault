@@ -18,6 +18,7 @@ import {
 import { useSession } from "@/store/session-store";
 import { createEmptyProject, type ProjectData } from "@/domain/schema";
 import { upsertRecent } from "@/lib/recents";
+import { askPassword } from "@/components/PasswordPromptDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -169,7 +170,7 @@ function LandingPage() {
         navigate({ to: "/app" });
       } catch (e) {
         if (e instanceof WrongPasswordError) {
-          const askPw = window.prompt("Enter password for this file:") || "";
+          const askPw = (await askPassword("Enter password", "This file is encrypted. Enter its password to load.")) || "";
           if (!askPw) return;
           try {
             const data = await openProjectFromBytes(picked.bytes, picked.handle, askPw);
