@@ -1,17 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Truck, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Truck, Plus, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
-import type { PurchaseItem } from "@/domain/schema";
+import { cn } from "@/lib/utils";
+import type { PurchaseItem, Medicine } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/purchases")({
   component: () => <PermissionGate perm="purchases"><PurchasesPage /></PermissionGate>,
@@ -106,15 +109,30 @@ function NewPurchase({ onClose, onSave }: {
           {rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No items yet.</p>
           ) : (
-            <div className="max-h-64 overflow-auto p-2">
+            <div className="max-h-72 overflow-auto p-2">
+              <div className="mb-1 hidden grid-cols-[1fr,90px,100px,120px,130px,32px] gap-2 px-1 text-[11px] font-medium text-muted-foreground sm:grid">
+                <span>Medicine</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Price</span>
+                <span>Batch</span>
+                <span>Expiry</span>
+                <span></span>
+              </div>
               {rows.map((r, i) => (
-                <div key={i} className="mb-2 grid grid-cols-[1fr,80px,100px,120px,110px,32px] gap-2">
-                  <Select value={r.medicineId} onValueChange={(v) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, medicineId: v } : x))}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{data.medicines.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Input type="number" className="h-8" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
-                  <Input type="number" className="h-8" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                <div key={i} className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr,90px,100px,120px,130px,32px]">
+                  <MedicineCombobox
+                    meds={data.medicines}
+                    value={r.medicineId}
+                    onChange={(v) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, medicineId: v, purchasePrice: data.medicines.find((m) => m.id === v)?.purchasePrice ?? x.purchasePrice } : x))}
+                  />
+                  <div>
+                    <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Qty</Label>
+                    <Input type="number" placeholder="Qty" className="h-8 text-right" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Price</Label>
+                    <Input type="number" placeholder="Price" className="h-8 text-right" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                  </div>
                   <Input className="h-8" placeholder="Batch" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
                   <Input type="date" className="h-8" value={r.expiryDate ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, expiryDate: e.target.value } : x))} />
                   <Button size="icon" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -133,5 +151,41 @@ function NewPurchase({ onClose, onSave }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function MedicineCombobox({ meds, value, onChange }: {
+  meds: Medicine[]; value: string; onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = useMemo(() => meds.find((m) => m.id === value), [meds, value]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="h-8 w-full justify-between text-left font-normal">
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected ? selected.name : "Select medicine…"}</span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search medicine, barcode…" />
+          <CommandList>
+            <CommandEmpty>No medicine found.</CommandEmpty>
+            <CommandGroup>
+              {meds.map((m) => (
+                <CommandItem key={m.id} value={`${m.name} ${m.barcode ?? ""} ${m.genericName ?? ""}`} onSelect={() => { onChange(m.id); setOpen(false); }}>
+                  <Check className={cn("mr-2 h-4 w-4", value === m.id ? "opacity-100" : "opacity-0")} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{m.name}</div>
+                    {(m.barcode || m.genericName) && <div className="truncate text-[11px] text-muted-foreground">{m.barcode || m.genericName}</div>}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
