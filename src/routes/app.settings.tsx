@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AdminGate } from "@/components/PermissionGate";
+import { TABS } from "@/routes/app";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
   verifyPassword, clearInstall,
@@ -223,8 +224,36 @@ function SettingsPage() {
           </label>
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Ctrl+1 to Ctrl+9 jump to the Nth visible tab. Ctrl+Tab moves to the next tab; Ctrl+Shift+Tab moves to the previous.
+          Ctrl+Tab / Ctrl+Shift+Tab jumps to the next/previous tab relative to the tab you are on. Ctrl+1..9 jumps to a specific tab; assign the digit for each tab below (leave blank to use default order).
         </p>
+
+        <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+          {TABS.map((t) => {
+            const current = s.tabShortcuts?.[t.to] ?? "";
+            return (
+              <div key={t.to} className="flex items-center gap-2">
+                <span className="flex-1 text-sm">{t.label}</span>
+                <span className="text-xs text-muted-foreground">Ctrl +</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={9}
+                  className="h-8 w-16"
+                  value={current || ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const n = raw === "" ? undefined : Math.max(1, Math.min(9, Number(raw) || 0));
+                    mutate((d) => {
+                      const map = { ...(d.settings.tabShortcuts ?? {}) };
+                      if (!n) delete map[t.to]; else map[t.to] = n;
+                      d.settings.tabShortcuts = map;
+                    });
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Danger zone */}

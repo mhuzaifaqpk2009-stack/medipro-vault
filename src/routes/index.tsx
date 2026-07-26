@@ -18,6 +18,7 @@ import {
 import { useSession } from "@/store/session-store";
 import { createEmptyProject, type ProjectData } from "@/domain/schema";
 import { upsertRecent } from "@/lib/recents";
+import { askPassword } from "@/components/PasswordPromptDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -169,7 +170,7 @@ function LandingPage() {
         navigate({ to: "/app" });
       } catch (e) {
         if (e instanceof WrongPasswordError) {
-          const askPw = window.prompt("Enter password for this file:") || "";
+          const askPw = (await askPassword("Enter password", "This file is encrypted. Enter its password to load.")) || "";
           if (!askPw) return;
           try {
             const data = await openProjectFromBytes(picked.bytes, picked.handle, askPw);
@@ -229,11 +230,11 @@ function LandingPage() {
           transition={{ duration: 0.4 }}
           className="flex items-center gap-3"
         >
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-elevated">
-            <Stethoscope className="h-6 w-6" />
+          <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white shadow-elevated">
+            <img src="./logo.png" alt="Huzaifa Software" className="h-12 w-12 object-contain" />
           </div>
           <div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">MediCore</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight">Huzaifa Software</h1>
             <p className="text-sm text-muted-foreground">Pharmacy Management System</p>
           </div>
         </motion.header>

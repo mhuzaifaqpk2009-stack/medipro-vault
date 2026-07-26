@@ -235,8 +235,8 @@ function SalesPage() {
         </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />
-          <div className="mt-2 flex items-center gap-3">
-            <Label className="text-xs whitespace-nowrap w-16">Tax %</Label>
+          <div className="mt-3 flex items-center gap-3">
+            <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Tax %</Label>
             <Input
               type="number" className="h-8 flex-1"
               disabled={!canChangeTax}
@@ -244,9 +244,11 @@ function SalesPage() {
               onChange={(e) => setTaxPercent(Math.max(0, +e.target.value || 0))}
             />
           </div>
-          <Row k={`Tax`} v={money(taxAmt, sym)} />
-          <div className="mt-2 flex items-center gap-3">
-            <Label className="text-xs whitespace-nowrap w-16">Discount</Label>
+          <div className="mt-2">
+            <Row k="Tax" v={money(taxAmt, sym)} />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount</Label>
             <Input
               type="number" className="h-8 flex-1"
               disabled={!canDiscount}

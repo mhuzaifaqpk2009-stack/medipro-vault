@@ -13,6 +13,7 @@ import { openProjectFromBytes } from "@/store/project-store";
 import { WrongPasswordError, decodeProject } from "@/lib/project-codec";
 import { updateInstall } from "@/lib/install";
 import { useSession } from "@/store/session-store";
+import { askPassword } from "@/components/PasswordPromptDialog";
 
 export function AppTopbar() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ export function AppTopbar() {
         toast.success(`Loaded ${d.meta.name}`);
       } catch (e) {
         if (e instanceof WrongPasswordError) {
-          const pw = window.prompt("Enter password for this file:") || "";
+          const pw = await askPassword("Enter password", "This file is encrypted. Enter its password to load.");
           if (!pw) return;
           try {
             const d = await openProjectFromBytes(picked.bytes, picked.handle, pw);
@@ -114,8 +115,9 @@ export function AppTopbar() {
       <SidebarTrigger />
       <Separator orientation="vertical" className="mx-1 h-6" />
       <div className="flex min-w-0 items-center gap-2">
+        <img src="./logo.png" alt="" className="h-6 w-6 object-contain" />
         <span className="truncate font-display text-sm font-semibold">
-          {data?.meta.name ?? "MediCore"}
+          {data?.meta.name ?? "Huzaifa Software"}
         </span>
         <DirtyBadge />
       </div>

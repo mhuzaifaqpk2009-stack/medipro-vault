@@ -13,24 +13,29 @@ export const Route = createFileRoute("/app/categories")({
 });
 
 function CategoriesPage() {
-  const list = useProjectStore((s) => s.data!.categories);
+  const list = useProjectStore((s) => s.data?.categories ?? []);
   const mutate = useProjectStore((s) => s.mutate);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
   function add() {
-    if (!name.trim()) return;
-    mutate((d) => { d.categories.push({ id: uid("cat_"), name: name.trim() }); });
-    setName(""); toast.success("Added");
+    const trimmed = name.trim();
+    if (!trimmed) { toast.error("Enter a category name"); return; }
+    mutate((d) => {
+      if (!Array.isArray(d.categories)) d.categories = [];
+      d.categories.push({ id: uid("cat_"), name: trimmed });
+    });
+    setName("");
+    toast.success("Category added");
   }
   function del(id: string) {
     if (!confirm("Delete category?")) return;
-    mutate((d) => { d.categories = d.categories.filter((c) => c.id !== id); });
+    mutate((d) => { d.categories = (d.categories ?? []).filter((c) => c.id !== id); });
   }
   function saveRename() {
     if (!editingId || !editingName.trim()) return;
-    mutate((d) => { const c = d.categories.find((x) => x.id === editingId); if (c) c.name = editingName.trim(); });
+    mutate((d) => { const c = (d.categories ?? []).find((x) => x.id === editingId); if (c) c.name = editingName.trim(); });
     setEditingId(null); setEditingName("");
   }
 

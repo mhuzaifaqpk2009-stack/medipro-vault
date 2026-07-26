@@ -24,21 +24,21 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-type TabDef = { to: string; perm?: keyof UserPermissions; adminOnly?: boolean };
+type TabDef = { to: string; label: string; perm?: keyof UserPermissions; adminOnly?: boolean };
 
 // Order matches the visual sidebar order.
-const TABS: TabDef[] = [
-  { to: "/app", adminOnly: true },
-  { to: "/app/sales", perm: "sales" },
-  { to: "/app/bills", perm: "bills" },
-  { to: "/app/medicines", perm: "medicines" },
-  { to: "/app/inventory", perm: "inventory" },
-  { to: "/app/purchases", perm: "purchases" },
-  { to: "/app/suppliers", perm: "suppliers" },
-  { to: "/app/customers", perm: "customers" },
-  { to: "/app/categories", perm: "categories" },
-  { to: "/app/reports", perm: "reports" },
-  { to: "/app/settings", adminOnly: true },
+export const TABS: TabDef[] = [
+  { to: "/app", label: "Dashboard", adminOnly: true },
+  { to: "/app/sales", label: "Sales (POS)", perm: "sales" },
+  { to: "/app/bills", label: "Bills", perm: "bills" },
+  { to: "/app/medicines", label: "Medicines", perm: "medicines" },
+  { to: "/app/inventory", label: "Inventory", perm: "inventory" },
+  { to: "/app/purchases", label: "Purchases", perm: "purchases" },
+  { to: "/app/suppliers", label: "Suppliers", perm: "suppliers" },
+  { to: "/app/customers", label: "Customers", perm: "customers" },
+  { to: "/app/categories", label: "Categories", perm: "categories" },
+  { to: "/app/reports", label: "Reports", perm: "reports" },
+  { to: "/app/settings", label: "Settings", adminOnly: true },
 ];
 
 function AppLayout() {
@@ -48,6 +48,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const enabled = data?.settings.tabShortcutsEnabled !== false;
+  const customShortcuts = data?.settings.tabShortcuts;
 
   const visibleTabs = useMemo(() => {
     const isAdmin = user?.role === "admin";
@@ -57,6 +58,31 @@ function AppLayout() {
       return true;
     });
   }, [user]);
+
+  // Map digit key ("1".."9") -> tab path.
+  const digitMap = useMemo(() => {
+    const map = new Map<string, string>();
+    // First apply user-defined bindings (only for currently visible tabs).
+    if (customShortcuts) {
+      for (const t of visibleTabs) {
+        const n = customShortcuts[t.to];
+        if (n && n >= 1 && n <= 9) {
+          const key = String(n);
+          if (!map.has(key)) map.set(key, t.to);
+        }
+      }
+    }
+    // Fill remaining 1..9 slots with visible tabs in order (skipping already-bound).
+    let slot = 1;
+    for (const t of visibleTabs) {
+      if (customShortcuts && customShortcuts[t.to]) continue;
+      while (slot <= 9 && map.has(String(slot))) slot++;
+      if (slot > 9) break;
+      map.set(String(slot), t.to);
+      slot++;
+    }
+    return map;
+  }, [visibleTabs, customShortcuts]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -70,7 +96,7 @@ function AppLayout() {
       if (!e.ctrlKey && !e.metaKey) return;
       if (e.altKey) return;
 
-      // Ctrl+Tab / Ctrl+Shift+Tab — cycle
+      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from current tab.
       if (e.key === "Tab") {
         if (visibleTabs.length === 0) return;
         e.preventDefault();
@@ -85,20 +111,20 @@ function AppLayout() {
         return;
       }
 
-      // Ctrl+1..9 — jump to Nth visible tab. Skip when typing.
+      // Ctrl+1..9 — jump to bound tab. Skip when typing.
       if (isEditable(e.target)) return;
       if (e.shiftKey) return;
       if (e.key >= "1" && e.key <= "9") {
-        const idx = parseInt(e.key, 10) - 1;
-        if (idx < visibleTabs.length) {
+        const to = digitMap.get(e.key);
+        if (to) {
           e.preventDefault();
-          navigate({ to: visibleTabs[idx].to });
+          navigate({ to });
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [enabled, visibleTabs, navigate, pathname]);
+  }, [enabled, visibleTabs, digitMap, navigate, pathname]);
 
   if (!data) return null;
 

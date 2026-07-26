@@ -21,14 +21,17 @@ try { fssync.mkdirSync(RECOVERY_DIR, { recursive: true }); } catch {}
 
 /* -------- window -------- */
 function createWindow() {
+  const iconPath = path.join(__dirname, "..", "public", "favicon.png");
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1100,
     minHeight: 700,
+    title: "Huzaifa Software — Pharmacy Management",
     backgroundColor: "#f6f8fa",
     show: false,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

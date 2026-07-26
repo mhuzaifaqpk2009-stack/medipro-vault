@@ -24,6 +24,8 @@ export interface PharmacySettings {
   passwordProtected: boolean;
   /** Enable Ctrl+1..9 / Ctrl+Tab / Ctrl+Shift+Tab shortcuts for switching workspace tabs. */
   tabShortcutsEnabled?: boolean;
+  /** Custom Ctrl+N slot per tab path. Missing entries fall back to sidebar order. */
+  tabShortcuts?: Record<string, number>;
 }
 
 export interface Category {
