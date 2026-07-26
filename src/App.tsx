@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getRouter, getQueryClient } from "./router";
 import { bridge } from "./lib/electron-bridge";
 import { useProjectStore } from "./store/project-store";
+import { PasswordPromptHost } from "./components/PasswordPromptDialog";
 
 export default function App() {
   const [router] = useState(() => getRouter());
