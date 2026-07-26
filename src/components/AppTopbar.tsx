@@ -115,8 +115,9 @@ export function AppTopbar() {
       <SidebarTrigger />
       <Separator orientation="vertical" className="mx-1 h-6" />
       <div className="flex min-w-0 items-center gap-2">
+        <img src="./logo.png" alt="" className="h-6 w-6 object-contain" />
         <span className="truncate font-display text-sm font-semibold">
-          {data?.meta.name ?? "MediCore"}
+          {data?.meta.name ?? "Huzaifa Software"}
         </span>
         <DirtyBadge />
       </div>
