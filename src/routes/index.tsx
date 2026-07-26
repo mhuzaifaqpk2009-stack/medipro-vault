@@ -230,11 +230,11 @@ function LandingPage() {
           transition={{ duration: 0.4 }}
           className="flex items-center gap-3"
         >
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-elevated">
-            <Stethoscope className="h-6 w-6" />
+          <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white shadow-elevated">
+            <img src="./logo.png" alt="Huzaifa Software" className="h-12 w-12 object-contain" />
           </div>
           <div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">MediCore</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight">Huzaifa Software</h1>
             <p className="text-sm text-muted-foreground">Pharmacy Management System</p>
           </div>
         </motion.header>

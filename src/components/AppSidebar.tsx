@@ -121,12 +121,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r">
       <SidebarHeader className="border-b px-3 py-4">
         <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground shadow-soft">
-            <Stethoscope className="h-4 w-4" />
+          <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-white shadow-soft">
+            <img src="./logo.png" alt="Huzaifa Software" className="h-8 w-8 object-contain" />
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-sm font-semibold">MediCore</span>
+              <span className="font-display text-sm font-semibold">Huzaifa Software</span>
               <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
                 {user ? `${user.username} · ${user.role}` : "Pharmacy Suite"}
               </span>
