@@ -306,18 +306,19 @@ function SettingsPage() {
       <Dialog open={showReset} onOpenChange={(o) => !o && setShowReset(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm admin password</DialogTitle>
+            <DialogTitle>Confirm reset password</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
-              Enter your admin password to reset the pharmacy setup.
+              Enter the reset password to remove all local accounts on this computer and return to
+              the welcome screen. The data file on disk is not deleted.
             </p>
             <Input
               type="password"
               autoFocus
               value={resetPw}
               onChange={(e) => setResetPw(e.target.value)}
-              placeholder="Admin password"
+              placeholder="Reset password"
             />
           </div>
           <DialogFooter>
