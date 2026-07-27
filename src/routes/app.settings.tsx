@@ -22,7 +22,7 @@ import { AdminGate } from "@/components/PermissionGate";
 import { TABS } from "@/routes/app";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
-  verifyPassword, clearInstall,
+  clearInstall,
 } from "@/lib/install";
 import {
   defaultPermissions,
