@@ -68,13 +68,12 @@ function SettingsPage() {
     mutate((d) => { (d.settings as any)[key] = value; });
 
   async function doResetSetup() {
-    if (!currentUser) return;
-    const ok = await verifyPassword(resetPw, currentUser.saltHex, currentUser.hashHex);
-    if (!ok) { toast.error("Wrong admin password"); return; }
-    if (!window.confirm("Reset the entire pharmacy setup? You'll return to first-time setup. Your data file on disk is not deleted.")) return;
+    if (resetPw !== "resetpassword") { toast.error("Wrong reset password"); return; }
+    if (!window.confirm("Reset the entire pharmacy setup? All local accounts on this computer will be removed. Your data file on disk is not deleted.")) return;
     clearInstall();
     useProjectStore.getState().close();
     useSession.getState().clear();
+    setShowReset(false);
     toast.success("Setup reset");
     navigate({ to: "/" });
   }
