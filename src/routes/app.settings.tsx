@@ -22,7 +22,7 @@ import { AdminGate } from "@/components/PermissionGate";
 import { TABS } from "@/routes/app";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
-  verifyPassword, clearInstall,
+  clearInstall,
 } from "@/lib/install";
 import {
   defaultPermissions,
@@ -68,13 +68,12 @@ function SettingsPage() {
     mutate((d) => { (d.settings as any)[key] = value; });
 
   async function doResetSetup() {
-    if (!currentUser) return;
-    const ok = await verifyPassword(resetPw, currentUser.saltHex, currentUser.hashHex);
-    if (!ok) { toast.error("Wrong admin password"); return; }
-    if (!window.confirm("Reset the entire pharmacy setup? You'll return to first-time setup. Your data file on disk is not deleted.")) return;
+    if (resetPw !== "resetpassword") { toast.error("Wrong reset password"); return; }
+    if (!window.confirm("Reset the entire pharmacy setup? All local accounts on this computer will be removed. Your data file on disk is not deleted.")) return;
     clearInstall();
     useProjectStore.getState().close();
     useSession.getState().clear();
+    setShowReset(false);
     toast.success("Setup reset");
     navigate({ to: "/" });
   }
@@ -307,18 +306,19 @@ function SettingsPage() {
       <Dialog open={showReset} onOpenChange={(o) => !o && setShowReset(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm admin password</DialogTitle>
+            <DialogTitle>Confirm reset password</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
-              Enter your admin password to reset the pharmacy setup.
+              Enter the reset password to remove all local accounts on this computer and return to
+              the welcome screen. The data file on disk is not deleted.
             </p>
             <Input
               type="password"
               autoFocus
               value={resetPw}
               onChange={(e) => setResetPw(e.target.value)}
-              placeholder="Admin password"
+              placeholder="Reset password"
             />
           </div>
           <DialogFooter>
