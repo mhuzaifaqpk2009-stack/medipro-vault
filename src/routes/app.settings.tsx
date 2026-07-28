@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, Save, Plus, Trash2, Pencil,
   Users as UsersIcon, ShieldCheck, AlertTriangle, RotateCcw,
+  HardDriveDownload, HardDriveUpload, FolderOpen, Keyboard,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -19,7 +20,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AdminGate } from "@/components/PermissionGate";
-import { TABS } from "@/routes/app";
+import { TABS, effectiveHotkey } from "@/routes/app";
+import { comboFromEvent } from "@/lib/hotkeys";
+import { pickBackupFolder, writeBackup, readBackupFile } from "@/lib/local-store";
+import { restoreFromBytes } from "@/store/project-store";
+import { decodeProject, WrongPasswordError } from "@/lib/project-codec";
+import { askPassword } from "@/components/PasswordPromptDialog";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
   clearInstall,
@@ -62,10 +68,103 @@ function SettingsPage() {
   const [editing, setEditing] = useState<StoredUser | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [resetPw, setResetPw] = useState("");
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
 
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
     mutate((d) => { (d.settings as any)[key] = value; });
+
+  // Capture the next key press as the shortcut for the selected tab.
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setCapturing(null); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      mutate((d) => {
+        d.settings.tabHotkeys = { ...(d.settings.tabHotkeys ?? {}), [capturing]: combo };
+      });
+      setCapturing(null);
+      toast.success(`Shortcut set to ${combo}`);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturing, mutate]);
+
+  async function doBackupNow(folderOverride?: string) {
+    setBackupBusy(true);
+    try {
+      const bytes = await useProjectStore.getState().exportBytes();
+      if (!bytes) { toast.error("Nothing to back up"); return; }
+      let folder = folderOverride ?? s.autoBackupFolder ?? null;
+      const picked = folderOverride ? folderOverride : await pickBackupFolder();
+      if (picked) folder = picked;
+      const written = await writeBackup(bytes, s.pharmacyName || data.meta.name, folder);
+      if (!written) return;
+      toast.success(`Backup saved: ${written}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Backup failed");
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function doLoadBackup() {
+    if (!window.confirm("Load a backup file? This replaces all current data on this computer.")) return;
+    setBackupBusy(true);
+    try {
+      const bytes = await readBackupFile();
+      if (!bytes) return;
+      try {
+        await restoreFromBytes(bytes);
+      } catch (e) {
+        if (e instanceof WrongPasswordError) {
+          const pw = await askPassword("Enter password", "This backup file is locked. Enter its password.");
+          if (!pw) return;
+          await restoreFromBytes(bytes, pw);
+        } else {
+          throw e;
+        }
+      }
+      await decodeProject(bytes).catch(() => null);
+      toast.success("Data restored from backup");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not load backup");
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function chooseAutoBackupFolder() {
+    const folder = await pickBackupFolder();
+    if (!folder) {
+      toast.error("Choosing a folder is only available in the desktop app");
+      return;
+    }
+    set("autoBackupFolder", folder);
+    toast.success("Backup location updated");
+  }
+
+  async function toggleAutoBackup(v: boolean) {
+    if (!v) { set("autoBackupEnabled", false); return; }
+    let folder = s.autoBackupFolder;
+    if (!folder) {
+      const picked = await pickBackupFolder();
+      if (!picked) {
+        toast.error("Choose a backup folder to enable auto backup");
+        return;
+      }
+      folder = picked;
+    }
+    mutate((d) => {
+      d.settings.autoBackupFolder = folder;
+      d.settings.autoBackupEnabled = true;
+    });
+    toast.success("Auto backup enabled");
+  }
 
   async function doResetSetup() {
     if (resetPw !== "resetpassword") { toast.error("Wrong reset password"); return; }
@@ -166,7 +265,7 @@ function SettingsPage() {
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Billing</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Field label="Tax %"><Input type="number" value={s.taxPercent || ""} onChange={(e) => set("taxPercent", Number(e.target.value) || 0)} /></Field>
+          <Field label="Tax % (applied automatically to every sale)"><Input type="number" value={s.taxPercent || ""} onChange={(e) => set("taxPercent", Number(e.target.value) || 0)} /></Field>
           <Field label="Currency code"><Input value={s.currency} onChange={(e) => set("currency", e.target.value)} /></Field>
           <Field label="Currency symbol"><Input value={s.currencySymbol} onChange={(e) => set("currencySymbol", e.target.value)} /></Field>
           <Field label="Default max discount % (used when a user has no per-user override; 0 = unlimited)" className="md:col-span-3">
@@ -201,7 +300,7 @@ function SettingsPage() {
       </section>
 
       <section className="surface-card mt-4 p-6">
-        <h2 className="font-display text-base font-semibold">Auto save & shortcuts</h2>
+        <h2 className="font-display text-base font-semibold">Auto save</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <label className="flex items-center gap-3">
             <Switch checked={s.autoSaveEnabled} onCheckedChange={(v) => set("autoSaveEnabled", v)} />
@@ -214,41 +313,116 @@ function SettingsPage() {
               <SelectContent>{[1, 2, 5, 10, 15].map((n) => <SelectItem key={n} value={String(n)}>{n} minute{n === 1 ? "" : "s"}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <label className="flex items-center gap-3">
-            <Switch
-              checked={s.tabShortcutsEnabled !== false}
-              onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
-            />
-            <span className="text-sm font-medium">Tab shortcuts (Ctrl+1..9, Ctrl+Tab, Ctrl+Shift+Tab)</span>
-          </label>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Ctrl+Tab / Ctrl+Shift+Tab jumps to the next/previous tab relative to the tab you are on. Ctrl+1..9 jumps to a specific tab; assign the digit for each tab below (leave blank to use default order).
+      </section>
+
+      {/* Backup & data */}
+      <section className="surface-card mt-4 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <HardDriveDownload className="h-4 w-4 text-primary" />
+          <h2 className="font-display text-base font-semibold">Backup & data</h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Your data lives inside the application (Ctrl+S saves it). A backup file is portable —
+          copy it to another computer and load it there.
         </p>
+        <div className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">Create backup</p>
+              <p className="text-xs text-muted-foreground">Choose a folder and save a portable backup file.</p>
+            </div>
+            <Button size="sm" onClick={() => void doBackupNow()} disabled={backupBusy}>
+              <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+            <div>
+              <p className="text-sm font-medium">Load data</p>
+              <p className="text-xs text-muted-foreground">Restore everything from a backup file. Replaces current data.</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={doLoadBackup} disabled={backupBusy}>
+              <HardDriveUpload className="mr-1.5 h-4 w-4" /> Load data
+            </Button>
+          </div>
+
+          <div className="rounded-md border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-3">
+                <Switch checked={!!s.autoBackupEnabled} onCheckedChange={toggleAutoBackup} />
+                <span className="text-sm font-medium">Auto backup</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Every</Label>
+                <Select
+                  value={String(s.autoBackupIntervalHours ?? 24)}
+                  onValueChange={(v) => set("autoBackupIntervalHours", Number(v))}
+                >
+                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 6, 12, 24, 48, 72, 168].map((h) => (
+                      <SelectItem key={h} value={String(h)}>
+                        {h < 24 ? `${h} hour${h === 1 ? "" : "s"}` : `${h / 24} day${h === 24 ? "" : "s"}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                Folder: {s.autoBackupFolder ? <span className="font-medium text-foreground">{s.autoBackupFolder}</span> : "not set"}
+              </span>
+              <Button size="sm" variant="outline" onClick={chooseAutoBackupFolder}>
+                <FolderOpen className="mr-1.5 h-4 w-4" /> Change location
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Shortcuts */}
+      <section className="surface-card mt-4 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Keyboard className="h-4 w-4 text-primary" />
+          <h2 className="font-display text-base font-semibold">Keyboard shortcuts</h2>
+        </div>
+        <label className="flex items-center gap-3">
+          <Switch
+            checked={s.tabShortcutsEnabled !== false}
+            onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
+          />
+          <span className="text-sm font-medium">Tab shortcuts</span>
+        </label>
 
         <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
-          {TABS.map((t) => {
-            const current = s.tabShortcuts?.[t.to] ?? "";
+          {TABS.map((t, i) => {
+            const combo = effectiveHotkey(t.to, i, s.tabHotkeys);
+            const isCapturing = capturing === t.to;
             return (
               <div key={t.to} className="flex items-center gap-2">
                 <span className="flex-1 text-sm">{t.label}</span>
-                <span className="text-xs text-muted-foreground">Ctrl +</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={9}
-                  className="h-8 w-16"
-                  value={current || ""}
-                  onChange={(e) => {
-                    const raw = e.target.value.trim();
-                    const n = raw === "" ? undefined : Math.max(1, Math.min(9, Number(raw) || 0));
-                    mutate((d) => {
-                      const map = { ...(d.settings.tabShortcuts ?? {}) };
-                      if (!n) delete map[t.to]; else map[t.to] = n;
-                      d.settings.tabShortcuts = map;
-                    });
-                  }}
-                />
+                <Button
+                  size="sm"
+                  variant={isCapturing ? "default" : "outline"}
+                  className="w-40 justify-center font-mono text-xs"
+                  onClick={() => setCapturing(isCapturing ? null : t.to)}
+                >
+                  {isCapturing ? "Press key…" : combo || "Not set"}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Reset to default"
+                  onClick={() => mutate((d) => {
+                    const map = { ...(d.settings.tabHotkeys ?? {}) };
+                    delete map[t.to];
+                    d.settings.tabHotkeys = map;
+                  })}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
               </div>
             );
           })}
