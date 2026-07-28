@@ -179,6 +179,40 @@ ipcMain.handle("recovery:read", async (_e, id) => {
 
 ipcMain.handle("system:userData", () => app.getPath("userData"));
 
+/* -------- internal app storage (Ctrl+S target) -------- */
+const STORE_FILE = path.join(app.getPath("userData"), "medicore-data.bin");
+ipcMain.handle("store:read", async () => {
+  try {
+    const buf = await fs.readFile(STORE_FILE);
+    return new Uint8Array(buf);
+  } catch { return null; }
+});
+ipcMain.handle("store:write", async (_e, bytes) => {
+  const tmp = `${STORE_FILE}.tmp`;
+  await fs.writeFile(tmp, Buffer.from(bytes));
+  await fs.rename(tmp, STORE_FILE);
+  return true;
+});
+ipcMain.handle("store:clear", async () => {
+  try { await fs.unlink(STORE_FILE); } catch {}
+  return true;
+});
+
+/* -------- backups -------- */
+ipcMain.handle("backup:pickFolder", async () => {
+  const res = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory", "createDirectory"] });
+  if (!res || res.canceled || !res.filePaths?.[0]) return null;
+  return res.filePaths[0];
+});
+ipcMain.handle("backup:write", async (_e, dir, fileName, bytes) => {
+  await fs.mkdir(dir, { recursive: true });
+  const full = path.join(dir, fileName);
+  const tmp = `${full}.tmp`;
+  await fs.writeFile(tmp, Buffer.from(bytes));
+  await fs.rename(tmp, full);
+  return full;
+});
+
 /* -------- printing -------- */
 ipcMain.handle("app:print-html", async (_e, html) => {
   if (typeof html !== "string" || !html) {

@@ -29,6 +29,15 @@ contextBridge.exposeInMainWorld("medicore", {
     list: () => ipcRenderer.invoke("recovery:list"),
     read: (id) => ipcRenderer.invoke("recovery:read", id),
   },
+  store: {
+    read: () => ipcRenderer.invoke("store:read"),
+    write: (b) => ipcRenderer.invoke("store:write", b),
+    clear: () => ipcRenderer.invoke("store:clear"),
+  },
+  backup: {
+    pickFolder: () => ipcRenderer.invoke("backup:pickFolder"),
+    write: (dir, name, bytes) => ipcRenderer.invoke("backup:write", dir, name, bytes),
+  },
   system: {
     userDataPath: () => ipcRenderer.invoke("system:userData"),
     platform: process.platform,
