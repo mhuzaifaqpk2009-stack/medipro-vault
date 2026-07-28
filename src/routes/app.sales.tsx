@@ -28,7 +28,6 @@ function SalesPage() {
   const user = useSession((s) => s.user);
   const isAdmin = user?.role === "admin";
   const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
-  const canChangeTax = isAdmin || !!user?.permissions.changeTax;
   const canForceSale = isAdmin || !!user?.permissions.forceSale;
   const maxDiscount = (user?.maxDiscount && user.maxDiscount > 0)
     ? user.maxDiscount
@@ -42,9 +41,8 @@ function SalesPage() {
   const setRemark = useCartStore((s) => s.setRemark);
   const discount = useCartStore((s) => s.discount);
   const setDiscount = useCartStore((s) => s.setDiscount);
-  const taxPercentStore = useCartStore((s) => s.taxPercent);
-  const setTaxPercent = useCartStore((s) => s.setTaxPercent);
-  const taxPercent = taxPercentStore ?? data.settings.taxPercent;
+  // Tax is configured once in Settings and applied automatically to every sale.
+  const taxPercent = data.settings.taxPercent || 0;
   const method = useCartStore((s) => s.method);
   const setMethod = useCartStore((s) => s.setMethod);
   const received = useCartStore((s) => s.received);
@@ -119,7 +117,7 @@ function SalesPage() {
       remark: remark.trim() || undefined,
       items: cart.map(({ name: _n, forced: _f, ...rest }) => rest),
       discount: canDiscount ? discount : 0,
-      taxPercent: canChangeTax ? taxPercent : data.settings.taxPercent,
+      taxPercent,
       payments: [{ method: method === "mixed" ? "cash" : method, amount: total }],
       status: "completed",
       createdBy: user?.username,
@@ -235,17 +233,8 @@ function SalesPage() {
         </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />
-          <div className="mt-3 flex items-center gap-3">
-            <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Tax %</Label>
-            <Input
-              type="number" className="h-8 flex-1"
-              disabled={!canChangeTax}
-              value={taxPercent || ""}
-              onChange={(e) => setTaxPercent(Math.max(0, +e.target.value || 0))}
-            />
-          </div>
           <div className="mt-2">
-            <Row k="Tax" v={money(taxAmt, sym)} />
+            <Row k={`Tax (${taxPercent}%)`} v={money(taxAmt, sym)} />
           </div>
           <div className="mt-3 flex items-center gap-3">
             <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount</Label>
