@@ -15,6 +15,8 @@ export interface InstallRecord {
   users: StoredUser[];
   /** Raw file-encryption password. Local desktop app; kept only in localStorage. */
   filePassword?: string;
+  /** When false, the app opens without a sign-in prompt. */
+  requireLogin?: boolean;
   lastFsPath?: string;
   lastPath?: string;
   // Legacy fields (kept for migration): saltHex/hashHex of single admin
