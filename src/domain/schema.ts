@@ -26,6 +26,13 @@ export interface PharmacySettings {
   tabShortcutsEnabled?: boolean;
   /** Custom Ctrl+N slot per tab path. Missing entries fall back to sidebar order. */
   tabShortcuts?: Record<string, number>;
+  /** Custom key-combo per tab path, e.g. { "/app/sales": "Ctrl+2" }. */
+  tabHotkeys?: Record<string, string>;
+  /** Automatic portable backups. */
+  autoBackupEnabled?: boolean;
+  autoBackupIntervalHours?: number;
+  autoBackupFolder?: string;
+  lastAutoBackupAt?: number;
 }
 
 export interface Category {
@@ -174,6 +181,8 @@ export function createEmptyProject(name: string, passwordProtected: boolean): Pr
       billFooter1: "Thanks for purchasing",
       billFooter2: "Please check & verify your medicines. Medicines will be returned within 15 days. Fridge items are not returnable. Pharmacy is not responsible after this period.",
       autoSaveEnabled: true,
+      autoBackupEnabled: false,
+      autoBackupIntervalHours: 24,
       autoSaveIntervalMinutes: 5,
       theme: "light",
       passwordProtected,
