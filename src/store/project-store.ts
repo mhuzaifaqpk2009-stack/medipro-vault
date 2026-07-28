@@ -1,25 +1,23 @@
 import { create } from "zustand";
 import type { ProjectData } from "@/domain/schema";
-import type { ProjectFileHandle } from "@/lib/project-io";
 import { encodeProject, decodeProject } from "@/lib/project-codec";
-import { writeToHandle, pickSaveFile, isPersistentHandle } from "@/lib/project-io";
-import { upsertRecent } from "@/lib/recents";
+import { readInternal, writeInternal, clearInternal } from "@/lib/local-store";
 import { reportDirty, writeRecovery, clearRecovery } from "@/lib/electron-bridge";
 
 interface ProjectState {
   data: ProjectData | null;
-  handle: ProjectFileHandle | null;
-  password?: string;
   dirty: boolean;
   lastSavedAt: number | null;
   isSaving: boolean;
 
-  load(data: ProjectData, handle: ProjectFileHandle | null, password?: string): void;
+  load(data: ProjectData): void;
   close(): void;
   mutate(fn: (draft: ProjectData) => void): void;
   markDirty(): void;
+  /** Saves into internal application storage. Never opens a file dialog. */
   save(): Promise<boolean>;
-  saveAs(): Promise<boolean>;
+  /** Serialised, portable bytes of the current project (for backups). */
+  exportBytes(): Promise<Uint8Array | null>;
 }
 
 // Throttle recovery writes.
@@ -28,12 +26,11 @@ function scheduleRecovery() {
   if (recoveryTimer) return;
   recoveryTimer = setTimeout(async () => {
     recoveryTimer = null;
-    const { data, handle, password } = useProjectStore.getState();
-    if (!data || password) return; // don't write plaintext recovery for encrypted files
+    const { data } = useProjectStore.getState();
+    if (!data) return;
     await writeRecovery({
       id: data.meta.id,
       name: data.meta.name,
-      fsPath: handle?.fsPath,
       data,
       savedAt: Date.now(),
     });
@@ -42,27 +39,17 @@ function scheduleRecovery() {
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
   data: null,
-  handle: null,
-  password: undefined,
   dirty: false,
   lastSavedAt: null,
   isSaving: false,
 
-  load(data, handle, password) {
-    set({ data, handle, password, dirty: false, lastSavedAt: Date.now() });
+  load(data) {
+    set({ data, dirty: false, lastSavedAt: Date.now() });
     reportDirty(false);
-    if (handle) {
-      upsertRecent({
-        name: data.meta.name,
-        path: handle.path,
-        fsPath: handle.fsPath,
-        encrypted: !!password,
-      });
-    }
   },
 
   close() {
-    set({ data: null, handle: null, password: undefined, dirty: false, lastSavedAt: null });
+    set({ data: null, dirty: false, lastSavedAt: null });
     reportDirty(false);
   },
 
@@ -80,19 +67,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   markDirty() { set({ dirty: true }); reportDirty(true); scheduleRecovery(); },
 
   async save() {
-    const { data, handle, password } = get();
+    const { data } = get();
     if (!data) return false;
-    if (!handle || !isPersistentHandle(handle)) return get().saveAs();
     set({ isSaving: true });
     try {
-      const bytes = await encodeProject(data as unknown as Record<string, unknown>, password);
-      await writeToHandle(handle, bytes);
+      const bytes = await encodeProject(data as unknown as Record<string, unknown>);
+      await writeInternal(bytes);
       set({ dirty: false, lastSavedAt: Date.now() });
       reportDirty(false);
-      upsertRecent({
-        name: data.meta.name, path: handle.path,
-        fsPath: handle.fsPath, encrypted: !!password,
-      });
       await clearRecovery(data.meta.id);
       return true;
     } catch (e) {
@@ -103,39 +85,38 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  async saveAs() {
-    const { data, password } = get();
-    if (!data) return false;
-    const handle = await pickSaveFile(data.meta.name);
-    if (!handle) return false;
-    set({ handle, isSaving: true });
-    try {
-      const bytes = await encodeProject(data as unknown as Record<string, unknown>, password);
-      await writeToHandle(handle, bytes);
-      set({ dirty: false, lastSavedAt: Date.now() });
-      reportDirty(false);
-      upsertRecent({
-        name: data.meta.name, path: handle.path,
-        fsPath: handle.fsPath, encrypted: !!password,
-      });
-      await clearRecovery(data.meta.id);
-      return true;
-    } catch (e) {
-      console.error("saveAs failed", e);
-      return false;
-    } finally {
-      set({ isSaving: false });
-    }
+  async exportBytes() {
+    const { data } = get();
+    if (!data) return null;
+    return await encodeProject(data as unknown as Record<string, unknown>);
   },
 }));
 
-export async function openProjectFromBytes(
-  bytes: Uint8Array,
-  handle: ProjectFileHandle | null,
-  password?: string,
-): Promise<ProjectData> {
+/** Read the project from internal application storage (startup path). */
+export async function loadProjectFromInternal(): Promise<ProjectData | null> {
+  const bytes = await readInternal();
+  if (!bytes) return null;
+  try {
+    const { payload } = await decodeProject(bytes);
+    const data = payload as unknown as ProjectData;
+    useProjectStore.getState().load(data);
+    return data;
+  } catch (e) {
+    console.error("internal load failed", e);
+    return null;
+  }
+}
+
+/** Restore from a portable backup file's bytes and persist it internally. */
+export async function restoreFromBytes(bytes: Uint8Array, password?: string): Promise<ProjectData> {
   const { payload } = await decodeProject(bytes, password);
   const data = payload as unknown as ProjectData;
-  useProjectStore.getState().load(data, handle, password);
+  useProjectStore.getState().load(data);
+  await useProjectStore.getState().save();
   return data;
+}
+
+export async function wipeInternalProject() {
+  await clearInternal();
+  useProjectStore.getState().close();
 }
