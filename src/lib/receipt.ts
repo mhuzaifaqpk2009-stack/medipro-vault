@@ -184,3 +184,26 @@ export function nextInvoiceNumber(sales: { invoiceNumber: string }[]): string {
   const next = nums.length ? Math.max(...nums) + 1 : 1000;
   return String(next);
 }
+
+/** Generic document printing (used by report printouts). */
+export async function printHtml(html: string) {
+  const api = (typeof window !== "undefined" ? (window as any).medicore : null);
+  if (api?.print?.html) {
+    try {
+      const res = await api.print.html(html);
+      if (!res?.ok) console.error("[printHtml] electron print failed:", res?.error);
+      return;
+    } catch (err) {
+      console.error("[printHtml] IPC error:", err);
+      return;
+    }
+  }
+  const w = window.open("", "_blank", "width=900,height=700");
+  if (!w) { console.error("[printHtml] window.open blocked"); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => {
+    try { w.focus(); w.print(); } catch (e) { console.error(e); }
+  }, 250);
+}
