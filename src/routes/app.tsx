@@ -59,45 +59,17 @@ function AppLayout() {
     });
   }, [user]);
 
-  // Map digit key ("1".."9") -> tab path.
-  const digitMap = useMemo(() => {
-    const map = new Map<string, string>();
-    // First apply user-defined bindings (only for currently visible tabs).
-    if (customShortcuts) {
-      for (const t of visibleTabs) {
-        const n = customShortcuts[t.to];
-        if (n && n >= 1 && n <= 9) {
-          const key = String(n);
-          if (!map.has(key)) map.set(key, t.to);
-        }
-      }
-    }
-    // Fill remaining 1..9 slots with visible tabs in order (skipping already-bound).
-    let slot = 1;
-    for (const t of visibleTabs) {
-      if (customShortcuts && customShortcuts[t.to]) continue;
-      while (slot <= 9 && map.has(String(slot))) slot++;
-      if (slot > 9) break;
-      map.set(String(slot), t.to);
-      slot++;
-    }
-    return map;
-  }, [visibleTabs, customShortcuts]);
+  // combo string (normalised) -> tab path
+  const hotkeyMap = useMemo(
+    () => buildHotkeyMap(visibleTabs, data?.settings.tabHotkeys),
+    [visibleTabs, data?.settings.tabHotkeys],
+  );
 
   useEffect(() => {
     if (!enabled) return;
-    const isEditable = (el: EventTarget | null) => {
-      const n = el as HTMLElement | null;
-      if (!n) return false;
-      const tag = n.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || n.isContentEditable;
-    };
     const handler = (e: KeyboardEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      if (e.altKey) return;
-
       // Ctrl+Tab / Ctrl+Shift+Tab — cycle from current tab.
-      if (e.key === "Tab") {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "Tab") {
         if (visibleTabs.length === 0) return;
         e.preventDefault();
         const currentIdx = visibleTabs.findIndex(
@@ -107,24 +79,26 @@ function AppLayout() {
         const nextIdx = e.shiftKey
           ? (base - 1 + visibleTabs.length) % visibleTabs.length
           : (base + 1) % visibleTabs.length;
+        forceCloseOverlays();
         navigate({ to: visibleTabs[nextIdx].to });
         return;
       }
 
-      // Ctrl+1..9 — jump to bound tab. Skip when typing.
-      if (isEditable(e.target)) return;
-      if (e.shiftKey) return;
-      if (e.key >= "1" && e.key <= "9") {
-        const to = digitMap.get(e.key);
-        if (to) {
-          e.preventDefault();
-          navigate({ to });
-        }
-      }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const to = hotkeyMap.get(normaliseCombo(combo));
+      if (!to) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Works from anywhere: close any open panel/dialog first, then navigate.
+      forceCloseOverlays();
+      navigate({ to });
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [enabled, visibleTabs, digitMap, navigate, pathname]);
+    // Capture phase so open dialogs/inputs cannot swallow the shortcut.
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
+
 
   if (!data) return null;
 
