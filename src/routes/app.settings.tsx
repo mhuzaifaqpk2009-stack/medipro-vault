@@ -332,7 +332,7 @@ function SettingsPage() {
               <p className="text-sm font-medium">Create backup</p>
               <p className="text-xs text-muted-foreground">Choose a folder and save a portable backup file.</p>
             </div>
-            <Button size="sm" onClick={doBackupNow} disabled={backupBusy}>
+            <Button size="sm" onClick={() => void doBackupNow()} disabled={backupBusy}>
               <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
             </Button>
           </div>
