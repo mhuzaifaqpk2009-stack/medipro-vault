@@ -7,6 +7,30 @@ import { useAutoSave } from "@/hooks/use-autosave";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import type { UserPermissions } from "@/lib/users";
+import {
+  comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
+} from "@/lib/hotkeys";
+
+/** Resolve the effective combo -> path map for the given tabs. */
+export function buildHotkeyMap(
+  tabs: { to: string }[],
+  custom?: Record<string, string>,
+) {
+  const map = new Map<string, string>();
+  tabs.forEach((t, i) => {
+    const combo = custom?.[t.to] || defaultHotkeyFor(i);
+    if (!combo) return;
+    const key = normaliseCombo(combo);
+    if (!map.has(key)) map.set(key, t.to);
+  });
+  return map;
+}
+
+/** Effective (possibly custom) combo label for a tab at a given index. */
+export function effectiveHotkey(to: string, index: number, custom?: Record<string, string>) {
+  return custom?.[to] || defaultHotkeyFor(index);
+}
+
 
 export const Route = createFileRoute("/app")({
   head: () => ({
