@@ -1,26 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import {
-  FolderOpen, Plus, Lock, LogIn, Sparkles, User as UserIcon, ArrowLeft,
-} from "lucide-react";
+import { Lock, LogIn, Plus, User as UserIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { pickOpenFile, pickSaveFile, writeToHandle } from "@/lib/project-io";
-import { decodeProject, encodeProject, WrongPasswordError } from "@/lib/project-codec";
-import { openProjectFromBytes, useProjectStore } from "@/store/project-store";
-import {
-  readInstall, writeInstall, updateInstall,
-  createUser, findUserByLogin,
-} from "@/lib/install";
+import { useProjectStore, loadProjectFromInternal } from "@/store/project-store";
+import { readInstall, writeInstall, createUser, findUserByLogin } from "@/lib/install";
 import { useSession } from "@/store/session-store";
-import { createEmptyProject, type ProjectData } from "@/domain/schema";
-import { upsertRecent } from "@/lib/recents";
-import { askPassword } from "@/components/PasswordPromptDialog";
-import type { ProjectFileHandle } from "@/lib/project-io";
+import { createEmptyProject } from "@/domain/schema";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,197 +22,90 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
 });
 
-type Screen = "home" | "new" | "login" | "create-account";
+type Screen = "boot" | "setup" | "login";
 
 function LandingPage() {
   const navigate = useNavigate();
   const setUser = useSession((s) => s.setUser);
 
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreen] = useState<Screen>("boot");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // "New data" form
+  // Setup form
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [locked, setLocked] = useState(true);
-  const [filePw, setFilePw] = useState("");
-  const [filePw2, setFilePw2] = useState("");
   const [adminUser, setAdminUser] = useState("");
   const [adminPw, setAdminPw] = useState("");
   const [adminPw2, setAdminPw2] = useState("");
+  const [protect, setProtect] = useState(true);
 
   // Login form
   const [loginUser, setLoginUser] = useState("");
   const [loginPw, setLoginPw] = useState("");
+  const [pharmacyLabel, setPharmacyLabel] = useState("");
 
-  // "Create account after loading" form (when a file was loaded but no local accounts exist)
-  const [newAdminUser, setNewAdminUser] = useState("");
-  const [newAdminPw, setNewAdminPw] = useState("");
-  const [newAdminPw2, setNewAdminPw2] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const rec = readInstall();
+      if (!rec || !rec.users?.length) {
+        if (!cancelled) setScreen("setup");
+        return;
+      }
+      setPharmacyLabel(rec.pharmacyName || "");
+      let data = useProjectStore.getState().data;
+      if (!data) data = await loadProjectFromInternal();
+      if (!data) {
+        // Install exists but internal data was wiped — recreate an empty project.
+        const fresh = createEmptyProject(rec.pharmacyName || "Pharmacy", !!rec.requireLogin);
+        fresh.settings.address = rec.address || "";
+        useProjectStore.getState().load(fresh);
+        await useProjectStore.getState().save();
+      }
+      if (cancelled) return;
+      if (rec.requireLogin === false) {
+        const admin = rec.users.find((u) => u.role === "admin") ?? rec.users[0];
+        setUser(admin);
+        navigate({ to: "/app" });
+        return;
+      }
+      setScreen("login");
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const install = useMemo(() => readInstall(), [screen, busy]);
-  const hasAccounts = !!install?.users?.length;
-
-  function resetForms() {
-    setError(null);
-    setName(""); setAddress("");
-    setLocked(true); setFilePw(""); setFilePw2("");
-    setAdminUser(""); setAdminPw(""); setAdminPw2("");
-    setLoginUser(""); setLoginPw("");
-    setNewAdminUser(""); setNewAdminPw(""); setNewAdminPw2("");
-  }
-
-  function goHome() { resetForms(); setScreen("home"); }
-
-  async function doCreateNew() {
+  async function doSetup() {
     setError(null);
     if (!name.trim()) return setError("Pharmacy name is required");
-    if (!address.trim()) return setError("Address is required");
-    if (locked) {
-      if (filePw.length < 4) return setError("File password must be at least 4 characters");
-      if (filePw !== filePw2) return setError("File passwords do not match");
-    }
-    if (!hasAccounts) {
-      if (!adminUser.trim()) return setError("Admin username is required");
-      if (adminPw.length < 4) return setError("Admin password must be at least 4 characters");
-      if (adminPw !== adminPw2) return setError("Admin passwords do not match");
-    }
+    if (!adminUser.trim()) return setError("Admin username is required");
+    if (adminPw.length < 4) return setError("Password must be at least 4 characters");
+    if (adminPw !== adminPw2) return setError("Passwords do not match");
 
     setBusy(true);
     try {
-      const handle = await pickSaveFile(name.trim());
-      if (!handle) { setBusy(false); return; }
-
-      const project = createEmptyProject(name.trim(), locked);
+      const project = createEmptyProject(name.trim(), protect);
       project.settings.pharmacyName = name.trim();
       project.settings.address = address.trim();
+      useProjectStore.getState().load(project);
+      await useProjectStore.getState().save();
 
-      const pwForFile = locked ? filePw : undefined;
-      const bytes = await encodeProject(
-        project as unknown as Record<string, unknown>,
-        pwForFile,
-      );
-      await writeToHandle(handle, bytes);
-
-      // Local accounts (per machine) — never inside the data file.
-      let userToSignIn = install?.users?.find((u) => u.role === "admin") ?? null;
-      if (!hasAccounts) {
-        const admin = await createUser({
-          username: adminUser.trim(), password: adminPw, role: "admin",
-        });
-        writeInstall({
-          setupDone: true,
-          pharmacyName: name.trim(),
-          address: address.trim(),
-          users: [admin],
-          filePassword: pwForFile,
-          lastFsPath: handle.fsPath,
-          lastPath: handle.path,
-        });
-        userToSignIn = admin;
-      } else {
-        updateInstall({
-          pharmacyName: name.trim(),
-          address: address.trim(),
-          filePassword: pwForFile,
-          lastFsPath: handle.fsPath,
-          lastPath: handle.path,
-        });
-      }
-
-      useProjectStore.getState().load(project, handle, pwForFile);
-      if (userToSignIn) setUser(userToSignIn);
-      upsertRecent({
-        name: project.meta.name, path: handle.path,
-        fsPath: handle.fsPath, encrypted: locked,
+      const admin = await createUser({
+        username: adminUser.trim(), password: adminPw, role: "admin",
       });
-      toast.success("Pharmacy data created");
-
-      if (userToSignIn) {
-        navigate({ to: "/app" });
-      } else {
-        // Accounts exist but not signed in — go to login.
-        setScreen("login");
-      }
-    } catch (e: any) {
-      setError(e?.message ?? "Could not create pharmacy data");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function decodeWithPasswordPrompt(bytes: Uint8Array, handle: ProjectFileHandle): Promise<ProjectData | null> {
-    // Try no-password first.
-    try {
-      return await openProjectFromBytes(bytes, handle);
-    } catch (e) {
-      if (!(e instanceof WrongPasswordError)) {
-        // Not encrypted / other error
-        try { await decodeProject(bytes); } catch { throw e; }
-      }
-    }
-    // Encrypted: try stored file password first (if any).
-    const rec = readInstall();
-    if (rec?.filePassword) {
-      try { return await openProjectFromBytes(bytes, handle, rec.filePassword); }
-      catch { /* fall through to prompt */ }
-    }
-    // Prompt user.
-    for (let i = 0; i < 3; i++) {
-      const pw = await askPassword("Enter password", "This data file is locked. Enter its password to load.");
-      if (!pw) return null;
-      try {
-        const data = await openProjectFromBytes(bytes, handle, pw);
-        updateInstall({ filePassword: pw });
-        return data;
-      } catch {
-        toast.error("Wrong password");
-      }
-    }
-    return null;
-  }
-
-  async function doLoadData() {
-    setError(null);
-    setBusy(true);
-    try {
-      const picked = await pickOpenFile();
-      if (!picked) { setBusy(false); return; }
-      const data = await decodeWithPasswordPrompt(picked.bytes, picked.handle);
-      if (!data) { setBusy(false); return; }
-      if (picked.handle.fsPath) {
-        updateInstall({
-          lastFsPath: picked.handle.fsPath,
-          lastPath: picked.handle.path,
-        });
-      }
-      upsertRecent({
-        name: data.meta.name, path: picked.handle.path,
-        fsPath: picked.handle.fsPath, encrypted: true,
+      writeInstall({
+        setupDone: true,
+        pharmacyName: name.trim(),
+        address: address.trim(),
+        users: [admin],
+        requireLogin: protect,
       });
-      toast.success(`Loaded ${data.meta.name}`);
-
-      const rec = readInstall();
-      if (rec?.users?.length) {
-        // Existing local accounts: require sign in before entering /app.
-        setScreen("login");
-      } else {
-        // No accounts on this machine — bootstrap an admin here.
-        // Seed an install record with pharmacy meta.
-        writeInstall({
-          setupDone: true,
-          pharmacyName: data.settings.pharmacyName || data.meta.name,
-          address: data.settings.address || "",
-          users: [],
-          lastFsPath: picked.handle.fsPath,
-          lastPath: picked.handle.path,
-        });
-        setScreen("create-account");
-      }
+      setUser(admin);
+      toast.success("Setup complete");
+      navigate({ to: "/app" });
     } catch (e: any) {
-      setError(e?.message ?? "Load failed");
-      toast.error(e?.message ?? "Load failed");
+      setError(e?.message ?? "Setup failed");
     } finally {
       setBusy(false);
     }
@@ -235,13 +118,6 @@ function LandingPage() {
       const u = await findUserByLogin(loginUser, loginPw);
       if (!u) { setError("Wrong username or password"); return; }
       setUser(u);
-
-      // If a project is already loaded (just loaded), go straight in.
-      if (useProjectStore.getState().data) {
-        toast.success(`Welcome, ${u.username}`);
-        navigate({ to: "/app" });
-        return;
-      }
       toast.success(`Welcome, ${u.username}`);
       navigate({ to: "/app" });
     } finally {
@@ -249,39 +125,9 @@ function LandingPage() {
     }
   }
 
-  async function doCreateAccountAfterLoad() {
-    setError(null);
-    if (!newAdminUser.trim()) return setError("Username is required");
-    if (newAdminPw.length < 4) return setError("Password must be at least 4 characters");
-    if (newAdminPw !== newAdminPw2) return setError("Passwords do not match");
-    setBusy(true);
-    try {
-      const admin = await createUser({
-        username: newAdminUser.trim(), password: newAdminPw, role: "admin",
-      });
-      const rec = readInstall();
-      writeInstall({
-        setupDone: true,
-        pharmacyName: rec?.pharmacyName || "",
-        address: rec?.address || "",
-        users: [admin],
-        filePassword: useProjectStore.getState().password,
-        lastFsPath: rec?.lastFsPath,
-        lastPath: rec?.lastPath,
-      });
-      setUser(admin);
-      toast.success(`Welcome, ${admin.username}`);
-      navigate({ to: "/app" });
-    } catch (e: any) {
-      setError(e?.message ?? "Could not create account");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="hero-bg min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-8 px-6 py-12">
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-8 px-6 py-12">
         <motion.header
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -297,89 +143,48 @@ function LandingPage() {
           </div>
         </motion.header>
 
-        {screen === "home" && (
-          <section className="surface-card p-8">
-            <div className="mb-6 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="font-display text-xl font-semibold">Welcome</h2>
-            </div>
-            <p className="mb-6 text-sm text-muted-foreground">
-              Load an existing pharmacy data file, or create a fresh one. All medicines, sales,
-              bills and settings are stored in the data file — take it to any computer.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button size="lg" onClick={doLoadData} disabled={busy}>
-                <FolderOpen className="mr-2 h-4 w-4" /> Load Data
-              </Button>
-              <Button size="lg" variant="secondary" onClick={() => { resetForms(); setScreen("new"); }} disabled={busy}>
-                <Plus className="mr-2 h-4 w-4" /> Make New Data
-              </Button>
-            </div>
-            {hasAccounts && (
-              <div className="mt-6 border-t pt-4">
-                <p className="mb-3 text-xs text-muted-foreground">
-                  This computer already has a saved account.
-                </p>
-                <Button variant="outline" onClick={() => { resetForms(); setScreen("login"); }}>
-                  <LogIn className="mr-2 h-4 w-4" /> Account exists — sign in
-                </Button>
-              </div>
-            )}
-            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+        {screen === "boot" && (
+          <section className="surface-card flex items-center gap-3 p-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading your pharmacy data…
           </section>
         )}
 
-        {screen === "new" && (
+        {screen === "setup" && (
           <section className="surface-card p-8">
-            <BackHeader onBack={goHome} title="Make new pharmacy data" icon={<Plus className="h-5 w-5 text-primary" />} />
+            <div className="mb-6 flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">First-time setup</h2>
+            </div>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Create the admin account for this computer. All data is stored inside the
+              application — use Settings → Backup to make a portable copy.
+            </p>
             <div className="grid gap-4">
               <Field label="Pharmacy name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jalal & Brothers Pharmacy" />
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jalal & Brothers Pharmacy" autoFocus />
               </Field>
-              <Field label="Address / Location">
+              <Field label="Address / Location (optional)">
                 <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Gill Road, Gujranwala" />
               </Field>
-
+              <Field label="Admin username">
+                <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="admin" />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Password">
+                  <Input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
+                </Field>
+                <Field label="Confirm password">
+                  <Input type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
+                </Field>
+              </div>
               <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-                <Checkbox checked={locked} onCheckedChange={(v) => setLocked(!!v)} />
-                <span className="font-medium">Lock this data file with a password</span>
-                <span className="text-xs text-muted-foreground">(recommended)</span>
+                <Checkbox checked={protect} onCheckedChange={(v) => setProtect(!!v)} />
+                <span className="font-medium">Password protect this data</span>
+                <span className="text-xs text-muted-foreground">(ask to sign in on every launch)</span>
               </label>
-
-              {locked && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="File password">
-                    <Input type="password" value={filePw} onChange={(e) => setFilePw(e.target.value)} />
-                  </Field>
-                  <Field label="Confirm file password">
-                    <Input type="password" value={filePw2} onChange={(e) => setFilePw2(e.target.value)} />
-                  </Field>
-                </div>
-              )}
-
-              {!hasAccounts && (
-                <>
-                  <div className="mt-2 rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                    Create the admin account for <strong>this computer</strong>. Accounts are stored locally
-                    on this machine only — they are never saved inside the data file.
-                  </div>
-                  <Field label="Admin username">
-                    <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="admin" />
-                  </Field>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Admin password">
-                      <Input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
-                    </Field>
-                    <Field label="Confirm admin password">
-                      <Input type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
-                    </Field>
-                  </div>
-                </>
-              )}
-
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button size="lg" onClick={doCreateNew} disabled={busy} className="mt-2">
-                <Plus className="mr-2 h-4 w-4" /> {busy ? "Creating…" : "Create pharmacy data"}
+              <Button size="lg" onClick={doSetup} disabled={busy} className="mt-2">
+                <Plus className="mr-2 h-4 w-4" /> {busy ? "Setting up…" : "Finish setup"}
               </Button>
             </div>
           </section>
@@ -387,10 +192,13 @@ function LandingPage() {
 
         {screen === "login" && (
           <section className="surface-card p-8">
-            <BackHeader onBack={goHome} title="Sign in" icon={<Lock className="h-5 w-5 text-primary" />} />
+            <div className="mb-6 flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Sign in</h2>
+            </div>
             <p className="mb-6 text-sm text-muted-foreground">
-              {install?.pharmacyName ? (
-                <><span className="font-medium text-foreground">{install.pharmacyName}</span> — enter your account.</>
+              {pharmacyLabel ? (
+                <><span className="font-medium text-foreground">{pharmacyLabel}</span> — enter your account.</>
               ) : (
                 "Enter your local account for this computer."
               )}
@@ -421,46 +229,7 @@ function LandingPage() {
             </form>
           </section>
         )}
-
-        {screen === "create-account" && (
-          <section className="surface-card p-8">
-            <BackHeader onBack={goHome} title="Create local account" icon={<UserIcon className="h-5 w-5 text-primary" />} />
-            <p className="mb-6 text-sm text-muted-foreground">
-              This computer has no account yet. Create an admin account to manage the loaded data.
-              Accounts live on this computer only — the data file is portable.
-            </p>
-            <div className="grid gap-4">
-              <Field label="Admin username">
-                <Input value={newAdminUser} onChange={(e) => setNewAdminUser(e.target.value)} placeholder="admin" autoFocus />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Admin password">
-                  <Input type="password" value={newAdminPw} onChange={(e) => setNewAdminPw(e.target.value)} />
-                </Field>
-                <Field label="Confirm password">
-                  <Input type="password" value={newAdminPw2} onChange={(e) => setNewAdminPw2(e.target.value)} />
-                </Field>
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button size="lg" onClick={doCreateAccountAfterLoad} disabled={busy}>
-                <Plus className="mr-2 h-4 w-4" /> {busy ? "Creating…" : "Create account & continue"}
-              </Button>
-            </div>
-          </section>
-        )}
       </div>
-    </div>
-  );
-}
-
-function BackHeader({ onBack, title, icon }: { onBack: () => void; title: string; icon: React.ReactNode }) {
-  return (
-    <div className="mb-6 flex items-center gap-2">
-      <Button variant="ghost" size="icon" onClick={onBack} className="-ml-2">
-        <ArrowLeft className="h-4 w-4" />
-      </Button>
-      {icon}
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
     </div>
   );
 }
