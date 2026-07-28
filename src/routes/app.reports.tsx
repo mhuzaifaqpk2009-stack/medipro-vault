@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
 import { money, useCurrencySymbol } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SalesReport } from "@/components/reports/SalesReport";
 
 export const Route = createFileRoute("/app/reports")({
   component: () => <PermissionGate perm="reports"><ReportsPage /></PermissionGate>,
@@ -49,6 +51,13 @@ function ReportsPage() {
         <Button className="ml-auto" variant="outline" onClick={() => window.print()}><FileText className="mr-1.5 h-4 w-4" />Print</Button>
       </header>
 
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="sales">Sales</TabsTrigger>
+        </TabsList>
+        <TabsContent value="sales"><SalesReport /></TabsContent>
+        <TabsContent value="overview">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card k="Today's sales" v={money(stats.todaySales, sym)} />
         <Card k="Monthly sales" v={money(stats.monthSales, sym)} />
@@ -70,6 +79,8 @@ function ReportsPage() {
           ["Name", "Phone", "Points", "Balance"], "customers.csv",
         )}><Download className="mr-1.5 h-4 w-4" />Customers CSV</Button>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
