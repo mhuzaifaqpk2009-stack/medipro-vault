@@ -94,15 +94,10 @@ function SettingsPage() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [capturing, mutate]);
 
-  async function doBackupNow(folderOverride?: string) {
+  async function doBackupNow(chooseFolder = false) {
     setBackupBusy(true);
     try {
-      const bytes = await useProjectStore.getState().exportBytes();
-      if (!bytes) { toast.error("Nothing to back up"); return; }
-      let folder = folderOverride ?? s.autoBackupFolder ?? null;
-      const picked = folderOverride ? folderOverride : await pickBackupFolder();
-      if (picked) folder = picked;
-      const written = await writeBackup(bytes, s.pharmacyName || data.meta.name, folder);
+      const written = await runBackupNow({ chooseFolder });
       if (!written) return;
       toast.success(`Backup saved: ${written}`);
     } catch (e: any) {
@@ -129,14 +124,17 @@ function SettingsPage() {
           throw e;
         }
       }
-      await decodeProject(bytes).catch(() => null);
       toast.success("Data restored from backup");
+      // Reload so every page/panel re-reads the restored data from scratch.
+      sessionStorage.setItem("medicore.resume", "1");
+      setTimeout(() => window.location.reload(), 400);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not load backup");
     } finally {
       setBackupBusy(false);
     }
   }
+
 
   async function chooseAutoBackupFolder() {
     const folder = await pickBackupFolder();
