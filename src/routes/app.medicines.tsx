@@ -33,7 +33,11 @@ function MedicinesPage() {
   const meds = useProjectStore((s) => s.data!.medicines);
   const mutate = useProjectStore((s) => s.mutate);
   const sym = useCurrencySymbol();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => {
+    const seed = typeof window !== "undefined" ? sessionStorage.getItem("medicore.medsearch") : null;
+    if (seed) sessionStorage.removeItem("medicore.medsearch");
+    return seed ?? "";
+  });
   const [editing, setEditing] = useState<Medicine | null>(null);
 
   const filtered = useMemo(() => {
