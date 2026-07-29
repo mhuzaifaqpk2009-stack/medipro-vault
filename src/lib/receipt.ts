@@ -145,7 +145,7 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
     <div class="totals-block">
       <div class="row"><span class="gross">Gross Total:</span><span class="value">${num(grossTotal)}</span></div>
       <div class="row"><span class="disc">Disc:</span><span class="value">${num(discountValue)}</span></div>
-      <div class="row net-row">
+      <div class="row">
         <span class="served-by-inline">${cashierName ? esc(cashierName) : ""}</span>
         <span class="netlabel">Net Total:</span>
         <span class="value net">${money(total, sym)}</span>
