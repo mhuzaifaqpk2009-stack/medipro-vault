@@ -22,9 +22,10 @@ import {
 import { AdminGate } from "@/components/PermissionGate";
 import { TABS, effectiveHotkey } from "@/routes/app";
 import { comboFromEvent } from "@/lib/hotkeys";
-import { pickBackupFolder, writeBackup, readBackupFile } from "@/lib/local-store";
+import { pickBackupFolder, readBackupFile } from "@/lib/local-store";
+import { runBackupNow } from "@/lib/backup";
 import { restoreFromBytes } from "@/store/project-store";
-import { decodeProject, WrongPasswordError } from "@/lib/project-codec";
+import { WrongPasswordError } from "@/lib/project-codec";
 import { askPassword } from "@/components/PasswordPromptDialog";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
@@ -50,7 +51,6 @@ const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "customers", label: "Access Customers page" },
   { key: "categories", label: "Access Categories page" },
   { key: "applyDiscount", label: "Apply discount at checkout" },
-  { key: "changeTax", label: "Change tax at checkout" },
   { key: "forceSale", label: "Force-sell out-of-stock items" },
 ];
 
@@ -330,7 +330,7 @@ function SettingsPage() {
               <p className="text-sm font-medium">Create backup</p>
               <p className="text-xs text-muted-foreground">Choose a folder and save a portable backup file.</p>
             </div>
-            <Button size="sm" onClick={() => void doBackupNow()} disabled={backupBusy}>
+            <Button size="sm" onClick={() => void doBackupNow(false)} disabled={backupBusy}>
               <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
             </Button>
           </div>
