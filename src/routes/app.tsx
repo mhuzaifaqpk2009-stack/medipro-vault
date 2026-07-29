@@ -124,7 +124,25 @@ function AppLayout() {
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
 
 
+  // F5 — create/overwrite a backup in the saved folder.
+  useEffect(() => {
+    const onKey = async (e: KeyboardEvent) => {
+      if (e.key !== "F5") return;
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const written = await runBackupNow();
+        if (written) toast.success(`Backup saved: ${written}`);
+      } catch (err: any) {
+        toast.error(err?.message ?? "Backup failed");
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
   if (!data) return null;
+
 
   return (
     <SidebarProvider>
