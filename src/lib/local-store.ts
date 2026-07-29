@@ -64,12 +64,15 @@ export async function pickBackupFolder(): Promise<string | null> {
   return null;
 }
 
+/**
+ * Stable backup file name — reusing the same name means a new backup in the
+ * same folder overwrites the previous one.
+ */
 export function backupFileName(pharmacyName: string) {
   const safe = (pharmacyName || "pharmacy").replace(/[^\w\-]+/g, "_");
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${safe}-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.medicore`;
+  return `${safe}-backup.medicore`;
 }
+
 
 /**
  * Write a backup. When `folder` is given (Electron) the file is written silently

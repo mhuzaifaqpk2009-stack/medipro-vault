@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { DirtyBadge } from "@/components/DirtyBadge";
+import { MedicineSearch } from "@/components/MedicineSearch";
 import { useProjectStore } from "@/store/project-store";
 import { confirmUnsaved } from "@/hooks/use-unsaved-guard";
 import { useSession } from "@/store/session-store";
@@ -78,7 +79,8 @@ export function AppTopbar() {
         <DirtyBadge />
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-2">
+        <MedicineSearch />
         <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle theme">
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>

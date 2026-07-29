@@ -22,9 +22,10 @@ import {
 import { AdminGate } from "@/components/PermissionGate";
 import { TABS, effectiveHotkey } from "@/routes/app";
 import { comboFromEvent } from "@/lib/hotkeys";
-import { pickBackupFolder, writeBackup, readBackupFile } from "@/lib/local-store";
+import { pickBackupFolder, readBackupFile } from "@/lib/local-store";
+import { runBackupNow } from "@/lib/backup";
 import { restoreFromBytes } from "@/store/project-store";
-import { decodeProject, WrongPasswordError } from "@/lib/project-codec";
+import { WrongPasswordError } from "@/lib/project-codec";
 import { askPassword } from "@/components/PasswordPromptDialog";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
@@ -50,7 +51,6 @@ const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "customers", label: "Access Customers page" },
   { key: "categories", label: "Access Categories page" },
   { key: "applyDiscount", label: "Apply discount at checkout" },
-  { key: "changeTax", label: "Change tax at checkout" },
   { key: "forceSale", label: "Force-sell out-of-stock items" },
 ];
 
@@ -94,15 +94,10 @@ function SettingsPage() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [capturing, mutate]);
 
-  async function doBackupNow(folderOverride?: string) {
+  async function doBackupNow(chooseFolder = false) {
     setBackupBusy(true);
     try {
-      const bytes = await useProjectStore.getState().exportBytes();
-      if (!bytes) { toast.error("Nothing to back up"); return; }
-      let folder = folderOverride ?? s.autoBackupFolder ?? null;
-      const picked = folderOverride ? folderOverride : await pickBackupFolder();
-      if (picked) folder = picked;
-      const written = await writeBackup(bytes, s.pharmacyName || data.meta.name, folder);
+      const written = await runBackupNow({ chooseFolder });
       if (!written) return;
       toast.success(`Backup saved: ${written}`);
     } catch (e: any) {
@@ -129,14 +124,17 @@ function SettingsPage() {
           throw e;
         }
       }
-      await decodeProject(bytes).catch(() => null);
       toast.success("Data restored from backup");
+      // Reload so every page/panel re-reads the restored data from scratch.
+      sessionStorage.setItem("medicore.resume", "1");
+      setTimeout(() => window.location.reload(), 400);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not load backup");
     } finally {
       setBackupBusy(false);
     }
   }
+
 
   async function chooseAutoBackupFolder() {
     const folder = await pickBackupFolder();
@@ -329,13 +327,23 @@ function SettingsPage() {
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
             <div>
-              <p className="text-sm font-medium">Create backup</p>
-              <p className="text-xs text-muted-foreground">Choose a folder and save a portable backup file.</p>
+              <p className="text-sm font-medium">Create backup (F5)</p>
+              <p className="text-xs text-muted-foreground">
+                {s.autoBackupFolder
+                  ? `Saves to ${s.autoBackupFolder} and overwrites the previous backup.`
+                  : "Choose a folder once — later backups reuse it automatically."}
+              </p>
             </div>
-            <Button size="sm" onClick={() => void doBackupNow()} disabled={backupBusy}>
-              <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => void doBackupNow(false)} disabled={backupBusy}>
+                <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void doBackupNow(true)} disabled={backupBusy}>
+                <FolderOpen className="mr-1.5 h-4 w-4" /> Change location
+              </Button>
+            </div>
           </div>
+
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
             <div>

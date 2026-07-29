@@ -101,21 +101,26 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   .totals { width: 100%; margin-top: 6px; font-size: 12px; }
   .totals-block { width: 100%; padding-left: 15mm; }
   .totals-block .row {
+    position: relative;
     display: grid;
     grid-template-columns: 12ch 1fr;
     align-items: center;
     margin: 2px 0;
     gap: 6px;
   }
-  .totals-block .row.net-row {
-    grid-template-columns: 1fr 12ch auto;
-    margin-left: -15mm;
-    width: calc(100% + 15mm);
-  }
   .totals .gross, .totals .disc, .totals .netlabel { text-align: right; }
   .totals .value { text-align: right; font-weight: normal; font-size: 12px; }
   .totals .value.net { font-weight: bold; font-size: 12.5px; }
-  .served-by-inline { font-size: 10.5px; color: #000; text-align: left; padding-right: 6px; }
+  .served-by-inline {
+    position: absolute;
+    left: -15mm;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10.5px;
+    color: #000;
+    white-space: nowrap;
+  }
+
   .footer { font-size: 11.5px; white-space: pre-wrap; color: #000; }
   .footer:first-of-type { margin-top: 10px; }
   .footer + .footer { margin-top: 0; }
@@ -140,7 +145,7 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
     <div class="totals-block">
       <div class="row"><span class="gross">Gross Total:</span><span class="value">${num(grossTotal)}</span></div>
       <div class="row"><span class="disc">Disc:</span><span class="value">${num(discountValue)}</span></div>
-      <div class="row net-row">
+      <div class="row">
         <span class="served-by-inline">${cashierName ? esc(cashierName) : ""}</span>
         <span class="netlabel">Net Total:</span>
         <span class="value net">${money(total, sym)}</span>

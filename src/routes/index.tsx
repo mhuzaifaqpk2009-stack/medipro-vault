@@ -64,6 +64,14 @@ function LandingPage() {
         await useProjectStore.getState().save();
       }
       if (cancelled) return;
+      // Resume straight into the app after an in-app restore/reload.
+      const resuming = sessionStorage.getItem("medicore.resume") === "1";
+      const cached = useSession.getState().user;
+      if (resuming && cached) {
+        sessionStorage.removeItem("medicore.resume");
+        navigate({ to: "/app" });
+        return;
+      }
       if (rec.requireLogin === false) {
         const admin = rec.users.find((u) => u.role === "admin") ?? rec.users[0];
         setUser(admin);
@@ -71,6 +79,7 @@ function LandingPage() {
         return;
       }
       setScreen("login");
+
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
