@@ -59,7 +59,7 @@ export function MedicineSearch() {
             >
               <span className="truncate">{m.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">
-                Stock {m.quantity ?? 0}
+                Stock {m.stockQuantity}
               </span>
             </button>
           ))}
