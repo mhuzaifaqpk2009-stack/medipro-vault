@@ -327,13 +327,23 @@ function SettingsPage() {
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
             <div>
-              <p className="text-sm font-medium">Create backup</p>
-              <p className="text-xs text-muted-foreground">Choose a folder and save a portable backup file.</p>
+              <p className="text-sm font-medium">Create backup (F5)</p>
+              <p className="text-xs text-muted-foreground">
+                {s.autoBackupFolder
+                  ? `Saves to ${s.autoBackupFolder} and overwrites the previous backup.`
+                  : "Choose a folder once — later backups reuse it automatically."}
+              </p>
             </div>
-            <Button size="sm" onClick={() => void doBackupNow(false)} disabled={backupBusy}>
-              <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => void doBackupNow(false)} disabled={backupBusy}>
+                <HardDriveDownload className="mr-1.5 h-4 w-4" /> Backup now
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void doBackupNow(true)} disabled={backupBusy}>
+                <FolderOpen className="mr-1.5 h-4 w-4" /> Change location
+              </Button>
+            </div>
           </div>
+
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
             <div>
