@@ -255,6 +255,43 @@ function Dashboard() {
         })}
       </div>
 
+      {/* Quick actions — each can be removed (X) or added back below. */}
+      <div className="surface-card mt-6 p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Quick actions</p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.filter((a) => !hiddenActions.includes(a.id)).map((a) => {
+            const Icon = a.icon;
+            return (
+              <div key={a.id} className="group relative">
+                <Link
+                  to={a.to}
+                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+                >
+                  <Icon className="h-4 w-4 text-primary" /> {a.label}
+                </Link>
+                <button
+                  onClick={() => toggleAction(a.id)}
+                  title="Remove"
+                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 place-items-center rounded-full border bg-background text-muted-foreground group-hover:grid hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+          {quickActions.filter((a) => hiddenActions.includes(a.id)).map((a) => (
+            <button
+              key={a.id}
+              onClick={() => toggleAction(a.id)}
+              className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
+            >
+              <Plus className="h-3.5 w-3.5" /> {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+
       {(showTrend || showMostSold) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           {showTrend && (
