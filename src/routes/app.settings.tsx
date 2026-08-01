@@ -20,6 +20,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AdminGate } from "@/components/PermissionGate";
+import { PasswordInput } from "@/components/PasswordInput";
+import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { TABS, effectiveHotkey } from "@/routes/app";
 import { comboFromEvent } from "@/lib/hotkeys";
 import { pickBackupFolder, readBackupFile } from "@/lib/local-store";
@@ -29,7 +31,6 @@ import { WrongPasswordError } from "@/lib/project-codec";
 import { askPassword } from "@/components/PasswordPromptDialog";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
-  clearInstall,
 } from "@/lib/install";
 import {
   defaultPermissions,
@@ -67,7 +68,7 @@ function SettingsPage() {
   const users = readInstall()?.users ?? [];
   const [editing, setEditing] = useState<StoredUser | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [resetPw, setResetPw] = useState("");
+  
   const [capturing, setCapturing] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -164,16 +165,6 @@ function SettingsPage() {
     toast.success("Auto backup enabled");
   }
 
-  async function doResetSetup() {
-    if (resetPw !== "resetpassword") { toast.error("Wrong reset password"); return; }
-    if (!window.confirm("Reset the entire pharmacy setup? All local accounts on this computer will be removed. Your data file on disk is not deleted.")) return;
-    clearInstall();
-    useProjectStore.getState().close();
-    useSession.getState().clear();
-    setShowReset(false);
-    toast.success("Setup reset");
-    navigate({ to: "/" });
-  }
 
   function clearBillHistory() {
     if (!window.confirm("Are you sure you want to delete all bill history? This cannot be undone.")) return;
@@ -271,7 +262,6 @@ function SettingsPage() {
               type="number"
               value={s.maxDiscount || ""}
               onChange={(e) => set("maxDiscount", Number(e.target.value) || 0)}
-              placeholder="e.g. 50"
             />
           </Field>
         </div>
@@ -279,21 +269,13 @@ function SettingsPage() {
 
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Printed bill</h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Header is fixed to "Jalal & Brothers Pharmacy". Address & phone come from Pharmacy details.
-        </p>
-        <div className="grid gap-4">
+        <div className="mt-4 grid gap-4">
           <Field label="Footer line 1 (thank-you message, max ~60 words)">
-            <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} placeholder="Thanks for purchasing" />
+            <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} />
           </Field>
           <Field label="Footer line 2 (return / exchange policy)">
             <Input value={s.billFooter2} onChange={(e) => set("billFooter2", e.target.value)} />
           </Field>
-          <div>
-            <Button size="sm" variant="secondary" onClick={async () => (await save()) && toast.success("Settings saved")}>
-              <Save className="mr-2 h-4 w-4" /> Save settings
-            </Button>
-          </div>
         </div>
       </section>
 
@@ -387,6 +369,30 @@ function SettingsPage() {
               </Button>
             </div>
           </div>
+
+          <div className="rounded-md border p-3">
+            <label className="flex items-center gap-3">
+              <Switch
+                checked={!!s.backupPasswordEnabled}
+                onCheckedChange={(v) => set("backupPasswordEnabled", v)}
+              />
+              <span className="text-sm font-medium">Password protect backup files</span>
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Backups are encrypted with this password. Loading such a backup — on this or any other
+              computer — asks for it first.
+            </p>
+            {s.backupPasswordEnabled && (
+              <div className="mt-3 max-w-sm">
+                <Field label="Backup password">
+                  <PasswordInput
+                    value={s.backupPassword ?? ""}
+                    onChange={(e) => set("backupPassword", e.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -396,13 +402,24 @@ function SettingsPage() {
           <Keyboard className="h-4 w-4 text-primary" />
           <h2 className="font-display text-base font-semibold">Keyboard shortcuts</h2>
         </div>
-        <label className="flex items-center gap-3">
-          <Switch
-            checked={s.tabShortcutsEnabled !== false}
-            onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
-          />
-          <span className="text-sm font-medium">Tab shortcuts</span>
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-3">
+            <Switch
+              checked={s.tabShortcutsEnabled !== false}
+              onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
+            />
+            <span className="text-sm font-medium">Tab shortcuts</span>
+          </label>
+          <Button
+            size="sm" variant="outline" className="ml-auto"
+            onClick={() => {
+              mutate((d) => { d.settings.tabHotkeys = {}; });
+              toast.success("Shortcuts restored to defaults");
+            }}
+          >
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Set defaults
+          </Button>
+        </div>
 
         <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
           {TABS.map((t, i) => {
@@ -460,7 +477,7 @@ function SettingsPage() {
               <p className="text-sm font-medium">Reset pharmacy setup</p>
               <p className="text-xs text-muted-foreground">Requires admin password. Returns to first-time setup. Data file on disk is not deleted.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => { setResetPw(""); setShowReset(true); }}>
+            <Button variant="outline" size="sm" onClick={() => setShowReset(true)}>
               <RotateCcw className="mr-1.5 h-4 w-4" /> Reset setup
             </Button>
           </div>
@@ -485,32 +502,11 @@ function SettingsPage() {
         />
       )}
 
-      <Dialog open={showReset} onOpenChange={(o) => !o && setShowReset(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm reset password</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <p className="text-sm text-muted-foreground">
-              Enter the reset password to remove all local accounts on this computer and return to
-              the welcome screen. The data file on disk is not deleted.
-            </p>
-            <Input
-              type="password"
-              autoFocus
-              value={resetPw}
-              onChange={(e) => setResetPw(e.target.value)}
-              placeholder="Reset password"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowReset(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={doResetSetup} disabled={!resetPw}>
-              Reset setup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ResetSetupDialog
+        open={showReset}
+        onOpenChange={setShowReset}
+        onDone={() => navigate({ to: "/" })}
+      />
     </div>
   );
 }
@@ -569,7 +565,7 @@ function UserDialog({
         <div className="grid gap-4">
           <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} /></Field>
           <Field label={existing ? "New password (leave blank to keep current)" : "Password"}>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <Field label="Role">
             <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
@@ -602,7 +598,6 @@ function UserDialog({
                       type="number"
                       value={userMaxDiscount || ""}
                       onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
-                      placeholder="e.g. 20"
                     />
                   </Field>
                 </div>

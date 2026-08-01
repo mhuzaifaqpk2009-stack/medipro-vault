@@ -28,11 +28,18 @@ export interface PharmacySettings {
   tabShortcuts?: Record<string, number>;
   /** Custom key-combo per tab path, e.g. { "/app/sales": "Ctrl+2" }. */
   tabHotkeys?: Record<string, string>;
+  /** Custom sidebar order: array of tab paths. Missing entries keep default order. */
+  tabOrder?: string[];
+  /** Hidden dashboard quick-action ids. */
+  hiddenQuickActions?: string[];
   /** Automatic portable backups. */
   autoBackupEnabled?: boolean;
   autoBackupIntervalHours?: number;
   autoBackupFolder?: string;
   lastAutoBackupAt?: number;
+  /** Encrypt backup files with a password (asked for when loading them). */
+  backupPasswordEnabled?: boolean;
+  backupPassword?: string;
 }
 
 export interface Category {

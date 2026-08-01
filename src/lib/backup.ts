@@ -24,7 +24,8 @@ export async function runBackupNow(opts?: { chooseFolder?: boolean }): Promise<s
     }
   }
 
-  const bytes = await useProjectStore.getState().exportBytes();
+  const pw = data.settings.backupPasswordEnabled ? data.settings.backupPassword : undefined;
+  const bytes = await useProjectStore.getState().exportBytes(pw || undefined);
   if (!bytes) return null;
 
   const current = useProjectStore.getState().data!;

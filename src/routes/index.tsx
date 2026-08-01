@@ -2,11 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Lock, LogIn, Plus, User as UserIcon, Loader2 } from "lucide-react";
+import { Lock, LogIn, Plus, User as UserIcon, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { PasswordInput } from "@/components/PasswordInput";
+import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { useProjectStore, loadProjectFromInternal } from "@/store/project-store";
 import { readInstall, writeInstall, createUser, findUserByLogin } from "@/lib/install";
 import { useSession } from "@/store/session-store";
@@ -38,7 +39,8 @@ function LandingPage() {
   const [adminUser, setAdminUser] = useState("");
   const [adminPw, setAdminPw] = useState("");
   const [adminPw2, setAdminPw2] = useState("");
-  const [protect, setProtect] = useState(true);
+  const protect = true;
+  const [showReset, setShowReset] = useState(false);
 
   // Login form
   const [loginUser, setLoginUser] = useState("");
@@ -170,27 +172,22 @@ function LandingPage() {
             </p>
             <div className="grid gap-4">
               <Field label="Pharmacy name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jalal & Brothers Pharmacy" autoFocus />
+                <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
               </Field>
               <Field label="Address / Location (optional)">
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Gill Road, Gujranwala" />
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} />
               </Field>
               <Field label="Admin username">
-                <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="admin" />
+                <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Password">
-                  <Input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
+                  <PasswordInput value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
                 </Field>
                 <Field label="Confirm password">
-                  <Input type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
+                  <PasswordInput value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
                 </Field>
               </div>
-              <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-                <Checkbox checked={protect} onCheckedChange={(v) => setProtect(!!v)} />
-                <span className="font-medium">Password protect this data</span>
-                <span className="text-xs text-muted-foreground">(ask to sign in on every launch)</span>
-              </label>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" onClick={doSetup} disabled={busy} className="mt-2">
                 <Plus className="mr-2 h-4 w-4" /> {busy ? "Setting up…" : "Finish setup"}
@@ -220,25 +217,36 @@ function LandingPage() {
                     className="pl-8"
                     value={loginUser} autoFocus
                     onChange={(e) => setLoginUser(e.target.value)}
-                    placeholder="admin"
                   />
                 </div>
               </Field>
               <Field label="Password">
-                <Input
-                  type="password" value={loginPw}
+                <PasswordInput
+                  value={loginPw}
                   onChange={(e) => setLoginPw(e.target.value)}
-                  placeholder="••••••••"
                 />
               </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" type="submit" disabled={busy || !loginPw || !loginUser}>
                 <LogIn className="mr-2 h-4 w-4" /> {busy ? "Signing in…" : "Sign in"}
               </Button>
+              <Button
+                type="button" variant="ghost" size="sm"
+                className="justify-self-start text-muted-foreground"
+                onClick={() => setShowReset(true)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" /> Reset setup
+              </Button>
             </form>
           </section>
         )}
       </div>
+
+      <ResetSetupDialog
+        open={showReset}
+        onOpenChange={setShowReset}
+        onDone={() => { setScreen("setup"); setLoginUser(""); setLoginPw(""); }}
+      />
     </div>
   );
 }

@@ -48,7 +48,7 @@ function CategoriesPage() {
 
       <div className="surface-card p-4">
         <div className="mb-4 flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="New category name…" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
           <Button onClick={add}><Plus className="mr-1 h-4 w-4" />Add</Button>
         </div>
         {list.length === 0 ? (

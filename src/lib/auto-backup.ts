@@ -13,7 +13,9 @@ export async function runAutoBackupIfDue(): Promise<boolean> {
   const last = s.lastAutoBackupAt ?? 0;
   if (Date.now() - last < hours * 3_600_000) return false;
 
-  const bytes = await store.exportBytes();
+  const bytes = await store.exportBytes(
+    s.backupPasswordEnabled ? (s.backupPassword || undefined) : undefined,
+  );
   if (!bytes) return false;
   try {
     await writeBackup(bytes, s.pharmacyName || data.meta.name, s.autoBackupFolder);

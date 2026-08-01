@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff, Truck, Plus, X,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -90,8 +90,93 @@ function Dashboard() {
   }, [data]);
 
   const user = useSession((st) => st.user);
+  const mutate = useProjectStore((s) => s.mutate);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setHidden((h) => ({ ...h, [k]: !h[k] }));
+
+  /* ---- interactive trend ---- */
+  const [metric, setMetric] = useState<"sales" | "profit" | "purchases">("sales");
+  const [range, setRange] = useState<"week" | "month" | "all">("week");
+
+  const series = useMemo(() => {
+    const saleTotal = (s: typeof data.sales[number]) => {
+      const sub = s.items.reduce(
+        (a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0,
+      );
+      return Math.max(0, sub + sub * (s.taxPercent / 100) - s.discount);
+    };
+    const saleProfit = (s: typeof data.sales[number]) =>
+      s.items.reduce((a, l) => {
+        const m = data.medicines.find((x) => x.id === l.medicineId);
+        const cost = (m?.purchasePrice ?? 0) * l.quantity;
+        return a + (l.salePrice * l.quantity * (1 - l.discountPercent / 100) - cost);
+      }, 0);
+
+    // Source events: (timestamp, value) pairs for the chosen metric.
+    const events: { t: number; v: number }[] =
+      metric === "purchases"
+        ? data.purchases.map((p) => ({
+            t: new Date(p.purchaseDate).getTime(),
+            v: p.items.reduce((a, l) => a + l.purchasePrice * l.quantity, 0),
+          }))
+        : data.sales
+            .filter((s) => s.status === "completed")
+            .map((s) => ({
+              t: new Date(s.date).getTime(),
+              v: metric === "profit" ? saleProfit(s) : saleTotal(s),
+            }));
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const day = 86400_000;
+
+    // Buckets: days for week/month, months for all-time.
+    const buckets: { label: string; value: number }[] = [];
+    if (range === "all") {
+      const first = events.length ? Math.min(...events.map((e) => e.t)) : startOfToday;
+      const start = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), 1);
+      const cursor = new Date(start);
+      while (cursor.getTime() <= startOfToday) {
+        const from = cursor.getTime();
+        const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1).getTime();
+        buckets.push({
+          label: cursor.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+          value: events.filter((e) => e.t >= from && e.t < next).reduce((a, e) => a + e.v, 0),
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    } else {
+      const span = range === "week" ? 7 : 30;
+      for (let i = span - 1; i >= 0; i--) {
+        const from = startOfToday - i * day;
+        buckets.push({
+          label: new Date(from).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+          value: events.filter((e) => e.t >= from && e.t < from + day).reduce((a, e) => a + e.v, 0),
+        });
+      }
+    }
+    const max = Math.max(1, ...buckets.map((b) => b.value));
+    const total = buckets.reduce((a, b) => a + b.value, 0);
+    return { buckets, max, total };
+  }, [data, metric, range]);
+
+  /* ---- quick actions ---- */
+  const hiddenActions = data.settings.hiddenQuickActions ?? [];
+  const quickActions = [
+    { id: "medicine", label: "Add medicine", icon: Pill, to: "/app/medicines" },
+    { id: "sale", label: "New sale", icon: ShoppingCart, to: "/app/sales" },
+    { id: "customer", label: "Add customer", icon: Users, to: "/app/customers" },
+    { id: "purchase", label: "New purchase", icon: Truck, to: "/app/purchases" },
+    { id: "supplier", label: "Add supplier", icon: Building2, to: "/app/suppliers" },
+  ];
+  function toggleAction(id: string) {
+    mutate((d) => {
+      const list = new Set(d.settings.hiddenQuickActions ?? []);
+      if (list.has(id)) list.delete(id); else list.add(id);
+      d.settings.hiddenQuickActions = Array.from(list);
+    });
+  }
+
   const mask = "••••";
   const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
     { id: "totalMedicines", label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
@@ -106,6 +191,7 @@ function Dashboard() {
   const kpis = allKpis.filter((k) => isCounterVisible(user, k.id));
   const showTrend = isCounterVisible(user, "salesTrend");
   const showMostSold = isCounterVisible(user, "mostSold");
+
 
   const toneMap: Record<string, string> = {
     primary: "from-primary/15 to-primary/0 text-primary",
@@ -169,32 +255,101 @@ function Dashboard() {
         })}
       </div>
 
+      {/* Quick actions — each can be removed (X) or added back below. */}
+      <div className="surface-card mt-6 p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Quick actions</p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.filter((a) => !hiddenActions.includes(a.id)).map((a) => {
+            const Icon = a.icon;
+            return (
+              <div key={a.id} className="group relative">
+                <Link
+                  to={a.to}
+                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+                >
+                  <Icon className="h-4 w-4 text-primary" /> {a.label}
+                </Link>
+                <button
+                  onClick={() => toggleAction(a.id)}
+                  title="Remove"
+                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 place-items-center rounded-full border bg-background text-muted-foreground group-hover:grid hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+          {quickActions.filter((a) => hiddenActions.includes(a.id)).map((a) => (
+            <button
+              key={a.id}
+              onClick={() => toggleAction(a.id)}
+              className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
+            >
+              <Plus className="h-3.5 w-3.5" /> {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+
       {(showTrend || showMostSold) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           {showTrend && (
             <div className="surface-card p-6 lg:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-base font-semibold">Sales trend</h2>
-                  <p className="text-xs text-muted-foreground">Last 14 days</p>
+                  <h2 className="font-display text-base font-semibold">
+                    {metric === "profit" ? "Profit trend" : metric === "purchases" ? "Purchase trend" : "Sales trend"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Total {money(series.total, sym)} ·{" "}
+                    {range === "week" ? "this week" : range === "month" ? "this month" : "all time"}
+                  </p>
                 </div>
-                <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
-                  {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["sales", "Sales"], ["profit", "Profit"], ["purchases", "Purchases"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setMetric(id)}
+                        className={`rounded px-2 py-1 ${metric === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["week", "Week"], ["month", "Month"], ["all", "All"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setRange(id)}
+                        className={`rounded px-2 py-1 ${range === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                    {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
               ) : (
                 <>
-                  <div className="flex h-56 items-end gap-2">
-                    {stats.days.map((d, i) => {
-                      const h = (d.value / stats.maxDay) * 100;
+                  <div className="flex h-56 items-end gap-1.5">
+                    {series.buckets.map((d, i) => {
+                      const h = (d.value / series.max) * 100;
                       return (
-                        <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+                        <div key={i} className="group relative flex flex-1 flex-col items-center justify-end">
+                          <span className="mb-1 text-[9px] tabular-nums text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                            {Math.round(d.value)}
+                          </span>
                           <motion.div
                             initial={{ height: 0 }}
                             animate={{ height: `${Math.max(2, h)}%` }}
-                            transition={{ duration: 0.5, delay: i * 0.03 }}
+                            transition={{ duration: 0.4, delay: i * 0.02 }}
                             className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
                             title={`${d.label}: ${money(d.value, sym)}`}
                           />
@@ -202,14 +357,16 @@ function Dashboard() {
                       );
                     })}
                   </div>
-                  <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-                    <span>{stats.days[0]?.label}</span>
-                    <span>{stats.days[stats.days.length - 1]?.label}</span>
+                  <div className="mt-2 flex justify-between gap-1 text-[9px] text-muted-foreground">
+                    {series.buckets.map((d, i) => (
+                      <span key={i} className="flex-1 truncate text-center">{d.label}</span>
+                    ))}
                   </div>
                 </>
               )}
             </div>
           )}
+
 
           {showMostSold && (
             <div className="surface-card p-6">

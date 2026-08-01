@@ -110,32 +110,40 @@ function NewPurchase({ onClose, onSave }: {
             <p className="py-8 text-center text-sm text-muted-foreground">No items yet.</p>
           ) : (
             <div className="max-h-72 overflow-auto p-2">
-              <div className="mb-1 hidden grid-cols-[1fr,90px,100px,120px,130px,32px] gap-2 px-1 text-[11px] font-medium text-muted-foreground sm:grid">
-                <span>Medicine</span>
-                <span className="text-right">Qty</span>
-                <span className="text-right">Price</span>
-                <span>Batch</span>
-                <span>Expiry</span>
-                <span></span>
-              </div>
               {rows.map((r, i) => (
-                <div key={i} className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr,90px,100px,120px,130px,32px]">
-                  <MedicineCombobox
-                    meds={data.medicines}
-                    value={r.medicineId}
-                    onChange={(v) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, medicineId: v, purchasePrice: data.medicines.find((m) => m.id === v)?.purchasePrice ?? x.purchasePrice } : x))}
-                  />
-                  <div>
-                    <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Qty</Label>
-                    <Input type="number" placeholder="Qty" className="h-8 text-right" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
+                <div key={i} className="mb-3 rounded-md border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Item {i + 1}</span>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
-                  <div>
-                    <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Price</Label>
-                    <Input type="number" placeholder="Price" className="h-8 text-right" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-[90px,1fr] items-center gap-2">
+                      <Label className="text-xs">Medicine :</Label>
+                      <MedicineCombobox
+                        meds={data.medicines}
+                        value={r.medicineId}
+                        onChange={(v) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, medicineId: v, purchasePrice: data.medicines.find((m) => m.id === v)?.purchasePrice ?? x.purchasePrice } : x))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-[90px,1fr] items-center gap-2">
+                      <Label className="text-xs">Qty :</Label>
+                      <Input type="number" className="h-8" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
+                    </div>
+                    <div className="grid grid-cols-[90px,1fr] items-center gap-2">
+                      <Label className="text-xs">Price :</Label>
+                      <Input type="number" className="h-8" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                    </div>
+                    <div className="grid grid-cols-[90px,1fr] items-center gap-2">
+                      <Label className="text-xs">Batch :</Label>
+                      <Input className="h-8" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
+                    </div>
+                    <div className="grid grid-cols-[90px,1fr] items-center gap-2">
+                      <Label className="text-xs">Expiry :</Label>
+                      <Input type="date" className="h-8" value={r.expiryDate ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, expiryDate: e.target.value } : x))} />
+                    </div>
                   </div>
-                  <Input className="h-8" placeholder="Batch" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
-                  <Input type="date" className="h-8" value={r.expiryDate ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, expiryDate: e.target.value } : x))} />
-                  <Button size="icon" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               ))}
             </div>

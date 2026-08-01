@@ -17,7 +17,7 @@ interface ProjectState {
   /** Saves into internal application storage. Never opens a file dialog. */
   save(): Promise<boolean>;
   /** Serialised, portable bytes of the current project (for backups). */
-  exportBytes(): Promise<Uint8Array | null>;
+  exportBytes(password?: string): Promise<Uint8Array | null>;
 }
 
 // Throttle recovery writes.
@@ -85,10 +85,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  async exportBytes() {
+  async exportBytes(password?: string) {
     const { data } = get();
     if (!data) return null;
-    return await encodeProject(data as unknown as Record<string, unknown>);
+    return await encodeProject(data as unknown as Record<string, unknown>, password);
   },
 }));
 
