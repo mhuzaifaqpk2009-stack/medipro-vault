@@ -278,21 +278,13 @@ function SettingsPage() {
 
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Printed bill</h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Header is fixed to "Jalal & Brothers Pharmacy". Address & phone come from Pharmacy details.
-        </p>
-        <div className="grid gap-4">
+        <div className="mt-4 grid gap-4">
           <Field label="Footer line 1 (thank-you message, max ~60 words)">
             <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} />
           </Field>
           <Field label="Footer line 2 (return / exchange policy)">
             <Input value={s.billFooter2} onChange={(e) => set("billFooter2", e.target.value)} />
           </Field>
-          <div>
-            <Button size="sm" variant="secondary" onClick={async () => (await save()) && toast.success("Settings saved")}>
-              <Save className="mr-2 h-4 w-4" /> Save settings
-            </Button>
-          </div>
         </div>
       </section>
 
