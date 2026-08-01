@@ -90,8 +90,93 @@ function Dashboard() {
   }, [data]);
 
   const user = useSession((st) => st.user);
+  const mutate = useProjectStore((s) => s.mutate);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setHidden((h) => ({ ...h, [k]: !h[k] }));
+
+  /* ---- interactive trend ---- */
+  const [metric, setMetric] = useState<"sales" | "profit" | "purchases">("sales");
+  const [range, setRange] = useState<"week" | "month" | "all">("week");
+
+  const series = useMemo(() => {
+    const saleTotal = (s: typeof data.sales[number]) => {
+      const sub = s.items.reduce(
+        (a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0,
+      );
+      return Math.max(0, sub + sub * (s.taxPercent / 100) - s.discount);
+    };
+    const saleProfit = (s: typeof data.sales[number]) =>
+      s.items.reduce((a, l) => {
+        const m = data.medicines.find((x) => x.id === l.medicineId);
+        const cost = (m?.purchasePrice ?? 0) * l.quantity;
+        return a + (l.salePrice * l.quantity * (1 - l.discountPercent / 100) - cost);
+      }, 0);
+
+    // Source events: (timestamp, value) pairs for the chosen metric.
+    const events: { t: number; v: number }[] =
+      metric === "purchases"
+        ? data.purchases.map((p) => ({
+            t: new Date(p.date).getTime(),
+            v: p.items.reduce((a, l) => a + l.purchasePrice * l.quantity, 0),
+          }))
+        : data.sales
+            .filter((s) => s.status === "completed")
+            .map((s) => ({
+              t: new Date(s.date).getTime(),
+              v: metric === "profit" ? saleProfit(s) : saleTotal(s),
+            }));
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const day = 86400_000;
+
+    // Buckets: days for week/month, months for all-time.
+    const buckets: { label: string; value: number }[] = [];
+    if (range === "all") {
+      const first = events.length ? Math.min(...events.map((e) => e.t)) : startOfToday;
+      const start = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), 1);
+      const cursor = new Date(start);
+      while (cursor.getTime() <= startOfToday) {
+        const from = cursor.getTime();
+        const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1).getTime();
+        buckets.push({
+          label: cursor.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+          value: events.filter((e) => e.t >= from && e.t < next).reduce((a, e) => a + e.v, 0),
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    } else {
+      const span = range === "week" ? 7 : 30;
+      for (let i = span - 1; i >= 0; i--) {
+        const from = startOfToday - i * day;
+        buckets.push({
+          label: new Date(from).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+          value: events.filter((e) => e.t >= from && e.t < from + day).reduce((a, e) => a + e.v, 0),
+        });
+      }
+    }
+    const max = Math.max(1, ...buckets.map((b) => b.value));
+    const total = buckets.reduce((a, b) => a + b.value, 0);
+    return { buckets, max, total };
+  }, [data, metric, range]);
+
+  /* ---- quick actions ---- */
+  const hiddenActions = data.settings.hiddenQuickActions ?? [];
+  const quickActions = [
+    { id: "medicine", label: "Add medicine", icon: Pill, to: "/app/medicines" },
+    { id: "sale", label: "New sale", icon: ShoppingCart, to: "/app/sales" },
+    { id: "customer", label: "Add customer", icon: Users, to: "/app/customers" },
+    { id: "purchase", label: "New purchase", icon: Truck, to: "/app/purchases" },
+    { id: "supplier", label: "Add supplier", icon: Building2, to: "/app/suppliers" },
+  ];
+  function toggleAction(id: string) {
+    mutate((d) => {
+      const list = new Set(d.settings.hiddenQuickActions ?? []);
+      if (list.has(id)) list.delete(id); else list.add(id);
+      d.settings.hiddenQuickActions = Array.from(list);
+    });
+  }
+
   const mask = "••••";
   const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
     { id: "totalMedicines", label: "Total Medicines", value: data.medicines.length, icon: Pill, tone: "primary" },
@@ -106,6 +191,7 @@ function Dashboard() {
   const kpis = allKpis.filter((k) => isCounterVisible(user, k.id));
   const showTrend = isCounterVisible(user, "salesTrend");
   const showMostSold = isCounterVisible(user, "mostSold");
+
 
   const toneMap: Record<string, string> = {
     primary: "from-primary/15 to-primary/0 text-primary",
