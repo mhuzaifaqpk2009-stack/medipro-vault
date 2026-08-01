@@ -50,6 +50,7 @@ function BillsPage() {
         <div className="relative border-b p-3">
           <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            data-search
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="h-11 pl-8 text-sm"
