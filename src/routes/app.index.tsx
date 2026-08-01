@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff, Truck, Plus, X, Link2,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -116,7 +116,7 @@ function Dashboard() {
     const events: { t: number; v: number }[] =
       metric === "purchases"
         ? data.purchases.map((p) => ({
-            t: new Date(p.date).getTime(),
+            t: new Date(p.purchaseDate).getTime(),
             v: p.items.reduce((a, l) => a + l.purchasePrice * l.quantity, 0),
           }))
         : data.sales
