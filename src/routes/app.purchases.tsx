@@ -127,13 +127,13 @@ function NewPurchase({ onClose, onSave }: {
                   />
                   <div>
                     <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Qty</Label>
-                    <Input type="number" placeholder="Qty" className="h-8 text-right" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
+                    <Input type="number" className="h-8 text-right" value={r.quantity || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, quantity: +e.target.value || 1 } : x))} />
                   </div>
                   <div>
                     <Label className="mb-1 block text-[10px] uppercase text-muted-foreground sm:hidden">Price</Label>
-                    <Input type="number" placeholder="Price" className="h-8 text-right" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
+                    <Input type="number" className="h-8 text-right" value={r.purchasePrice || ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, purchasePrice: +e.target.value || 0 } : x))} />
                   </div>
-                  <Input className="h-8" placeholder="Batch" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
+                  <Input className="h-8" value={r.batchNumber ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, batchNumber: e.target.value } : x))} />
                   <Input type="date" className="h-8" value={r.expiryDate ?? ""} onChange={(e) => setRows((rs) => rs.map((x, k) => k === i ? { ...x, expiryDate: e.target.value } : x))} />
                   <Button size="icon" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>

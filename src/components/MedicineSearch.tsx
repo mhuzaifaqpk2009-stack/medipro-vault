@@ -35,7 +35,6 @@ export function MedicineSearch() {
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={q}
-        placeholder="Search medicine..."
         className="h-9 pl-8"
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
