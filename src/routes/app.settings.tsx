@@ -31,7 +31,6 @@ import { WrongPasswordError } from "@/lib/project-codec";
 import { askPassword } from "@/components/PasswordPromptDialog";
 import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
-  clearInstall,
 } from "@/lib/install";
 import {
   defaultPermissions,
@@ -478,7 +477,7 @@ function SettingsPage() {
               <p className="text-sm font-medium">Reset pharmacy setup</p>
               <p className="text-xs text-muted-foreground">Requires admin password. Returns to first-time setup. Data file on disk is not deleted.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => { setResetPw(""); setShowReset(true); }}>
+            <Button variant="outline" size="sm" onClick={() => setShowReset(true)}>
               <RotateCcw className="mr-1.5 h-4 w-4" /> Reset setup
             </Button>
           </div>
