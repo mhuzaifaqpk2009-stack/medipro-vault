@@ -2,11 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Lock, LogIn, Plus, User as UserIcon, Loader2 } from "lucide-react";
+import { Lock, LogIn, Plus, User as UserIcon, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { PasswordInput } from "@/components/PasswordInput";
+import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { useProjectStore, loadProjectFromInternal } from "@/store/project-store";
 import { readInstall, writeInstall, createUser, findUserByLogin } from "@/lib/install";
 import { useSession } from "@/store/session-store";
@@ -38,7 +39,8 @@ function LandingPage() {
   const [adminUser, setAdminUser] = useState("");
   const [adminPw, setAdminPw] = useState("");
   const [adminPw2, setAdminPw2] = useState("");
-  const [protect, setProtect] = useState(true);
+  const protect = true;
+  const [showReset, setShowReset] = useState(false);
 
   // Login form
   const [loginUser, setLoginUser] = useState("");
