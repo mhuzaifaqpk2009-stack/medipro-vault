@@ -241,6 +241,12 @@ function LandingPage() {
           </section>
         )}
       </div>
+
+      <ResetSetupDialog
+        open={showReset}
+        onOpenChange={setShowReset}
+        onDone={() => { setScreen("setup"); setLoginUser(""); setLoginPw(""); }}
+      />
     </div>
   );
 }
