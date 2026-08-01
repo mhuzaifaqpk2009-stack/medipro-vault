@@ -378,6 +378,30 @@ function SettingsPage() {
               </Button>
             </div>
           </div>
+
+          <div className="rounded-md border p-3">
+            <label className="flex items-center gap-3">
+              <Switch
+                checked={!!s.backupPasswordEnabled}
+                onCheckedChange={(v) => set("backupPasswordEnabled", v)}
+              />
+              <span className="text-sm font-medium">Password protect backup files</span>
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Backups are encrypted with this password. Loading such a backup — on this or any other
+              computer — asks for it first.
+            </p>
+            {s.backupPasswordEnabled && (
+              <div className="mt-3 max-w-sm">
+                <Field label="Backup password">
+                  <PasswordInput
+                    value={s.backupPassword ?? ""}
+                    onChange={(e) => set("backupPassword", e.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -387,13 +411,24 @@ function SettingsPage() {
           <Keyboard className="h-4 w-4 text-primary" />
           <h2 className="font-display text-base font-semibold">Keyboard shortcuts</h2>
         </div>
-        <label className="flex items-center gap-3">
-          <Switch
-            checked={s.tabShortcutsEnabled !== false}
-            onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
-          />
-          <span className="text-sm font-medium">Tab shortcuts</span>
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-3">
+            <Switch
+              checked={s.tabShortcutsEnabled !== false}
+              onCheckedChange={(v) => set("tabShortcutsEnabled", v)}
+            />
+            <span className="text-sm font-medium">Tab shortcuts</span>
+          </label>
+          <Button
+            size="sm" variant="outline" className="ml-auto"
+            onClick={() => {
+              mutate((d) => { d.settings.tabHotkeys = {}; });
+              toast.success("Shortcuts restored to defaults");
+            }}
+          >
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Set defaults
+          </Button>
+        </div>
 
         <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
           {TABS.map((t, i) => {
