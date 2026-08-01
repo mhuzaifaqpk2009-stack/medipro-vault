@@ -259,28 +259,60 @@ function Dashboard() {
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           {showTrend && (
             <div className="surface-card p-6 lg:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-base font-semibold">Sales trend</h2>
-                  <p className="text-xs text-muted-foreground">Last 14 days</p>
+                  <h2 className="font-display text-base font-semibold">
+                    {metric === "profit" ? "Profit trend" : metric === "purchases" ? "Purchase trend" : "Sales trend"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Total {money(series.total, sym)} ·{" "}
+                    {range === "week" ? "this week" : range === "month" ? "this month" : "all time"}
+                  </p>
                 </div>
-                <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
-                  {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["sales", "Sales"], ["profit", "Profit"], ["purchases", "Purchases"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setMetric(id)}
+                        className={`rounded px-2 py-1 ${metric === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["week", "Week"], ["month", "Month"], ["all", "All"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setRange(id)}
+                        className={`rounded px-2 py-1 ${range === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                    {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
               ) : (
                 <>
-                  <div className="flex h-56 items-end gap-2">
-                    {stats.days.map((d, i) => {
-                      const h = (d.value / stats.maxDay) * 100;
+                  <div className="flex h-56 items-end gap-1.5">
+                    {series.buckets.map((d, i) => {
+                      const h = (d.value / series.max) * 100;
                       return (
-                        <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+                        <div key={i} className="group relative flex flex-1 flex-col items-center justify-end">
+                          <span className="mb-1 text-[9px] tabular-nums text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                            {Math.round(d.value)}
+                          </span>
                           <motion.div
                             initial={{ height: 0 }}
                             animate={{ height: `${Math.max(2, h)}%` }}
-                            transition={{ duration: 0.5, delay: i * 0.03 }}
+                            transition={{ duration: 0.4, delay: i * 0.02 }}
                             className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
                             title={`${d.label}: ${money(d.value, sym)}`}
                           />
@@ -288,14 +320,16 @@ function Dashboard() {
                       );
                     })}
                   </div>
-                  <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-                    <span>{stats.days[0]?.label}</span>
-                    <span>{stats.days[stats.days.length - 1]?.label}</span>
+                  <div className="mt-2 flex justify-between gap-1 text-[9px] text-muted-foreground">
+                    {series.buckets.map((d, i) => (
+                      <span key={i} className="flex-1 truncate text-center">{d.label}</span>
+                    ))}
                   </div>
                 </>
               )}
             </div>
           )}
+
 
           {showMostSold && (
             <div className="surface-card p-6">
