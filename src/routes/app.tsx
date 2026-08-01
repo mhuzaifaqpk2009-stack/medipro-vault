@@ -76,14 +76,22 @@ function AppLayout() {
   const enabled = data?.settings.tabShortcutsEnabled !== false;
   const customShortcuts = data?.settings.tabShortcuts;
 
+  const tabOrder = data?.settings.tabOrder;
+
   const visibleTabs = useMemo(() => {
     const isAdmin = user?.role === "admin";
-    return TABS.filter((t) => {
+    const shown = TABS.filter((t) => {
       if (t.adminOnly) return isAdmin;
       if (t.perm) return isAdmin || !!user?.permissions[t.perm];
       return true;
     });
-  }, [user]);
+    if (!tabOrder || tabOrder.length === 0) return shown;
+    const rank = new Map(tabOrder.map((p, i) => [p, i]));
+    return [...shown].sort(
+      (a, b) => (rank.get(a.to) ?? 999) - (rank.get(b.to) ?? 999),
+    );
+  }, [user, tabOrder]);
+
 
   // combo string (normalised) -> tab path
   const hotkeyMap = useMemo(
