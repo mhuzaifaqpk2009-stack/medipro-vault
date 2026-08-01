@@ -513,31 +513,11 @@ function SettingsPage() {
         />
       )}
 
-      <Dialog open={showReset} onOpenChange={(o) => !o && setShowReset(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm reset password</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <p className="text-sm text-muted-foreground">
-              Enter the reset password to remove all local accounts on this computer and return to
-              the welcome screen. The data file on disk is not deleted.
-            </p>
-            <Input
-              type="password"
-              autoFocus
-              value={resetPw}
-              onChange={(e) => setResetPw(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowReset(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={doResetSetup} disabled={!resetPw}>
-              Reset setup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ResetSetupDialog
+        open={showReset}
+        onOpenChange={setShowReset}
+        onDone={() => navigate({ to: "/" })}
+      />
     </div>
   );
 }
@@ -596,7 +576,7 @@ function UserDialog({
         <div className="grid gap-4">
           <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} /></Field>
           <Field label={existing ? "New password (leave blank to keep current)" : "Password"}>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <Field label="Role">
             <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
