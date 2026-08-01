@@ -180,17 +180,12 @@ function LandingPage() {
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Password">
-                  <Input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
+                  <PasswordInput value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
                 </Field>
                 <Field label="Confirm password">
-                  <Input type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
+                  <PasswordInput value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
                 </Field>
               </div>
-              <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-                <Checkbox checked={protect} onCheckedChange={(v) => setProtect(!!v)} />
-                <span className="font-medium">Password protect this data</span>
-                <span className="text-xs text-muted-foreground">(ask to sign in on every launch)</span>
-              </label>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" onClick={doSetup} disabled={busy} className="mt-2">
                 <Plus className="mr-2 h-4 w-4" /> {busy ? "Setting up…" : "Finish setup"}
@@ -224,14 +219,21 @@ function LandingPage() {
                 </div>
               </Field>
               <Field label="Password">
-                <Input
-                  type="password" value={loginPw}
+                <PasswordInput
+                  value={loginPw}
                   onChange={(e) => setLoginPw(e.target.value)}
                 />
               </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" type="submit" disabled={busy || !loginPw || !loginUser}>
                 <LogIn className="mr-2 h-4 w-4" /> {busy ? "Signing in…" : "Sign in"}
+              </Button>
+              <Button
+                type="button" variant="ghost" size="sm"
+                className="justify-self-start text-muted-foreground"
+                onClick={() => setShowReset(true)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" /> Reset setup
               </Button>
             </form>
           </section>
