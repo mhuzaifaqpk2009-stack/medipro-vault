@@ -165,7 +165,6 @@ function SalesPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && results[0]) add(results[0].id);
             }}
-            placeholder="Scan barcode or search medicine…  (Enter to add top match)"
             className="h-11 pl-8 text-sm"
           />
           {results.length > 0 && (
@@ -229,7 +228,7 @@ function SalesPage() {
         </div>
         <div>
           <Label className="text-xs">Remark (optional)</Label>
-          <Input value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="e.g. MUZAMMIL SB" />
+          <Input value={remark} onChange={(e) => setRemark(e.target.value)} />
         </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />

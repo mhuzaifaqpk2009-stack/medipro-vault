@@ -82,7 +82,7 @@ function MedicinesPage() {
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, barcode, batch…" className="h-9 w-72 pl-8" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-72 pl-8" />
           </div>
           <Button onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add medicine</Button>
         </div>

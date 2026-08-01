@@ -271,7 +271,6 @@ function SettingsPage() {
               type="number"
               value={s.maxDiscount || ""}
               onChange={(e) => set("maxDiscount", Number(e.target.value) || 0)}
-              placeholder="e.g. 50"
             />
           </Field>
         </div>
@@ -284,7 +283,7 @@ function SettingsPage() {
         </p>
         <div className="grid gap-4">
           <Field label="Footer line 1 (thank-you message, max ~60 words)">
-            <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} placeholder="Thanks for purchasing" />
+            <Input value={s.billFooter1} onChange={(e) => set("billFooter1", e.target.value.split(/\s+/).slice(0, 60).join(" "))} />
           </Field>
           <Field label="Footer line 2 (return / exchange policy)">
             <Input value={s.billFooter2} onChange={(e) => set("billFooter2", e.target.value)} />
@@ -500,7 +499,6 @@ function SettingsPage() {
               autoFocus
               value={resetPw}
               onChange={(e) => setResetPw(e.target.value)}
-              placeholder="Reset password"
             />
           </div>
           <DialogFooter>
@@ -602,7 +600,6 @@ function UserDialog({
                       type="number"
                       value={userMaxDiscount || ""}
                       onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
-                      placeholder="e.g. 20"
                     />
                   </Field>
                 </div>

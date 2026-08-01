@@ -52,7 +52,6 @@ function BillsPage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by bill code (e.g. INV-20260719-001) or customer…"
             className="h-11 pl-8 text-sm"
             autoFocus
           />

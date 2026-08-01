@@ -170,13 +170,13 @@ function LandingPage() {
             </p>
             <div className="grid gap-4">
               <Field label="Pharmacy name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jalal & Brothers Pharmacy" autoFocus />
+                <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
               </Field>
               <Field label="Address / Location (optional)">
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Gill Road, Gujranwala" />
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} />
               </Field>
               <Field label="Admin username">
-                <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="admin" />
+                <Input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Password">
@@ -220,7 +220,6 @@ function LandingPage() {
                     className="pl-8"
                     value={loginUser} autoFocus
                     onChange={(e) => setLoginUser(e.target.value)}
-                    placeholder="admin"
                   />
                 </div>
               </Field>
@@ -228,7 +227,6 @@ function LandingPage() {
                 <Input
                   type="password" value={loginPw}
                   onChange={(e) => setLoginPw(e.target.value)}
-                  placeholder="••••••••"
                 />
               </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
