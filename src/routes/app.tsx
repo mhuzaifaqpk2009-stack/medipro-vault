@@ -94,6 +94,9 @@ function AppLayout() {
   useEffect(() => {
     if (!enabled) return;
     const handler = (e: KeyboardEvent) => {
+      // Any open dialog/panel takes precedence — never switch tabs from inside one.
+      if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
+
       // Ctrl+Tab / Ctrl+Shift+Tab — cycle from current tab.
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "Tab") {
         if (visibleTabs.length === 0) return;
@@ -116,7 +119,6 @@ function AppLayout() {
       if (!to) return;
       e.preventDefault();
       e.stopPropagation();
-      // Works from anywhere: close any open panel/dialog first, then navigate.
       forceCloseOverlays();
       navigate({ to });
     };
@@ -124,6 +126,24 @@ function AppLayout() {
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
+
+  // "/" — jump straight into the current page's search box.
+  useEffect(() => {
+    const onSlash = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      const search = document.querySelector<HTMLInputElement>("[data-search]");
+      if (!search) return;
+      e.preventDefault();
+      search.focus();
+      search.select();
+    };
+    window.addEventListener("keydown", onSlash, true);
+    return () => window.removeEventListener("keydown", onSlash, true);
+  }, [pathname]);
+
 
 
   // F5 — create/overwrite a backup in the saved folder.
