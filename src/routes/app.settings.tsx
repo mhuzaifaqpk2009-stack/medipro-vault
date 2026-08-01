@@ -69,7 +69,7 @@ function SettingsPage() {
   const users = readInstall()?.users ?? [];
   const [editing, setEditing] = useState<StoredUser | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [resetPw, setResetPw] = useState("");
+  
   const [capturing, setCapturing] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -166,16 +166,6 @@ function SettingsPage() {
     toast.success("Auto backup enabled");
   }
 
-  async function doResetSetup() {
-    if (resetPw !== "resetpassword") { toast.error("Wrong reset password"); return; }
-    if (!window.confirm("Reset the entire pharmacy setup? All local accounts on this computer will be removed. Your data file on disk is not deleted.")) return;
-    clearInstall();
-    useProjectStore.getState().close();
-    useSession.getState().clear();
-    setShowReset(false);
-    toast.success("Setup reset");
-    navigate({ to: "/" });
-  }
 
   function clearBillHistory() {
     if (!window.confirm("Are you sure you want to delete all bill history? This cannot be undone.")) return;
