@@ -4,6 +4,8 @@ import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-rea
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/SearchInput";
+
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
