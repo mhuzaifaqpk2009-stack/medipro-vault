@@ -162,8 +162,7 @@ function Dashboard() {
     return { buckets, max, total };
   }, [data, metric, range]);
 
-  /* ---- quick actions ---- */
-  const hiddenActions = data.settings.hiddenQuickActions ?? [];
+  /* ---- quick actions (bottom of the page) ---- */
   const quickActions = [
     { id: "medicine", label: "Add medicine", icon: Pill, to: "/app/medicines" },
     { id: "sale", label: "New sale", icon: ShoppingCart, to: "/app/sales" },
@@ -171,13 +170,7 @@ function Dashboard() {
     { id: "purchase", label: "New purchase", icon: Truck, to: "/app/purchases" },
     { id: "supplier", label: "Add supplier", icon: Building2, to: "/app/suppliers" },
   ];
-  function toggleAction(id: string) {
-    mutate((d) => {
-      const list = new Set(d.settings.hiddenQuickActions ?? []);
-      if (list.has(id)) list.delete(id); else list.add(id);
-      d.settings.hiddenQuickActions = Array.from(list);
-    });
-  }
+
 
   const mask = "••••";
   const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
