@@ -68,14 +68,17 @@ export function defaultPermissions(role: UserRole): UserPermissions {
       sales: true, bills: true, medicines: true, inventory: true,
       purchases: true, reports: true, suppliers: true, categories: true,
       customers: true, applyDiscount: true, changeTax: true, forceSale: true,
+      pinPanel: true,
     };
   }
   return {
     sales: true, bills: true, medicines: false, inventory: false,
     purchases: false, reports: false, suppliers: false, categories: false,
     customers: false, applyDiscount: false, changeTax: false, forceSale: false,
+    pinPanel: false,
   };
 }
+
 
 export function isCounterVisible(u: StoredUser | null, id: CounterId): boolean {
   if (!u) return true;
