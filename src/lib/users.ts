@@ -19,7 +19,10 @@ export interface UserPermissions {
   applyDiscount: boolean;
   changeTax: boolean;
   forceSale: boolean;
+  /** See and use the bottom pinned panel. */
+  pinPanel?: boolean;
 }
+
 
 export type CounterId =
   | "totalMedicines"
