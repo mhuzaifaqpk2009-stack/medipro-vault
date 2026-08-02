@@ -282,7 +282,31 @@ function SettingsPage() {
       </section>
 
       <section className="surface-card mt-4 p-6">
+        <h2 className="font-display text-base font-semibold">Pinned bottom panel</h2>
+        <div className="mt-4 flex flex-wrap items-center gap-6">
+          <label className="flex items-center gap-3">
+            <Switch
+              checked={!s.pinPanelHidden}
+              onCheckedChange={(v) => set("pinPanelHidden", !v)}
+            />
+            <span className="text-sm font-medium">Show pinned panel</span>
+          </label>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { mutate((d) => { d.settings.pinnedItems = []; }); toast.success("Pins cleared"); }}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" /> Clear pins ({(s.pinnedItems ?? []).length})
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Right-click any sidebar tab, dashboard counter or quick action and choose “Pin” to keep it in the bottom panel.
+        </p>
+      </section>
+
+      <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Auto save</h2>
+
         <div className="mt-4 flex flex-wrap items-center gap-6">
           <label className="flex items-center gap-3">
             <Switch checked={s.autoSaveEnabled} onCheckedChange={(v) => set("autoSaveEnabled", v)} />
