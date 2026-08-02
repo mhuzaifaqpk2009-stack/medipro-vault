@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/SearchInput";
+
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -96,6 +98,16 @@ function SalesPage() {
   const total = Math.max(0, subtotal + taxAmt - discount);
   const change = Math.max(0, received - total);
 
+  // Selected customer's special discount % fills the discount box automatically.
+  const specialPercent = customerId
+    ? (data.customers.find((c) => c.id === customerId)?.specialDiscountPercent ?? 0)
+    : 0;
+  useEffect(() => {
+    if (!specialPercent) return;
+    const auto = Math.round(subtotal * (specialPercent / 100) * 100) / 100;
+    setDiscount(auto);
+  }, [specialPercent, subtotal, setDiscount]);
+
   function handleDiscountChange(v: number) {
     const clean = Math.max(0, v || 0);
     if (!isAdmin && maxDiscount > 0 && clean > maxDiscount) {
@@ -105,6 +117,7 @@ function SalesPage() {
     }
     setDiscount(clean);
   }
+
 
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
@@ -158,8 +171,12 @@ function SalesPage() {
         </div>
         <div className="relative border-b p-3">
           <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <SearchInput
             data-search
+            phrases={[
+              "Scan barcode or search medicine…",
+              "Enter adds the top match…",
+            ]}
             value={q}
             autoFocus
             onChange={(e) => setQ(e.target.value)}
@@ -168,6 +185,7 @@ function SalesPage() {
             }}
             className="h-11 pl-8 text-sm"
           />
+
           {results.length > 0 && (
             <div className="absolute left-3 right-3 top-14 z-10 max-h-72 overflow-auto rounded-md border bg-popover shadow-elevated">
               {results.map((m) => (
@@ -229,7 +247,7 @@ function SalesPage() {
         </div>
         <div>
           <Label className="text-xs">Remark (optional)</Label>
-          <Input value={remark} onChange={(e) => setRemark(e.target.value)} />
+          <Input value={remark} placeholder="e.g. MUZAMMIL SB" onChange={(e) => setRemark(e.target.value)} />
         </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm">
           <Row k="Subtotal" v={money(subtotal, sym)} />
@@ -239,15 +257,21 @@ function SalesPage() {
           <div className="mt-3 flex items-center gap-3">
             <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount</Label>
             <Input
-              type="number" className="h-8 flex-1"
+              type="number" className="h-8 flex-1" placeholder="0"
               disabled={!canDiscount}
               value={discount || ""}
               onChange={(e) => handleDiscountChange(+e.target.value)}
             />
           </div>
+          {specialPercent > 0 && (
+            <p className="mt-1 text-[11px] text-primary">
+              Customer special discount {specialPercent}% applied automatically.
+            </p>
+          )}
           {!isAdmin && maxDiscount > 0 && (
             <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {money(maxDiscount, sym)}</p>
           )}
+
           <div className="mt-3 flex items-center justify-between border-t pt-2">
             <span className="font-display font-semibold">Total</span>
             <span className="font-display text-xl font-bold tabular-nums">{money(total, sym)}</span>

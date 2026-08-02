@@ -30,8 +30,20 @@ export interface PharmacySettings {
   tabHotkeys?: Record<string, string>;
   /** Custom sidebar order: array of tab paths. Missing entries keep default order. */
   tabOrder?: string[];
+  /** Custom display names per tab path (admin only). */
+  tabRenames?: Record<string, string>;
   /** Hidden dashboard quick-action ids. */
   hiddenQuickActions?: string[];
+  /** Items pinned to the bottom panel. */
+  pinnedItems?: PinnedItem[];
+  /** Hide the bottom pinned panel completely. */
+  pinPanelHidden?: boolean;
+  /** Collapse the bottom pinned panel to a thin strip. */
+  pinPanelMinimized?: boolean;
+  /** Resizable chrome sizes (px). */
+  sidebarWidth?: number;
+  topbarHeight?: number;
+  pinBarHeight?: number;
   /** Automatic portable backups. */
   autoBackupEnabled?: boolean;
   autoBackupIntervalHours?: number;
@@ -41,6 +53,16 @@ export interface PharmacySettings {
   backupPasswordEnabled?: boolean;
   backupPassword?: string;
 }
+
+export type PinKind = "nav" | "action" | "cmd" | "counter";
+export interface PinnedItem {
+  id: string;
+  label: string;
+  kind: PinKind;
+  /** Route for nav/action pins. */
+  to?: string;
+}
+
 
 export interface Category {
   id: string;
@@ -66,7 +88,10 @@ export interface Customer {
   address?: string;
   balance: number;
   loyaltyPoints: number;
+  /** Special discount % automatically applied at checkout for this customer. */
+  specialDiscountPercent?: number;
 }
+
 
 export interface Medicine {
   id: string;

@@ -13,7 +13,7 @@ import type { Customer } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/customers")({ component: CustomersPage });
 
-const empty = (): Customer => ({ id: "", name: "", phone: "", email: "", address: "", balance: 0, loyaltyPoints: 0 });
+const empty = (): Customer => ({ id: "", name: "", phone: "", email: "", address: "", balance: 0, loyaltyPoints: 0, specialDiscountPercent: 0 });
 
 function CustomersPage() {
   const list = useProjectStore((s) => s.data!.customers);
@@ -81,13 +81,23 @@ function Editor({ value, onCancel, onSave }: { value: Customer; onCancel: () => 
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
       <DialogContent><DialogHeader><DialogTitle>{value.id ? "Edit" : "New"} customer</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><Label className="text-xs">Name *</Label><Input value={c.name} onChange={(e) => upd("name", e.target.value)} autoFocus /></div>
-          <div><Label className="text-xs">Phone</Label><Input value={c.phone ?? ""} onChange={(e) => upd("phone", e.target.value)} /></div>
-          <div><Label className="text-xs">Email</Label><Input value={c.email ?? ""} onChange={(e) => upd("email", e.target.value)} /></div>
-          <div><Label className="text-xs">Address</Label><Input value={c.address ?? ""} onChange={(e) => upd("address", e.target.value)} /></div>
-          <div><Label className="text-xs">Points</Label><Input type="number" value={c.loyaltyPoints || ""} onChange={(e) => upd("loyaltyPoints", +e.target.value || 0)} /></div>
-          <div><Label className="text-xs">Balance</Label><Input type="number" value={c.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Name *</Label><Input value={c.name} placeholder="Customer name" onChange={(e) => upd("name", e.target.value)} autoFocus /></div>
+          <div><Label className="text-xs">Phone</Label><Input value={c.phone ?? ""} placeholder="03xx xxxxxxx" onChange={(e) => upd("phone", e.target.value)} /></div>
+          <div><Label className="text-xs">Email</Label><Input value={c.email ?? ""} placeholder="name@example.com" onChange={(e) => upd("email", e.target.value)} /></div>
+          <div><Label className="text-xs">Address</Label><Input value={c.address ?? ""} placeholder="Street, city" onChange={(e) => upd("address", e.target.value)} /></div>
+          <div><Label className="text-xs">Points</Label><Input type="number" placeholder="0" value={c.loyaltyPoints || ""} onChange={(e) => upd("loyaltyPoints", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Balance</Label><Input type="number" placeholder="0" value={c.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs">Special discount % (auto-applied at checkout)</Label>
+            <Input
+              type="number"
+              placeholder="e.g. 10"
+              value={c.specialDiscountPercent || ""}
+              onChange={(e) => upd("specialDiscountPercent", +e.target.value || 0)}
+            />
+          </div>
         </div>
+
         <DialogFooter><Button variant="ghost" onClick={onCancel}>Cancel</Button><Button onClick={() => onSave(c)}>Save</Button></DialogFooter>
       </DialogContent>
     </Dialog>

@@ -51,11 +51,13 @@ function BillsPage() {
           <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             data-search
+            placeholder="Search by invoice # or customer…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="h-11 pl-8 text-sm"
             autoFocus
           />
+
         </div>
         <div className="flex-1 overflow-auto">
           {list.length === 0 ? (

@@ -3,13 +3,15 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff, Truck, Plus, X,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff, Truck,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
+import { pinContext } from "@/lib/pins";
 import { AdminGate } from "@/components/PermissionGate";
+
 
 export const Route = createFileRoute("/app/")({
   component: () => <AdminGate><Dashboard /></AdminGate>,
@@ -160,8 +162,7 @@ function Dashboard() {
     return { buckets, max, total };
   }, [data, metric, range]);
 
-  /* ---- quick actions ---- */
-  const hiddenActions = data.settings.hiddenQuickActions ?? [];
+  /* ---- quick actions (bottom of the page) ---- */
   const quickActions = [
     { id: "medicine", label: "Add medicine", icon: Pill, to: "/app/medicines" },
     { id: "sale", label: "New sale", icon: ShoppingCart, to: "/app/sales" },
@@ -169,13 +170,7 @@ function Dashboard() {
     { id: "purchase", label: "New purchase", icon: Truck, to: "/app/purchases" },
     { id: "supplier", label: "Add supplier", icon: Building2, to: "/app/suppliers" },
   ];
-  function toggleAction(id: string) {
-    mutate((d) => {
-      const list = new Set(d.settings.hiddenQuickActions ?? []);
-      if (list.has(id)) list.delete(id); else list.add(id);
-      d.settings.hiddenQuickActions = Array.from(list);
-    });
-  }
+
 
   const mask = "••••";
   const allKpis: { id: CounterId; label: string; value: any; icon: any; tone: string }[] = [
@@ -230,8 +225,10 @@ function Dashboard() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.04 }}
+              {...pinContext({ id: `counter:${k.id}`, label: k.label, kind: "counter" })}
               className="surface-card group relative overflow-hidden p-5"
             >
+
               <div className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${toneMap[k.tone]} opacity-60 blur-2xl`} />
               <div className="relative flex items-start justify-between">
                 <div>
@@ -255,41 +252,8 @@ function Dashboard() {
         })}
       </div>
 
-      {/* Quick actions — each can be removed (X) or added back below. */}
-      <div className="surface-card mt-6 p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Quick actions</p>
-        <div className="flex flex-wrap gap-2">
-          {quickActions.filter((a) => !hiddenActions.includes(a.id)).map((a) => {
-            const Icon = a.icon;
-            return (
-              <div key={a.id} className="group relative">
-                <Link
-                  to={a.to}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
-                >
-                  <Icon className="h-4 w-4 text-primary" /> {a.label}
-                </Link>
-                <button
-                  onClick={() => toggleAction(a.id)}
-                  title="Remove"
-                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 place-items-center rounded-full border bg-background text-muted-foreground group-hover:grid hover:text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-          {quickActions.filter((a) => hiddenActions.includes(a.id)).map((a) => (
-            <button
-              key={a.id}
-              onClick={() => toggleAction(a.id)}
-              className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
-            >
-              <Plus className="h-3.5 w-3.5" /> {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
+
+
 
 
       {(showTrend || showMostSold) && (
@@ -409,6 +373,30 @@ function Dashboard() {
           )}
         </div>
       )}
+
+      {/* Quick actions — right-click any button to pin it to the bottom panel. */}
+      <div className="surface-card mt-6 p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          Quick actions
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.map((a) => {
+            const Icon = a.icon;
+            return (
+              <Link
+                key={a.id}
+                to={a.to}
+                draggable={false}
+                {...pinContext({ id: `action:${a.id}`, label: a.label, kind: "action", to: a.to })}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+              >
+                <Icon className="h-4 w-4 text-primary" /> {a.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
     </div>
+
   );
 }
