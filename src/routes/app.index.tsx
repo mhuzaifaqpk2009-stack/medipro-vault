@@ -373,6 +373,30 @@ function Dashboard() {
           )}
         </div>
       )}
+
+      {/* Quick actions — right-click any button to pin it to the bottom panel. */}
+      <div className="surface-card mt-6 p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          Quick actions
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.map((a) => {
+            const Icon = a.icon;
+            return (
+              <Link
+                key={a.id}
+                to={a.to}
+                draggable={false}
+                {...pinContext({ id: `action:${a.id}`, label: a.label, kind: "action", to: a.to })}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+              >
+                <Icon className="h-4 w-4 text-primary" /> {a.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
     </div>
+
   );
 }
