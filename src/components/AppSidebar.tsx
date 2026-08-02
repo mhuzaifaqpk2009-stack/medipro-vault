@@ -14,8 +14,7 @@ import {
   Pencil,
   Check,
   RotateCcw,
-  ChevronUp,
-  ChevronDown,
+  GripVertical,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -23,6 +22,7 @@ import { useSession } from "@/store/session-store";
 import { useProjectStore } from "@/store/project-store";
 import type { UserPermissions } from "@/lib/users";
 import { Button } from "@/components/ui/button";
+import { pinContext } from "@/lib/pins";
 import {
   Sidebar,
   SidebarContent,
@@ -43,22 +43,25 @@ type NavItem = {
   exact?: boolean;
   perm?: keyof UserPermissions;
   adminOnly?: boolean;
+  group: string;
 };
 
-/** Default order — also the order restored by "Reset" in edit mode. */
+/** Default order & grouping — also what "Reset" restores in edit mode. */
 const NAV: NavItem[] = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true, adminOnly: true },
-  { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart, perm: "sales" },
-  { to: "/app/bills", label: "Bills", icon: Receipt, perm: "bills" },
-  { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines" },
-  { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory" },
-  { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases" },
-  { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers" },
-  { to: "/app/customers", label: "Customers", icon: Users, perm: "customers" },
-  { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories" },
-  { to: "/app/reports", label: "Reports", icon: BarChart3, perm: "reports" },
-  { to: "/app/settings", label: "Settings", icon: Settings, adminOnly: true },
+  { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true, adminOnly: true, group: "Main" },
+  { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart, perm: "sales", group: "Main" },
+  { to: "/app/bills", label: "Bills", icon: Receipt, perm: "bills", group: "Main" },
+  { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines", group: "Inventory" },
+  { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory", group: "Inventory" },
+  { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
+  { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
+  { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
+  { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
+  { to: "/app/reports", label: "Reports", icon: BarChart3, perm: "reports", group: "Insights" },
+  { to: "/app/settings", label: "Settings", icon: Settings, adminOnly: true, group: "Insights" },
 ];
+
+const GROUPS = ["Main", "Inventory", "People", "Insights"];
 
 /** Order NAV by the saved tab order, appending anything new at the end. */
 export function orderNav(order?: string[]) {
@@ -80,8 +83,10 @@ export function AppSidebar() {
   const user = useSession((s) => s.user);
   const isAdmin = user?.role === "admin";
   const tabOrder = useProjectStore((s) => s.data?.settings.tabOrder);
+  const renames = useProjectStore((s) => s.data?.settings.tabRenames);
   const mutate = useProjectStore((s) => s.mutate);
   const [editing, setEditing] = useState(false);
+  const [dragging, setDragging] = useState<string | null>(null);
 
   const items = useMemo(() => {
     const ordered = orderNav(tabOrder);
@@ -92,32 +97,33 @@ export function AppSidebar() {
     });
   }, [tabOrder, isAdmin, user]);
 
+  const labelOf = (to: string, fallback: string) => renames?.[to] || fallback;
+
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
-  function move(index: number, dir: -1 | 1) {
-    const next = [...items];
-    const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    // Merge the visible order back into the full order so hidden tabs survive.
-    const visiblePaths = new Set(items.map((i) => i.to));
+  /** Move `from` to just before/after `to` in the persisted order. */
+  function reorder(fromPath: string, toPath: string) {
+    if (fromPath === toPath) return;
     const full = orderNav(tabOrder).map((i) => i.to);
-    let vi = 0;
-    const merged = full.map((p) => (visiblePaths.has(p) ? next[vi++].to : p));
-    mutate((d) => { d.settings.tabOrder = merged; });
+    const next = full.filter((p) => p !== fromPath);
+    const at = next.indexOf(toPath);
+    next.splice(at < 0 ? next.length : at, 0, fromPath);
+    mutate((d) => { d.settings.tabOrder = next; });
   }
 
   function resetOrder() {
     mutate((d) => { d.settings.tabOrder = []; });
   }
 
+  const groupsToRender = GROUPS.filter((g) => items.some((i) => i.group === g));
+
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarHeader className="border-b px-3 py-4">
         <div className="flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-white shadow-soft">
-            <img src="./logo.png" alt="Huzaifa Software" className="h-8 w-8 object-contain" />
+            <img src="./logo.png" alt="Huzaifa Software" className="h-8 w-8 object-contain" draggable={false} />
           </div>
           {!collapsed && (
             <div className="flex min-w-0 flex-col leading-tight">
@@ -130,72 +136,89 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          {!collapsed && (
-            <div className="flex items-center justify-between pr-1">
-              <SidebarGroupLabel>{editing ? "Reorder tabs" : "Navigation"}</SidebarGroupLabel>
-              <div className="flex items-center gap-1">
-                {editing && (
-                  <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to default order" onClick={resetOrder}>
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6"
-                  title={editing ? "Done" : "Edit tab order"}
-                  onClick={() => setEditing((v) => !v)}
-                >
-                  {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+        {!collapsed && isAdmin && (
+          <div className="flex items-center justify-between px-2 pt-2">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {editing ? "Drag tabs to reorder" : ""}
+            </span>
+            <div className="flex items-center gap-1">
+              {editing && (
+                <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to default order" onClick={resetOrder}>
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
-              </div>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                title={editing ? "Done" : "Edit tab order"}
+                onClick={() => setEditing((v) => !v)}
+              >
+                {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+              </Button>
             </div>
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((i, index) => {
-                const active = isActive(i.to, i.exact);
-                const Icon = i.icon;
-                if (editing && !collapsed) {
+          </div>
+        )}
+
+        {groupsToRender.map((group) => (
+          <SidebarGroup key={group}>
+            {!collapsed && <SidebarGroupLabel>{group}</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {items.filter((i) => i.group === group).map((i) => {
+                  const active = isActive(i.to, i.exact);
+                  const Icon = i.icon;
+                  const label = labelOf(i.to, i.label);
+                  const menu = pinContext({ id: i.to, label, kind: "nav", to: i.to, canRename: true });
+
+                  if (editing && !collapsed) {
+                    return (
+                      <SidebarMenuItem key={i.to}>
+                        <div
+                          draggable
+                          onDragStart={() => setDragging(i.to)}
+                          onDragEnd={() => setDragging(null)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => { if (dragging) reorder(dragging, i.to); setDragging(null); }}
+                          className={cn(
+                            "flex cursor-grab items-center gap-2 rounded-md px-2 py-1.5 text-sm active:cursor-grabbing",
+                            dragging === i.to ? "opacity-40" : "hover:bg-sidebar-accent",
+                          )}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">{label}</span>
+                        </div>
+                      </SidebarMenuItem>
+                    );
+                  }
+
                   return (
                     <SidebarMenuItem key={i.to}>
-                      <div className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm">
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="flex-1 truncate">{i.label}</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" disabled={index === 0} onClick={() => move(index, -1)}>
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" disabled={index === items.length - 1} onClick={() => move(index, 1)}>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+                        <Link
+                          to={i.to}
+                          draggable={false}
+                          {...menu}
+                          className={cn(
+                            "group relative flex items-center gap-3 rounded-md",
+                            active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                          )}
+                        >
+                          {active && (
+                            <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />
+                          )}
+                          <Icon className="h-4 w-4" />
+                          {!collapsed && <span className="truncate">{label}</span>}
+                        </Link>
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
-                }
-                return (
-                  <SidebarMenuItem key={i.to}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={i.label}>
-                      <Link
-                        to={i.to}
-                        className={cn(
-                          "group relative flex items-center gap-3 rounded-md",
-                          active && "bg-sidebar-accent text-sidebar-accent-foreground",
-                        )}
-                      >
-                        {active && (
-                          <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />
-                        )}
-                        <Icon className="h-4 w-4" />
-                        {!collapsed && <span className="truncate">{i.label}</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
     </Sidebar>
   );
