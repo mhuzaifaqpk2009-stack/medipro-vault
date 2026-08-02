@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,16 @@ function SalesPage() {
   const total = Math.max(0, subtotal + taxAmt - discount);
   const change = Math.max(0, received - total);
 
+  // Selected customer's special discount % fills the discount box automatically.
+  const specialPercent = customerId
+    ? (data.customers.find((c) => c.id === customerId)?.specialDiscountPercent ?? 0)
+    : 0;
+  useEffect(() => {
+    if (!specialPercent) return;
+    const auto = Math.round(subtotal * (specialPercent / 100) * 100) / 100;
+    setDiscount(auto);
+  }, [specialPercent, subtotal, setDiscount]);
+
   function handleDiscountChange(v: number) {
     const clean = Math.max(0, v || 0);
     if (!isAdmin && maxDiscount > 0 && clean > maxDiscount) {
@@ -105,6 +115,7 @@ function SalesPage() {
     }
     setDiscount(clean);
   }
+
 
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
