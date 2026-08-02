@@ -230,8 +230,10 @@ function Dashboard() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.04 }}
+              {...pinContext({ id: `counter:${k.id}`, label: k.label, kind: "counter" })}
               className="surface-card group relative overflow-hidden p-5"
             >
+
               <div className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${toneMap[k.tone]} opacity-60 blur-2xl`} />
               <div className="relative flex items-start justify-between">
                 <div>
