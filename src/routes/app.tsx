@@ -5,6 +5,9 @@ import { runBackupNow } from "@/lib/backup";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopbar } from "@/components/AppTopbar";
+import { PinBar } from "@/components/PinBar";
+import { ResizeHandle } from "@/components/ResizeHandle";
+import { ItemMenuHost } from "@/lib/pins";
 import { useAutoSave } from "@/hooks/use-autosave";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -12,6 +15,7 @@ import type { UserPermissions } from "@/lib/users";
 import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
 } from "@/lib/hotkeys";
+
 
 /** Resolve the effective combo -> path map for the given tabs. */
 export function buildHotkeyMap(
@@ -135,14 +139,18 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", handler, true);
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
 
-  // "/" — jump straight into the current page's search box.
+  // "/" — jump into the current page's search box. Ctrl+/ — top panel search.
   useEffect(() => {
     const onSlash = (e: KeyboardEvent) => {
-      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key !== "/" && e.code !== "Slash") return;
+      if (e.altKey) return;
+      const global = e.ctrlKey || e.metaKey;
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
-      const search = document.querySelector<HTMLInputElement>("[data-search]");
+      if (!global && (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable)) return;
+      const search = global
+        ? document.querySelector<HTMLInputElement>("[data-global-search]")
+        : document.querySelector<HTMLInputElement>("[data-search]");
       if (!search) return;
       e.preventDefault();
       search.focus();
@@ -171,20 +179,36 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
+  const mutate = useProjectStore((s) => s.mutate);
+  const sidebarWidth = Math.min(420, Math.max(180, data?.settings.sidebarWidth ?? 256));
+
   if (!data) return null;
 
 
   return (
-    <SidebarProvider>
+    <SidebarProvider
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+    >
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
+        <ResizeHandle
+          orientation="vertical"
+          value={sidebarWidth}
+          min={180}
+          max={420}
+          onChange={(v) => mutate((d) => { d.settings.sidebarWidth = v; })}
+          className="hidden md:block"
+        />
         <SidebarInset className="flex min-w-0 flex-1 flex-col">
           <AppTopbar />
           <main className="flex-1 overflow-auto">
             <Outlet />
           </main>
+          <PinBar />
         </SidebarInset>
       </div>
+      <ItemMenuHost />
     </SidebarProvider>
   );
 }
+

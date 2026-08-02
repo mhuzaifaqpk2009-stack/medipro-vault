@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/SearchInput";
 import { useProjectStore } from "@/store/project-store";
 
 /** Quick medicine lookup available from anywhere in the app. */
@@ -33,7 +33,9 @@ export function MedicineSearch() {
   return (
     <div className="relative hidden w-full max-w-xs sm:block">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
+      <SearchInput
+        data-global-search
+        phrases={["Search medicines…", "Search by barcode…", "Search by batch…"]}
         value={q}
         className="h-9 pl-8"
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
@@ -44,6 +46,7 @@ export function MedicineSearch() {
           if (e.key === "Escape") setOpen(false);
         }}
       />
+
       {open && results.length > 0 && (
         <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-md border bg-popover shadow-lg">
           {results.map((m) => (
