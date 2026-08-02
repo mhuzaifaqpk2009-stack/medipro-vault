@@ -53,6 +53,8 @@ const PERM_LABELS: { key: keyof UserPermissions; label: string }[] = [
   { key: "categories", label: "Access Categories page" },
   { key: "applyDiscount", label: "Apply discount at checkout" },
   { key: "forceSale", label: "Force-sell out-of-stock items" },
+  { key: "pinPanel", label: "Use the bottom pinned panel" },
+
 ];
 
 function SettingsPage() {
