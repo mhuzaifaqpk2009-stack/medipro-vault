@@ -4,21 +4,34 @@ import { encodeProject, decodeProject } from "@/lib/project-codec";
 import { readInternal, writeInternal, clearInternal } from "@/lib/local-store";
 import { reportDirty, writeRecovery, clearRecovery } from "@/lib/electron-bridge";
 
+/** How many steps Ctrl+Z can walk back. */
+const HISTORY_LIMIT = 40;
+
+export interface MutateOptions {
+  /** Set to false for actions that must never be undone (e.g. completing a sale). */
+  history?: boolean;
+}
+
 interface ProjectState {
   data: ProjectData | null;
   dirty: boolean;
   lastSavedAt: number | null;
   isSaving: boolean;
+  past: ProjectData[];
+  future: ProjectData[];
 
   load(data: ProjectData): void;
   close(): void;
-  mutate(fn: (draft: ProjectData) => void): void;
+  mutate(fn: (draft: ProjectData) => void, options?: MutateOptions): void;
+  undo(): boolean;
+  redo(): boolean;
   markDirty(): void;
   /** Saves into internal application storage. Never opens a file dialog. */
   save(): Promise<boolean>;
   /** Serialised, portable bytes of the current project (for backups). */
   exportBytes(password?: string): Promise<Uint8Array | null>;
 }
+
 
 // Throttle recovery writes.
 let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
