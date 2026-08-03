@@ -181,12 +181,17 @@ export async function printReceipt(sale: Sale, data: ProjectData) {
   }, 250);
 }
 
-/** Sequential numeric invoice numbers starting at 1000. Resets when sales list is empty. */
-export function nextInvoiceNumber(sales: { invoiceNumber: string }[]): string {
-  const nums = sales
+/**
+ * Sequential numeric invoice numbers starting at 1000.
+ * Uses the persistent counter in settings so clearing bill history does NOT
+ * reset numbering (Settings → Danger zone can reset the counter explicitly).
+ */
+export function nextInvoiceNumber(data: ProjectData): string {
+  const fromSales = data.sales
     .map((s) => parseInt(String(s.invoiceNumber).replace(/[^0-9]/g, ""), 10))
     .filter((n) => Number.isFinite(n) && n >= 1000);
-  const next = nums.length ? Math.max(...nums) + 1 : 1000;
+  const counter = data.settings.invoiceCounter ?? 1000;
+  const next = Math.max(counter, fromSales.length ? Math.max(...fromSales) + 1 : 1000);
   return String(next);
 }
 
