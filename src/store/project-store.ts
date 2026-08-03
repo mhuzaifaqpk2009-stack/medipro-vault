@@ -55,27 +55,66 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   dirty: false,
   lastSavedAt: null,
   isSaving: false,
+  past: [],
+  future: [],
 
   load(data) {
-    set({ data, dirty: false, lastSavedAt: Date.now() });
+    set({ data, dirty: false, lastSavedAt: Date.now(), past: [], future: [] });
     reportDirty(false);
   },
 
   close() {
-    set({ data: null, dirty: false, lastSavedAt: null });
+    set({ data: null, dirty: false, lastSavedAt: null, past: [], future: [] });
     reportDirty(false);
   },
 
-  mutate(fn) {
-    const { data } = get();
+  mutate(fn, options) {
+    const { data, past } = get();
     if (!data) return;
     const next = structuredClone(data);
     fn(next);
     next.meta.updatedAt = new Date().toISOString();
-    set({ data: next, dirty: true });
+    const keepHistory = options?.history !== false;
+    set({
+      data: next,
+      dirty: true,
+      past: keepHistory ? [...past, data].slice(-HISTORY_LIMIT) : past,
+      future: keepHistory ? [] : get().future,
+    });
     reportDirty(true);
     scheduleRecovery();
   },
+
+  undo() {
+    const { data, past, future } = get();
+    if (!data || past.length === 0) return false;
+    const previous = past[past.length - 1];
+    set({
+      data: previous,
+      past: past.slice(0, -1),
+      future: [...future, data].slice(-HISTORY_LIMIT),
+      dirty: true,
+    });
+    reportDirty(true);
+    scheduleRecovery();
+    return true;
+  },
+
+  redo() {
+    const { data, past, future } = get();
+    if (!data || future.length === 0) return false;
+    const nextState = future[future.length - 1];
+    set({
+      data: nextState,
+      future: future.slice(0, -1),
+      past: [...past, data].slice(-HISTORY_LIMIT),
+      dirty: true,
+    });
+    reportDirty(true);
+    scheduleRecovery();
+    return true;
+  },
+
 
   markDirty() { set({ dirty: true }); reportDirty(true); scheduleRecovery(); },
 
