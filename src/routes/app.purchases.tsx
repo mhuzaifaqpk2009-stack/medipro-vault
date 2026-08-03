@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { pinContext } from "@/lib/pins";
+import { useQuickAction } from "@/lib/quick-actions";
 import { cn } from "@/lib/utils";
 import type { PurchaseItem, Medicine } from "@/domain/schema";
 
@@ -25,13 +27,14 @@ function PurchasesPage() {
   const mutate = useProjectStore((s) => s.mutate);
   const sym = useCurrencySymbol();
   const [open, setOpen] = useState(false);
+  useQuickAction("new-purchase", () => setOpen(true));
 
   return (
     <div className="mx-auto max-w-6xl p-6 md:p-8">
       <header className="mb-5 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft"><Truck className="h-5 w-5" /></div>
         <div><h1 className="font-display text-2xl font-bold">Purchases</h1><p className="text-sm text-muted-foreground">{data.purchases.length} purchase{data.purchases.length === 1 ? "" : "s"}</p></div>
-        <Button className="ml-auto" onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>
+        <Button className="ml-auto" {...pinContext({ id: "action:new-purchase", label: "New purchase", kind: "action", to: "/app/purchases" })} onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>
       </header>
 
       <div className="surface-card overflow-hidden">

@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useProjectStore } from "@/store/project-store";
 import { daysUntil } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { pinContext } from "@/lib/pins";
 
 export const Route = createFileRoute("/app/inventory")({
   component: () => <PermissionGate perm="inventory"><InventoryPage /></PermissionGate>,
@@ -32,10 +33,10 @@ function InventoryPage() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPI icon={<PackageX />} label="Out of stock" n={groups.out.length} tone="destructive" />
-        <KPI icon={<AlertTriangle />} label="Low stock" n={groups.low.length} tone="warning" />
-        <KPI icon={<CalendarX />} label="Expired" n={groups.exp.length} tone="destructive" />
-        <KPI icon={<CalendarX />} label="Expiring ≤ 30d" n={groups.nearExp.length} tone="warning" />
+        <KPI id="outOfStock" icon={<PackageX />} label="Out of stock" n={groups.out.length} tone="destructive" />
+        <KPI id="lowStock" icon={<AlertTriangle />} label="Low stock" n={groups.low.length} tone="warning" />
+        <KPI id="expired" icon={<CalendarX />} label="Expired" n={groups.exp.length} tone="destructive" />
+        <KPI id="nearExpiry" icon={<CalendarX />} label="Expiring ≤ 30d" n={groups.nearExp.length} tone="warning" />
       </div>
 
       <Section title="Out of stock" items={groups.out} />
@@ -46,10 +47,10 @@ function InventoryPage() {
   );
 }
 
-function KPI({ icon, label, n, tone }: { icon: React.ReactNode; label: string; n: number; tone: string }) {
+function KPI({ id, icon, label, n, tone }: { id: string; icon: React.ReactNode; label: string; n: number; tone: string }) {
   const map: Record<string, string> = { warning: "text-warning", destructive: "text-destructive" };
   return (
-    <div className="surface-card p-4">
+    <div className="surface-card p-4" {...pinContext({ id: `counter:${id}`, label, kind: "counter" })}>
       <div className={`mb-2 flex items-center gap-2 ${map[tone]}`}>{icon}<span className="text-xs font-medium">{label}</span></div>
       <p className="font-display text-3xl font-bold tabular-nums">{n}</p>
     </div>

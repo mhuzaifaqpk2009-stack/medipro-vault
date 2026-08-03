@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useProjectStore } from "@/store/project-store";
 import { uid } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { pinContext } from "@/lib/pins";
+import { useQuickAction } from "@/lib/quick-actions";
 import type { Supplier } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/suppliers")({
@@ -22,6 +24,7 @@ function SuppliersPage() {
   const list = useProjectStore((s) => s.data!.suppliers);
   const mutate = useProjectStore((s) => s.mutate);
   const [editing, setEditing] = useState<Supplier | null>(null);
+  useQuickAction("new-supplier", () => setEditing(empty()));
 
   function save(v: Supplier) {
     if (!v.name.trim()) { toast.error("Name required"); return; }
@@ -44,7 +47,7 @@ function SuppliersPage() {
       <header className="mb-5 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft"><Building2 className="h-5 w-5" /></div>
         <div><h1 className="font-display text-2xl font-bold">Suppliers</h1><p className="text-sm text-muted-foreground">{list.length} vendor{list.length === 1 ? "" : "s"}</p></div>
-        <Button className="ml-auto" onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add supplier</Button>
+        <Button className="ml-auto" {...pinContext({ id: "action:new-supplier", label: "New supplier", kind: "action", to: "/app/suppliers" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add supplier</Button>
       </header>
 
       <div className="surface-card overflow-hidden">
