@@ -16,6 +16,7 @@ import { useSession } from "@/store/session-store";
 import { useCartStore } from "@/store/cart-store";
 import { uid, money, useCurrencySymbol } from "@/lib/format";
 import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
+import { cartTotals } from "@/lib/sale-math";
 import type { PaymentMethod, Sale } from "@/domain/schema";
 import { PermissionGate } from "@/components/PermissionGate";
 
@@ -93,9 +94,8 @@ function SalesPage() {
     setCart((c) => c.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
 
-  const subtotal = cart.reduce((s, l) => s + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0);
-  const taxAmt = subtotal * (taxPercent / 100);
-  const total = Math.max(0, subtotal + taxAmt - discount);
+  // `discount` is a PERCENTAGE off the gross (subtotal + tax) — same as the receipt.
+  const { subtotal, tax: taxAmt, discountValue, total } = cartTotals(cart, taxPercent, discount);
   const change = Math.max(0, received - total);
 
   // Selected customer's special discount % fills the discount box automatically.
@@ -104,14 +104,13 @@ function SalesPage() {
     : 0;
   useEffect(() => {
     if (!specialPercent) return;
-    const auto = Math.round(subtotal * (specialPercent / 100) * 100) / 100;
-    setDiscount(auto);
-  }, [specialPercent, subtotal, setDiscount]);
+    setDiscount(specialPercent);
+  }, [specialPercent, setDiscount]);
 
   function handleDiscountChange(v: number) {
-    const clean = Math.max(0, v || 0);
+    const clean = Math.min(100, Math.max(0, v || 0));
     if (!isAdmin && maxDiscount > 0 && clean > maxDiscount) {
-      toast.error(`Max discount is ${money(maxDiscount, sym)}`);
+      toast.error(`Max discount is ${maxDiscount}%`);
       setDiscount(maxDiscount);
       return;
     }
@@ -121,7 +120,7 @@ function SalesPage() {
 
   function checkout() {
     if (cart.length === 0) { toast.error("Cart is empty"); return; }
-    const invoiceNumber = nextInvoiceNumber(data.sales);
+    const invoiceNumber = nextInvoiceNumber(data);
     const newSale: Sale = {
       id: uid("sale_"),
       invoiceNumber,
@@ -146,7 +145,8 @@ function SalesPage() {
         if (c) c.loyaltyPoints = (c.loyaltyPoints ?? 0) + Math.floor(total);
       }
       d.sales.push(newSale);
-    });
+      d.settings.invoiceCounter = Number(invoiceNumber) + 1;
+    }, { history: false }); // a completed sale can never be undone with Ctrl+Z
     toast.success(`Sale complete · ${invoiceNumber}`);
     if (printBill) {
       const latest = useProjectStore.getState().data!;
@@ -255,13 +255,16 @@ function SalesPage() {
             <Row k={`Tax (${taxPercent}%)`} v={money(taxAmt, sym)} />
           </div>
           <div className="mt-3 flex items-center gap-3">
-            <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount</Label>
+            <Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount %</Label>
             <Input
-              type="number" className="h-8 flex-1" placeholder="0"
+              type="number" max={100} className="h-8 flex-1" placeholder="0"
               disabled={!canDiscount}
               value={discount || ""}
               onChange={(e) => handleDiscountChange(+e.target.value)}
             />
+            <span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+              −{money(discountValue, sym)}
+            </span>
           </div>
           {specialPercent > 0 && (
             <p className="mt-1 text-[11px] text-primary">
@@ -269,7 +272,7 @@ function SalesPage() {
             </p>
           )}
           {!isAdmin && maxDiscount > 0 && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {money(maxDiscount, sym)}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {maxDiscount}%</p>
           )}
 
           <div className="mt-3 flex items-center justify-between border-t pt-2">
