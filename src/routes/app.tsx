@@ -15,6 +15,10 @@ import type { UserPermissions } from "@/lib/users";
 import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
 } from "@/lib/hotkeys";
+import {
+  QUICK_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId,
+} from "@/lib/quick-actions";
+
 
 
 /** Resolve the effective combo -> path map for the given tabs. */
@@ -102,6 +106,49 @@ function AppLayout() {
     () => buildHotkeyMap(visibleTabs, data?.settings.tabHotkeys),
     [visibleTabs, data?.settings.tabHotkeys],
   );
+
+  // combo string (normalised) -> quick action id (Ctrl+M etc.)
+  const actionMap = useMemo(() => {
+    const m = new Map<string, QuickActionId>();
+    for (const a of QUICK_ACTIONS) {
+      const combo = effectiveActionHotkey(a.id, data?.settings.actionHotkeys);
+      if (combo) m.set(normaliseCombo(combo), a.id);
+    }
+    return m;
+  }, [data?.settings.actionHotkeys]);
+
+  // Quick actions (new medicine / purchase / customer / supplier) + undo & redo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const key = normaliseCombo(combo);
+      const el = document.activeElement as HTMLElement | null;
+      const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable;
+
+      if (key === "ctrl+z" || key === "ctrl+y" || key === "ctrl+shift+z") {
+        if (typing) return;
+        e.preventDefault();
+        const store = useProjectStore.getState();
+        const ok = key === "ctrl+z" ? store.undo() : store.redo();
+        if (ok) toast.success(key === "ctrl+z" ? "Undone" : "Redone");
+        else toast.message(key === "ctrl+z" ? "Nothing to undo" : "Nothing to redo");
+        return;
+      }
+
+      const action = actionMap.get(key);
+      if (!action) return;
+      // Never trigger while a dialog/panel is open.
+      if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      forceCloseOverlays();
+      runQuickAction(action, navigate);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [actionMap, navigate]);
+
 
   useEffect(() => {
     if (!enabled) return;
