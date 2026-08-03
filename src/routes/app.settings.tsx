@@ -540,6 +540,23 @@ function SettingsPage() {
           </section>
         </TabsContent>
         <TabsContent value="danger">
+          <section className="surface-card mt-4 p-6">
+            <h2 className="font-display text-base font-semibold">Invoice counter</h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Next invoice #: <span className="font-mono">{s.invoiceCounter ?? 1000}</span> — resetting keeps all bills.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (!window.confirm("Reset the invoice counter back to 1000? Bills are kept.")) return;
+                mutate((d) => { d.settings.invoiceCounter = 1000; });
+                toast.success("Invoice counter reset to 1000");
+              }}
+            >
+              Reset invoice counter
+            </Button>
+          </section>
       <section className="surface-card mt-4 border-destructive/40 p-6">
         <div className="mb-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />
