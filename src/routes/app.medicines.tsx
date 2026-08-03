@@ -17,6 +17,8 @@ import {
 import { useProjectStore } from "@/store/project-store";
 import { uid, money, useCurrencySymbol, daysUntil } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { pinContext } from "@/lib/pins";
+import { useQuickAction } from "@/lib/quick-actions";
 import type { Medicine } from "@/domain/schema";
 
 export const Route = createFileRoute("/app/medicines")({
@@ -39,6 +41,7 @@ function MedicinesPage() {
     return seed ?? "";
   });
   const [editing, setEditing] = useState<Medicine | null>(null);
+  useQuickAction("new-medicine", () => setEditing(empty()));
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -84,7 +87,7 @@ function MedicinesPage() {
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input data-search placeholder="Search name, barcode, batch…" autoFocus value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-72 pl-8" />
           </div>
-          <Button onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add medicine</Button>
+          <Button {...pinContext({ id: "action:new-medicine", label: "New medicine", kind: "action", to: "/app/medicines" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add medicine</Button>
         </div>
       </header>
 
