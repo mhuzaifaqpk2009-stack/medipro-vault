@@ -10,8 +10,11 @@ export interface PharmacySettings {
   email: string;
   address: string;
   taxPercent: number;
-  /** Cap on flat discount amount for non-admin users at checkout. 0/undefined = unlimited. */
+  /** Cap on the discount PERCENT for non-admin users at checkout. 0/undefined = unlimited. */
   maxDiscount?: number;
+  /** Next invoice number to hand out (never reset by clearing bills). */
+  invoiceCounter?: number;
+
   currency: string;
   currencySymbol: string;
   receiptFooter: string;
@@ -28,10 +31,15 @@ export interface PharmacySettings {
   tabShortcuts?: Record<string, number>;
   /** Custom key-combo per tab path, e.g. { "/app/sales": "Ctrl+2" }. */
   tabHotkeys?: Record<string, string>;
+  /** Custom key-combo per quick action id, e.g. { "new-medicine": "Ctrl+M" }. */
+  actionHotkeys?: Record<string, string>;
   /** Custom sidebar order: array of tab paths. Missing entries keep default order. */
   tabOrder?: string[];
+  /** Custom sidebar group per tab path (admin drag between categories). */
+  tabGroups?: Record<string, string>;
   /** Custom display names per tab path (admin only). */
   tabRenames?: Record<string, string>;
+
   /** Hidden dashboard quick-action ids. */
   hiddenQuickActions?: string[];
   /** Items pinned to the bottom panel. */
@@ -159,7 +167,10 @@ export interface Sale {
   notes?: string;
   /** Username of the cashier who created the sale (for audit). */
   createdBy?: string;
+  /** ISO timestamps of every reprint of this bill. */
+  reprints?: string[];
 }
+
 
 export interface StockAdjustment {
   id: string;

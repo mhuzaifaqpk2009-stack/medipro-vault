@@ -24,7 +24,8 @@ function saleTotals(s: Sale, data: ProjectData) {
   const gross = s.items.reduce(
     (sum, it) => sum + it.salePrice * it.quantity * (1 - it.discountPercent / 100), 0,
   );
-  const net = Math.max(0, gross + gross * ((s.taxPercent || 0) / 100) - (s.discount || 0));
+  const withTax = gross + gross * ((s.taxPercent || 0) / 100);
+  const net = Math.max(0, withTax - withTax * ((s.discount || 0) / 100));
   const cogs = s.items.reduce((sum, it) => {
     const m = data.medicines.find((x) => x.id === it.medicineId);
     return sum + (m ? m.purchasePrice * it.quantity : 0);

@@ -1,15 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff, Truck,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isCounterVisible, type CounterId } from "@/lib/users";
 import { daysUntil, money } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
+import { saleTotal as saleTotalOf, saleProfit as saleProfitOf } from "@/lib/sale-math";
 import { AdminGate } from "@/components/PermissionGate";
 
 
@@ -34,20 +35,8 @@ function Dashboard() {
       return d !== null && d <= 0;
     }).length;
 
-    const saleTotal = (s: typeof data.sales[number]) => {
-      const sub = s.items.reduce(
-        (a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0,
-      );
-      const tax = sub * (s.taxPercent / 100);
-      return Math.max(0, sub + tax - s.discount);
-    };
-    const saleProfit = (s: typeof data.sales[number]) =>
-      s.items.reduce((a, l) => {
-        const m = data.medicines.find((x) => x.id === l.medicineId);
-        const cost = (m?.purchasePrice ?? 0) * l.quantity;
-        const rev = l.salePrice * l.quantity * (1 - l.discountPercent / 100);
-        return a + (rev - cost);
-      }, 0);
+    const saleTotal = (s: typeof data.sales[number]) => saleTotalOf(s);
+    const saleProfit = (s: typeof data.sales[number]) => saleProfitOf(s, data.medicines);
 
     const active = data.sales.filter((s) => s.status === "completed");
     const todaysSales = active.filter((s) => new Date(s.date).getTime() >= startOfDay);
@@ -101,18 +90,8 @@ function Dashboard() {
   const [range, setRange] = useState<"week" | "month" | "all">("week");
 
   const series = useMemo(() => {
-    const saleTotal = (s: typeof data.sales[number]) => {
-      const sub = s.items.reduce(
-        (a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0,
-      );
-      return Math.max(0, sub + sub * (s.taxPercent / 100) - s.discount);
-    };
-    const saleProfit = (s: typeof data.sales[number]) =>
-      s.items.reduce((a, l) => {
-        const m = data.medicines.find((x) => x.id === l.medicineId);
-        const cost = (m?.purchasePrice ?? 0) * l.quantity;
-        return a + (l.salePrice * l.quantity * (1 - l.discountPercent / 100) - cost);
-      }, 0);
+    const saleTotal = (s: typeof data.sales[number]) => saleTotalOf(s);
+    const saleProfit = (s: typeof data.sales[number]) => saleProfitOf(s, data.medicines);
 
     // Source events: (timestamp, value) pairs for the chosen metric.
     const events: { t: number; v: number }[] =
@@ -161,15 +140,6 @@ function Dashboard() {
     const total = buckets.reduce((a, b) => a + b.value, 0);
     return { buckets, max, total };
   }, [data, metric, range]);
-
-  /* ---- quick actions (bottom of the page) ---- */
-  const quickActions = [
-    { id: "medicine", label: "Add medicine", icon: Pill, to: "/app/medicines" },
-    { id: "sale", label: "New sale", icon: ShoppingCart, to: "/app/sales" },
-    { id: "customer", label: "Add customer", icon: Users, to: "/app/customers" },
-    { id: "purchase", label: "New purchase", icon: Truck, to: "/app/purchases" },
-    { id: "supplier", label: "Add supplier", icon: Building2, to: "/app/suppliers" },
-  ];
 
 
   const mask = "••••";
@@ -374,28 +344,6 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Quick actions — right-click any button to pin it to the bottom panel. */}
-      <div className="surface-card mt-6 p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          Quick actions
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {quickActions.map((a) => {
-            const Icon = a.icon;
-            return (
-              <Link
-                key={a.id}
-                to={a.to}
-                draggable={false}
-                {...pinContext({ id: `action:${a.id}`, label: a.label, kind: "action", to: a.to })}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
-              >
-                <Icon className="h-4 w-4 text-primary" /> {a.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
     </div>
 
   );

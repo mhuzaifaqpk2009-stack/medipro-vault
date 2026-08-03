@@ -84,9 +84,12 @@ export function AppSidebar() {
   const isAdmin = user?.role === "admin";
   const tabOrder = useProjectStore((s) => s.data?.settings.tabOrder);
   const renames = useProjectStore((s) => s.data?.settings.tabRenames);
+  const groupOverrides = useProjectStore((s) => s.data?.settings.tabGroups);
   const mutate = useProjectStore((s) => s.mutate);
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
+
+  const groupOf = (item: NavItem) => groupOverrides?.[item.to] || item.group;
 
   const items = useMemo(() => {
     const ordered = orderNav(tabOrder);
@@ -102,21 +105,37 @@ export function AppSidebar() {
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
-  /** Move `from` to just before/after `to` in the persisted order. */
+  /** Move `from` to just before/after `to` in the persisted order (and adopt its group). */
   function reorder(fromPath: string, toPath: string) {
     if (fromPath === toPath) return;
     const full = orderNav(tabOrder).map((i) => i.to);
     const next = full.filter((p) => p !== fromPath);
     const at = next.indexOf(toPath);
     next.splice(at < 0 ? next.length : at, 0, fromPath);
-    mutate((d) => { d.settings.tabOrder = next; });
+    const targetItem = NAV.find((n) => n.to === toPath);
+    const targetGroup = groupOverrides?.[toPath] || targetItem?.group;
+    mutate((d) => {
+      d.settings.tabOrder = next;
+      if (targetGroup) {
+        d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: targetGroup };
+      }
+    });
+  }
+
+  /** Drop a tab onto a category header to move it into that category. */
+  function moveToGroup(fromPath: string, group: string) {
+    mutate((d) => {
+      d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: group };
+    });
   }
 
   function resetOrder() {
-    mutate((d) => { d.settings.tabOrder = []; });
+    mutate((d) => { d.settings.tabOrder = []; d.settings.tabGroups = {}; });
   }
 
-  const groupsToRender = GROUPS.filter((g) => items.some((i) => i.group === g));
+  const groupsToRender = editing && !collapsed
+    ? GROUPS
+    : GROUPS.filter((g) => items.some((i) => groupOf(i) === g));
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -136,36 +155,39 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {!collapsed && isAdmin && (
-          <div className="flex items-center justify-between px-2 pt-2">
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {editing ? "Drag tabs to reorder" : ""}
-            </span>
-            <div className="flex items-center gap-1">
-              {editing && (
-                <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to default order" onClick={resetOrder}>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                title={editing ? "Done" : "Edit tab order"}
-                onClick={() => setEditing((v) => !v)}
+        {groupsToRender.map((group, gi) => (
+          <SidebarGroup key={group} className={gi === 0 ? "pt-1" : undefined}>
+            {!collapsed && (
+              <SidebarGroupLabel
+                onDragOver={(e) => { if (editing) e.preventDefault(); }}
+                onDrop={() => { if (editing && dragging) moveToGroup(dragging, group); setDragging(null); }}
+                className={cn("flex items-center", editing && "rounded outline-dashed outline-1 outline-border")}
               >
-                {editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {groupsToRender.map((group) => (
-          <SidebarGroup key={group}>
-            {!collapsed && <SidebarGroupLabel>{group}</SidebarGroupLabel>}
+                <span className="flex-1 truncate">{group}</span>
+                {/* Edit controls live on the first category row so nothing sits above it. */}
+                {gi === 0 && isAdmin && (
+                  <span className="flex items-center gap-0.5">
+                    {editing && (
+                      <Button size="icon" variant="ghost" className="h-5 w-5" title="Reset to default layout" onClick={resetOrder}>
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5"
+                      title={editing ? "Done" : "Edit tab layout"}
+                      onClick={() => setEditing((v) => !v)}
+                    >
+                      {editing ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+                    </Button>
+                  </span>
+                )}
+              </SidebarGroupLabel>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
-                {items.filter((i) => i.group === group).map((i) => {
+                {items.filter((i) => groupOf(i) === group).map((i) => {
                   const active = isActive(i.to, i.exact);
                   const Icon = i.icon;
                   const label = labelOf(i.to, i.label);
@@ -215,6 +237,9 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                   );
                 })}
+                {editing && !collapsed && items.filter((i) => groupOf(i) === group).length === 0 && (
+                  <p className="px-2 py-1 text-[11px] text-muted-foreground">Drop a tab here</p>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

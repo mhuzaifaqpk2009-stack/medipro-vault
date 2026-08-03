@@ -19,7 +19,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { QUICK_ACTIONS, effectiveActionHotkey } from "@/lib/quick-actions";
 import { AdminGate } from "@/components/PermissionGate";
+
 import { PasswordInput } from "@/components/PasswordInput";
 import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { TABS, effectiveHotkey } from "@/routes/app";
@@ -72,6 +75,8 @@ function SettingsPage() {
   const [showNew, setShowNew] = useState(false);
   
   const [capturing, setCapturing] = useState<string | null>(null);
+  const [capturingAction, setCapturingAction] = useState<string | null>(null);
+
   const [backupBusy, setBackupBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
 
@@ -96,6 +101,26 @@ function SettingsPage() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [capturing, mutate]);
+
+  // Same, for quick-action shortcuts (new medicine / purchase / customer / supplier).
+  useEffect(() => {
+    if (!capturingAction) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setCapturingAction(null); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      mutate((d) => {
+        d.settings.actionHotkeys = { ...(d.settings.actionHotkeys ?? {}), [capturingAction]: combo };
+      });
+      setCapturingAction(null);
+      toast.success(`Shortcut set to ${combo}`);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturingAction, mutate]);
+
 
   async function doBackupNow(chooseFolder = false) {
     setBackupBusy(true);
@@ -192,7 +217,16 @@ function SettingsPage() {
         </Button>
       </header>
 
-      {/* Users */}
+      <Tabs defaultValue="users">
+        <TabsList className="mb-4 flex flex-wrap">
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="general">Pharmacy & billing</TabsTrigger>
+          <TabsTrigger value="workspace">Workspace</TabsTrigger>
+          <TabsTrigger value="data">Backup & data</TabsTrigger>
+          <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+          <TabsTrigger value="danger">Danger zone</TabsTrigger>
+        </TabsList>
+        <TabsContent value="users">
       <section className="surface-card p-6">
         <div className="mb-4 flex items-center gap-2">
           <UsersIcon className="h-4 w-4 text-primary" />
@@ -240,7 +274,8 @@ function SettingsPage() {
         <p className="mt-3 text-[11px] text-muted-foreground">Tick users: {usersTick}</p>
       </section>
 
-      {/* Pharmacy details */}
+        </TabsContent>
+        <TabsContent value="general">
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pharmacy details</h2>
         <p className="mb-4 text-xs text-muted-foreground">Appears on receipts and printed invoices.</p>
@@ -281,6 +316,8 @@ function SettingsPage() {
         </div>
       </section>
 
+        </TabsContent>
+        <TabsContent value="workspace">
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pinned bottom panel</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -322,7 +359,8 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Backup & data */}
+        </TabsContent>
+        <TabsContent value="data">
       <section className="surface-card mt-4 p-6">
         <div className="mb-4 flex items-center gap-2">
           <HardDriveDownload className="h-4 w-4 text-primary" />
@@ -422,7 +460,8 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Shortcuts */}
+        </TabsContent>
+        <TabsContent value="shortcuts">
       <section className="surface-card mt-4 p-6">
         <div className="mb-4 flex items-center gap-2">
           <Keyboard className="h-4 w-4 text-primary" />
@@ -480,7 +519,44 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Danger zone */}
+          <section className="surface-card mt-4 p-6">
+            <h2 className="font-display text-base font-semibold">Quick action shortcuts</h2>
+            <p className="mb-3 text-sm text-muted-foreground">Open a create panel from anywhere.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {QUICK_ACTIONS.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm">{a.label}</span>
+                  <Button
+                    size="sm"
+                    variant={capturingAction === a.id ? "default" : "outline"}
+                    className="font-mono text-xs"
+                    onClick={() => setCapturingAction(a.id)}
+                  >
+                    {capturingAction === a.id ? "Press keys…" : effectiveActionHotkey(a.id, s.actionHotkeys)}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </TabsContent>
+        <TabsContent value="danger">
+          <section className="surface-card mt-4 p-6">
+            <h2 className="font-display text-base font-semibold">Invoice counter</h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Next invoice #: <span className="font-mono">{s.invoiceCounter ?? 1000}</span> — resetting keeps all bills.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (!window.confirm("Reset the invoice counter back to 1000? Bills are kept.")) return;
+                mutate((d) => { d.settings.invoiceCounter = 1000; });
+                toast.success("Invoice counter reset to 1000");
+              }}
+            >
+              Reset invoice counter
+            </Button>
+          </section>
       <section className="surface-card mt-4 border-destructive/40 p-6">
         <div className="mb-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -509,6 +585,8 @@ function SettingsPage() {
           </div>
         </div>
       </section>
+        </TabsContent>
+      </Tabs>
 
       {showNew && (
         <UserDialog

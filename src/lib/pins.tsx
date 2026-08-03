@@ -1,31 +1,30 @@
 /**
  * Pin & rename system.
  *
- * Any button, counter or panel can be right-clicked to open a small dialog
- * offering "Pin to bottom bar" and (for admins) "Rename". Pinned items live in
- * project settings so they travel with the saved data / backups.
+ * Right-clicking any button, counter or panel opens a small Windows-style
+ * context menu at the cursor offering "Pin to bottom panel" / "Unpin" and
+ * (for admins) "Rename". Pinned items live in project settings so they travel
+ * with the saved data / backups.
  */
 import { useEffect, useRef, useState } from "react";
-import { Pin, PinOff, Pencil } from "lucide-react";
+import { Pin, PinOff, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import type { PinnedItem, ProjectData } from "@/domain/schema";
 import { daysUntil, money } from "@/lib/format";
+import { saleProfit, saleTotal } from "@/lib/sale-math";
 
 export type MenuTarget = PinnedItem & { canRename?: boolean };
+type Point = { x: number; y: number };
 
-let openFn: ((t: MenuTarget) => void) | null = null;
+let openFn: ((t: MenuTarget, at: Point) => void) | null = null;
 
-/** Open the pin/rename dialog for an item. */
-export function openItemMenu(target: MenuTarget) {
-  openFn?.(target);
+/** Open the pin/rename menu for an item at a screen position. */
+export function openItemMenu(target: MenuTarget, at: Point) {
+  openFn?.(target, at);
 }
 
 /** Handy right-click binder: <div {...pinContext({...})} /> */
@@ -34,7 +33,7 @@ export function pinContext(target: MenuTarget) {
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      openItemMenu(target);
+      openItemMenu(target, { x: e.clientX, y: e.clientY });
     },
   };
 }
@@ -58,6 +57,12 @@ export function togglePin(item: PinnedItem) {
   return pinned;
 }
 
+export function unpin(id: string) {
+  useProjectStore.getState().mutate((d) => {
+    d.settings.pinnedItems = (d.settings.pinnedItems ?? []).filter((p) => p.id !== id);
+  });
+}
+
 export function renameTab(path: string, name: string) {
   useProjectStore.getState().mutate((d) => {
     const map = { ...(d.settings.tabRenames ?? {}) };
@@ -71,109 +76,149 @@ export function renameTab(path: string, name: string) {
   });
 }
 
-/** Live value for a pinned dashboard counter. */
+/** Live value for a pinned counter. */
 export function counterValue(data: ProjectData, id: string): string {
   const sym = data.settings.currencySymbol || "$";
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const completed = data.sales.filter((s) => s.status === "completed");
-  const total = (s: ProjectData["sales"][number]) => {
-    const sub = s.items.reduce((a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0);
-    return Math.max(0, sub + sub * (s.taxPercent / 100) - s.discount);
-  };
-  const profit = (s: ProjectData["sales"][number]) =>
-    s.items.reduce((a, l) => {
-      const m = data.medicines.find((x) => x.id === l.medicineId);
-      return a + (l.salePrice * l.quantity * (1 - l.discountPercent / 100) - (m?.purchasePrice ?? 0) * l.quantity);
-    }, 0);
-  const since = (t: number, f: (s: any) => number) =>
+  const since = (t: number, f: (s: ProjectData["sales"][number]) => number) =>
     completed.filter((s) => new Date(s.date).getTime() >= t).reduce((a, s) => a + f(s), 0);
+  const expiringWithin = (days: number) =>
+    data.medicines.filter((m) => {
+      const d = daysUntil(m.expiryDate);
+      return d !== null && d >= 0 && d <= days;
+    }).length;
 
   switch (id) {
     case "counter:totalMedicines": return String(data.medicines.length);
     case "counter:lowStock":
       return String(data.medicines.filter((m) => m.stockQuantity <= (m.minimumStock ?? 0)).length);
+    case "counter:outOfStock":
+      return String(data.medicines.filter((m) => m.stockQuantity === 0).length);
+    case "counter:nearExpiry": return String(expiringWithin(30));
     case "counter:expired":
       return String(data.medicines.filter((m) => {
         const d = daysUntil(m.expiryDate);
         return d !== null && d <= 0;
       }).length);
-    case "counter:todayRevenue": return money(since(startOfDay, total), sym);
-    case "counter:todayProfit": return money(since(startOfDay, profit), sym);
-    case "counter:monthRevenue": return money(since(startOfMonth, total), sym);
+    case "counter:todayRevenue": return money(since(startOfDay, saleTotal), sym);
+    case "counter:todayProfit":
+      return money(since(startOfDay, (s) => saleProfit(s, data.medicines)), sym);
+    case "counter:monthRevenue": return money(since(startOfMonth, saleTotal), sym);
     case "counter:customers": return String(data.customers.length);
     case "counter:suppliers": return String(data.suppliers.length);
+    case "counter:bills": return String(data.sales.length);
+    case "counter:purchases": return String(data.purchases.length);
+    case "counter:categories": return String(data.categories.length);
     default: return "—";
   }
 }
 
+const MENU_W = 224;
+
 export function ItemMenuHost() {
   const [target, setTarget] = useState<MenuTarget | null>(null);
+  const [at, setAt] = useState<Point>({ x: 0, y: 0 });
+  const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
   const settings = useProjectStore((s) => s.data?.settings);
   const user = useSession((s) => s.user);
   const isAdmin = user?.role === "admin";
-  const mounted = useRef(false);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
-    mounted.current = true;
-    openFn = (t) => {
+    openFn = (t, p) => {
       setTarget(t);
-      setName(settings?.tabRenames?.[t.id] ?? "");
+      setAt(p);
+      setRenaming(false);
+      setName(settingsRef.current?.tabRenames?.[t.id] ?? "");
     };
     return () => { openFn = null; };
-  }, [settings]);
+  }, []);
+
+  useEffect(() => {
+    if (!target) return;
+    const close = () => setTarget(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [target]);
 
   if (!target || !settings) return null;
   const pinned = isPinned(settings, target.id);
 
-  return (
-    <Dialog open onOpenChange={(o) => !o && setTarget(null)}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{target.label}</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <Button
-            variant="outline"
-            onClick={() => {
-              const nowPinned = togglePin(target);
-              toast.success(nowPinned ? "Pinned to bottom panel" : "Unpinned");
-              setTarget(null);
-            }}
-          >
-            {pinned ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
-            {pinned ? "Unpin from bottom panel" : "Pin to bottom panel"}
-          </Button>
+  const left = Math.min(at.x, Math.max(8, window.innerWidth - MENU_W - 8));
+  const top = Math.min(at.y, Math.max(8, window.innerHeight - 160));
 
-          {target.canRename && isAdmin && (
-            <div className="rounded-md border p-3">
-              <Label className="mb-1.5 block text-xs text-muted-foreground">Rename</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={name}
-                  placeholder={target.label}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { renameTab(target.id, name); toast.success("Renamed"); setTarget(null); }
-                  }}
-                />
-                <Button
-                  onClick={() => { renameTab(target.id, name); toast.success("Renamed"); setTarget(null); }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">Leave blank and save to restore the original name.</p>
-            </div>
-          )}
-          {target.canRename && !isAdmin && (
-            <p className="text-xs text-muted-foreground">Renaming is available to admins only.</p>
-          )}
+  function doRename() {
+    renameTab(target!.id, name);
+    toast.success("Renamed");
+    setTarget(null);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100]" onMouseDown={() => setTarget(null)} onContextMenu={(e) => { e.preventDefault(); setTarget(null); }}>
+      <div
+        role="menu"
+        style={{ left, top, width: MENU_W }}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="absolute rounded-md border bg-popover p-1 text-popover-foreground shadow-elevated"
+      >
+        <div className="truncate px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+          {target.label}
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setTarget(null)}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <button
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+          onClick={() => {
+            const nowPinned = togglePin(target);
+            toast.success(nowPinned ? "Pinned to bottom panel" : "Unpinned");
+            setTarget(null);
+          }}
+        >
+          {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          {pinned ? "Unpin" : "Pin to bottom panel"}
+        </button>
+
+        {target.canRename && isAdmin && !renaming && (
+          <button
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onClick={() => setRenaming(true)}
+          >
+            <Pencil className="h-4 w-4" /> Rename
+          </button>
+        )}
+
+        {renaming && (
+          <div className="border-t p-2">
+            <Input
+              value={name}
+              autoFocus
+              placeholder={target.label}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") doRename(); }}
+              className="h-8 text-sm"
+            />
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" className="h-7 flex-1 text-xs" onClick={doRename}>Save</Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRenaming(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">Blank restores the original name.</p>
+          </div>
+        )}
+
+        {target.canRename && !isAdmin && (
+          <p className="px-2 py-1 text-[11px] text-muted-foreground">Renaming is admin-only.</p>
+        )}
+      </div>
+    </div>
   );
 }
