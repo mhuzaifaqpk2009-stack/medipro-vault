@@ -19,7 +19,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { QUICK_ACTIONS, effectiveActionHotkey } from "@/lib/quick-actions";
 import { AdminGate } from "@/components/PermissionGate";
+
 import { PasswordInput } from "@/components/PasswordInput";
 import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { TABS, effectiveHotkey } from "@/routes/app";
@@ -72,6 +75,8 @@ function SettingsPage() {
   const [showNew, setShowNew] = useState(false);
   
   const [capturing, setCapturing] = useState<string | null>(null);
+  const [capturingAction, setCapturingAction] = useState<string | null>(null);
+
   const [backupBusy, setBackupBusy] = useState(false);
   const [showReset, setShowReset] = useState(false);
 
@@ -96,6 +101,26 @@ function SettingsPage() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [capturing, mutate]);
+
+  // Same, for quick-action shortcuts (new medicine / purchase / customer / supplier).
+  useEffect(() => {
+    if (!capturingAction) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setCapturingAction(null); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      mutate((d) => {
+        d.settings.actionHotkeys = { ...(d.settings.actionHotkeys ?? {}), [capturingAction]: combo };
+      });
+      setCapturingAction(null);
+      toast.success(`Shortcut set to ${combo}`);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturingAction, mutate]);
+
 
   async function doBackupNow(chooseFolder = false) {
     setBackupBusy(true);
