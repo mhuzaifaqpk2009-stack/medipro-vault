@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Receipt, Printer } from "lucide-react";
+import { Search, Receipt, Printer, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
 import { money, useCurrencySymbol } from "@/lib/format";
+import { toast } from "sonner";
 import { printReceipt } from "@/lib/receipt";
+import { saleTotal } from "@/lib/sale-math";
 import type { Sale } from "@/domain/schema";
 
 import { PermissionGate } from "@/components/PermissionGate";
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/app/bills")({
 function BillsPage() {
   const data = useProjectStore((s) => s.data!);
   const sym = useCurrencySymbol();
+  const mutate = useProjectStore((s) => s.mutate);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Sale | null>(null);
 
@@ -32,13 +35,25 @@ function BillsPage() {
     });
   }, [q, data.sales, data.customers]);
 
-  const totalOf = (sale: Sale) => {
-    const sub = sale.items.reduce(
-      (a, l) => a + l.salePrice * l.quantity * (1 - l.discountPercent / 100), 0,
-    );
-    const tax = sub * (sale.taxPercent / 100);
-    return Math.max(0, sub + tax - sale.discount);
-  };
+  const totalOf = (sale: Sale) => saleTotal(sale);
+
+  function removeBill(sale: Sale) {
+    if (!window.confirm(`Delete bill ${sale.invoiceNumber}? The invoice counter is not affected.`)) return;
+    mutate((d) => { d.sales = d.sales.filter((x) => x.id !== sale.id); });
+    if (selected?.id === sale.id) setSelected(null);
+    toast.success("Bill deleted");
+  }
+
+  async function reprint(sale: Sale) {
+    mutate((d) => {
+      const target = d.sales.find((x) => x.id === sale.id);
+      if (target) target.reprints = [...(target.reprints ?? []), new Date().toISOString()];
+    }, { history: false });
+    const latest = useProjectStore.getState().data!;
+    const fresh = latest.sales.find((x) => x.id === sale.id) ?? sale;
+    setSelected(fresh);
+    await printReceipt(fresh, latest);
+  }
 
   return (
     <div className="grid h-full grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr,420px]">
@@ -73,6 +88,7 @@ function BillsPage() {
                   <th className="p-2 text-left">Customer</th>
                   <th className="p-2 text-right">Items</th>
                   <th className="p-2 text-right">Total</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -89,6 +105,14 @@ function BillsPage() {
                       <td className="p-2">{cust?.name ?? "Walk-in"}</td>
                       <td className="p-2 text-right tabular-nums">{s.items.length}</td>
                       <td className="p-2 text-right tabular-nums">{money(totalOf(s), sym)}</td>
+                      <td className="p-2 text-right">
+                        <Button
+                          size="icon" variant="ghost" className="h-7 w-7" title="Delete this bill"
+                          onClick={(e) => { e.stopPropagation(); removeBill(s); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -110,10 +134,19 @@ function BillsPage() {
                 <p className="text-xs text-muted-foreground">Bill code</p>
                 <p className="font-mono font-semibold">{selected.invoiceNumber}</p>
               </div>
-              <Button size="sm" onClick={() => printReceipt(selected, data)}>
+              <Button size="sm" onClick={() => void reprint(selected)}>
                 <Printer className="mr-1.5 h-4 w-4" /> Reprint
               </Button>
             </div>
+            {(selected.reprints ?? []).length > 0 && (
+              <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-2">
+                {[...(selected.reprints ?? [])].reverse().map((t, i) => (
+                  <p key={i} className="text-[11px] font-medium text-warning">
+                    Reprint ({new Date(t).toLocaleString()})
+                  </p>
+                ))}
+              </div>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">
               {new Date(selected.date).toLocaleString()}
             </p>
@@ -154,7 +187,7 @@ function BillsPage() {
               </table>
             </div>
             <div className="mt-3 rounded-md bg-muted/30 p-3 text-sm">
-              <Row k="Discount" v={money(selected.discount, sym)} />
+              <Row k={`Discount (${selected.discount || 0}%)`} v="" />
               <Row k={`Tax (${selected.taxPercent}%)`} v="" />
               <div className="mt-2 flex items-center justify-between border-t pt-2 font-display text-lg font-bold">
                 <span>Total</span>
