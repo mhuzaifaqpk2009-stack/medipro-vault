@@ -217,7 +217,16 @@ function SettingsPage() {
         </Button>
       </header>
 
-      {/* Users */}
+      <Tabs defaultValue="users">
+        <TabsList className="mb-4 flex flex-wrap">
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="general">Pharmacy & billing</TabsTrigger>
+          <TabsTrigger value="workspace">Workspace</TabsTrigger>
+          <TabsTrigger value="data">Backup & data</TabsTrigger>
+          <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+          <TabsTrigger value="danger">Danger zone</TabsTrigger>
+        </TabsList>
+        <TabsContent value="users">
       <section className="surface-card p-6">
         <div className="mb-4 flex items-center gap-2">
           <UsersIcon className="h-4 w-4 text-primary" />
@@ -265,7 +274,8 @@ function SettingsPage() {
         <p className="mt-3 text-[11px] text-muted-foreground">Tick users: {usersTick}</p>
       </section>
 
-      {/* Pharmacy details */}
+        </TabsContent>
+        <TabsContent value="general">
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pharmacy details</h2>
         <p className="mb-4 text-xs text-muted-foreground">Appears on receipts and printed invoices.</p>
@@ -306,6 +316,8 @@ function SettingsPage() {
         </div>
       </section>
 
+        </TabsContent>
+        <TabsContent value="workspace">
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pinned bottom panel</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -347,7 +359,8 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Backup & data */}
+        </TabsContent>
+        <TabsContent value="data">
       <section className="surface-card mt-4 p-6">
         <div className="mb-4 flex items-center gap-2">
           <HardDriveDownload className="h-4 w-4 text-primary" />
@@ -447,7 +460,8 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Shortcuts */}
+        </TabsContent>
+        <TabsContent value="shortcuts">
       <section className="surface-card mt-4 p-6">
         <div className="mb-4 flex items-center gap-2">
           <Keyboard className="h-4 w-4 text-primary" />
@@ -505,7 +519,27 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* Danger zone */}
+          <section className="surface-card mt-4 p-6">
+            <h2 className="font-display text-base font-semibold">Quick action shortcuts</h2>
+            <p className="mb-3 text-sm text-muted-foreground">Open a create panel from anywhere.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {QUICK_ACTIONS.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <span className="text-sm">{a.label}</span>
+                  <Button
+                    size="sm"
+                    variant={capturingAction === a.id ? "default" : "outline"}
+                    className="font-mono text-xs"
+                    onClick={() => setCapturingAction(a.id)}
+                  >
+                    {capturingAction === a.id ? "Press keys…" : effectiveActionHotkey(a.id, s.actionHotkeys)}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </TabsContent>
+        <TabsContent value="danger">
       <section className="surface-card mt-4 border-destructive/40 p-6">
         <div className="mb-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -534,6 +568,8 @@ function SettingsPage() {
           </div>
         </div>
       </section>
+        </TabsContent>
+      </Tabs>
 
       {showNew && (
         <UserDialog
