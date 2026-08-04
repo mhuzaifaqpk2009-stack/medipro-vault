@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff, Maximize2,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -12,6 +12,9 @@ import { daysUntil, money } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
 import { saleTotal as saleTotalOf, saleProfit as saleProfitOf } from "@/lib/sale-math";
 import { AdminGate } from "@/components/PermissionGate";
+import { TrendChart } from "@/components/TrendChart";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 
 
 export const Route = createFileRoute("/app/")({
