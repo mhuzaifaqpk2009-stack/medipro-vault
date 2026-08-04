@@ -63,6 +63,13 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   const dateStr = d.toLocaleDateString();
   const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+  // Reprints are logged on the sale; show the latest one at the very top.
+  const lastReprint = sale.reprints?.length ? new Date(sale.reprints[sale.reprints.length - 1]) : null;
+  const reprintLine = lastReprint
+    ? `Reprint (${lastReprint.toLocaleDateString()} ${lastReprint.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`
+    : "";
+
+
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(sale.invoiceNumber)}</title>
 <style>
   @page { size: 80mm auto; margin: 0; }
