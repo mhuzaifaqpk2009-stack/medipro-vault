@@ -63,6 +63,13 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   const dateStr = d.toLocaleDateString();
   const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+  // Reprints are logged on the sale; show the latest one at the very top.
+  const lastReprint = sale.reprints?.length ? new Date(sale.reprints[sale.reprints.length - 1]) : null;
+  const reprintLine = lastReprint
+    ? `Reprint (${lastReprint.toLocaleDateString()} ${lastReprint.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`
+    : "";
+
+
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(sale.invoiceNumber)}</title>
 <style>
   @page { size: 80mm auto; margin: 0; }
@@ -124,9 +131,12 @@ export function buildReceiptHtml(sale: Sale, data: ProjectData): string {
   .footer { font-size: 11.5px; white-space: pre-wrap; color: #000; }
   .footer:first-of-type { margin-top: 10px; }
   .footer + .footer { margin-top: 0; }
+  .reprint { text-align: center; font-size: 12.5px; font-weight: bold; margin-bottom: 3px; color: #000; }
   @media screen { body { box-shadow: 0 0 0 1px #ddd; margin: 12px auto; } }
 </style></head><body>
+  ${reprintLine ? `<div class="reprint">${esc(reprintLine)}</div>` : ""}
   <h1>${esc(FIXED_HEADER)}</h1>
+
   <div class="addr">${esc(s.address || "")}</div>
   <div class="addr">${esc(s.phone ? "Phone -" + s.phone : "")}</div>
   <div class="divider"></div>

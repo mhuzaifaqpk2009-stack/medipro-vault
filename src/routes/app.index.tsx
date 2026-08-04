@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Pill, AlertTriangle, CalendarX, TrendingUp, DollarSign, Users, Building2,
-  ShoppingCart, ArrowUpRight, Eye, EyeOff,
+  ShoppingCart, ArrowUpRight, Eye, EyeOff, Maximize2,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -12,6 +12,9 @@ import { daysUntil, money } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
 import { saleTotal as saleTotalOf, saleProfit as saleProfitOf } from "@/lib/sale-math";
 import { AdminGate } from "@/components/PermissionGate";
+import { TrendChart } from "@/components/TrendChart";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 
 
 export const Route = createFileRoute("/app/")({
@@ -82,12 +85,29 @@ function Dashboard() {
 
   const user = useSession((st) => st.user);
   const mutate = useProjectStore((s) => s.mutate);
-  const [hidden, setHidden] = useState<Record<string, boolean>>({});
-  const toggle = (k: string) => setHidden((h) => ({ ...h, [k]: !h[k] }));
+
+  /* Hidden cards + trend preferences persist with the project so they survive logout. */
+  const hiddenList = data.settings.dashboardHidden ?? [];
+  const hidden = useMemo(
+    () => Object.fromEntries(hiddenList.map((k) => [k, true])) as Record<string, boolean>,
+    [hiddenList],
+  );
+  const toggle = (k: string) =>
+    mutate((d) => {
+      const cur = new Set(d.settings.dashboardHidden ?? []);
+      if (cur.has(k)) cur.delete(k); else cur.add(k);
+      d.settings.dashboardHidden = [...cur];
+    });
 
   /* ---- interactive trend ---- */
-  const [metric, setMetric] = useState<"sales" | "profit" | "purchases">("sales");
-  const [range, setRange] = useState<"week" | "month" | "all">("week");
+  const metric = data.settings.trendMetric ?? "sales";
+  const range = data.settings.trendRange ?? "week";
+  const chartType = data.settings.trendChartType ?? "bar";
+  const setMetric = (v: typeof metric) => mutate((d) => { d.settings.trendMetric = v; });
+  const setRange = (v: typeof range) => mutate((d) => { d.settings.trendRange = v; });
+  const setChartType = (v: typeof chartType) => mutate((d) => { d.settings.trendChartType = v; });
+  const [expanded, setExpanded] = useState(false);
+
 
   const series = useMemo(() => {
     const saleTotal = (s: typeof data.sales[number]) => saleTotalOf(s);
@@ -229,7 +249,14 @@ function Dashboard() {
       {(showTrend || showMostSold) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           {showTrend && (
-            <div className="surface-card p-6 lg:col-span-2">
+            <div
+              className="surface-card cursor-pointer p-6 lg:col-span-2"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest("button")) return;
+                setExpanded(true);
+              }}
+              title="Click to expand"
+            >
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-base font-semibold">
@@ -263,6 +290,20 @@ function Dashboard() {
                       </button>
                     ))}
                   </div>
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["bar", "Chart"], ["line", "Graph"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setChartType(id)}
+                        className={`rounded px-2 py-1 ${chartType === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setExpanded(true)} title="Expand" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
                   <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
                     {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -271,35 +312,11 @@ function Dashboard() {
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
               ) : (
-                <>
-                  <div className="flex h-56 items-end gap-1.5">
-                    {series.buckets.map((d, i) => {
-                      const h = (d.value / series.max) * 100;
-                      return (
-                        <div key={i} className="group relative flex flex-1 flex-col items-center justify-end">
-                          <span className="mb-1 text-[9px] tabular-nums text-muted-foreground opacity-0 transition group-hover:opacity-100">
-                            {Math.round(d.value)}
-                          </span>
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: `${Math.max(2, h)}%` }}
-                            transition={{ duration: 0.4, delay: i * 0.02 }}
-                            className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
-                            title={`${d.label}: ${money(d.value, sym)}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2 flex justify-between gap-1 text-[9px] text-muted-foreground">
-                    {series.buckets.map((d, i) => (
-                      <span key={i} className="flex-1 truncate text-center">{d.label}</span>
-                    ))}
-                  </div>
-                </>
+                <TrendChart buckets={series.buckets} max={series.max} sym={sym} type={chartType} height={224} />
               )}
             </div>
           )}
+
 
 
           {showMostSold && (
@@ -344,7 +361,19 @@ function Dashboard() {
         </div>
       )}
 
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {metric === "profit" ? "Profit trend" : metric === "purchases" ? "Purchase trend" : "Sales trend"} ·{" "}
+              {range === "week" ? "this week" : range === "month" ? "this month" : "all time"} · {money(series.total, sym)}
+            </DialogTitle>
+          </DialogHeader>
+          <TrendChart buckets={series.buckets} max={series.max} sym={sym} type={chartType} height={420} />
+        </DialogContent>
+      </Dialog>
     </div>
+
 
   );
 }

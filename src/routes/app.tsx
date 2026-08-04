@@ -11,7 +11,7 @@ import { ItemMenuHost } from "@/lib/pins";
 import { useAutoSave } from "@/hooks/use-autosave";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
-import type { UserPermissions } from "@/lib/users";
+import { visibleNavItems } from "@/lib/nav";
 import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
 } from "@/lib/hotkeys";
@@ -58,23 +58,6 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-type TabDef = { to: string; label: string; perm?: keyof UserPermissions; adminOnly?: boolean };
-
-// Order matches the visual sidebar order.
-export const TABS: TabDef[] = [
-  { to: "/app", label: "Dashboard", adminOnly: true },
-  { to: "/app/sales", label: "Sales (POS)", perm: "sales" },
-  { to: "/app/bills", label: "Bills", perm: "bills" },
-  { to: "/app/medicines", label: "Medicines", perm: "medicines" },
-  { to: "/app/inventory", label: "Inventory", perm: "inventory" },
-  { to: "/app/purchases", label: "Purchases", perm: "purchases" },
-  { to: "/app/suppliers", label: "Suppliers", perm: "suppliers" },
-  { to: "/app/customers", label: "Customers", perm: "customers" },
-  { to: "/app/categories", label: "Categories", perm: "categories" },
-  { to: "/app/reports", label: "Reports", perm: "reports" },
-  { to: "/app/settings", label: "Settings", adminOnly: true },
-];
-
 function AppLayout() {
   useAutoSave();
   const data = useProjectStore((s) => s.data);
@@ -82,23 +65,13 @@ function AppLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const enabled = data?.settings.tabShortcutsEnabled !== false;
-  const customShortcuts = data?.settings.tabShortcuts;
 
-  const tabOrder = data?.settings.tabOrder;
+  /** Always the sidebar's live visual order — reordering tabs remaps shortcuts. */
+  const visibleTabs = useMemo(
+    () => visibleNavItems(data?.settings, user),
+    [data?.settings, user],
+  );
 
-  const visibleTabs = useMemo(() => {
-    const isAdmin = user?.role === "admin";
-    const shown = TABS.filter((t) => {
-      if (t.adminOnly) return isAdmin;
-      if (t.perm) return isAdmin || !!user?.permissions[t.perm];
-      return true;
-    });
-    if (!tabOrder || tabOrder.length === 0) return shown;
-    const rank = new Map(tabOrder.map((p, i) => [p, i]));
-    return [...shown].sort(
-      (a, b) => (rank.get(a.to) ?? 999) - (rank.get(b.to) ?? 999),
-    );
-  }, [user, tabOrder]);
 
 
   // combo string (normalised) -> tab path
@@ -152,23 +125,34 @@ function AppLayout() {
 
   useEffect(() => {
     if (!enabled) return;
+    const go = (to: string) => {
+      forceCloseOverlays();
+      navigate({ to });
+      window.dispatchEvent(new CustomEvent("medicore:nav-flash", { detail: to }));
+    };
     const handler = (e: KeyboardEvent) => {
       // Any open dialog/panel takes precedence — never switch tabs from inside one.
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
+      const el = document.activeElement as HTMLElement | null;
+      const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || !!el?.isContentEditable;
 
-      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from current tab.
+      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from the currently open tab, wrapping around.
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "Tab") {
         if (visibleTabs.length === 0) return;
         e.preventDefault();
-        const currentIdx = visibleTabs.findIndex(
-          (t) => pathname === t.to || pathname.startsWith(t.to + "/"),
-        );
+        e.stopPropagation();
+        // Longest matching path wins so "/app" doesn't shadow "/app/sales".
+        let currentIdx = -1;
+        let bestLen = -1;
+        visibleTabs.forEach((t, i) => {
+          const hit = t.exact ? pathname === t.to : pathname === t.to || pathname.startsWith(t.to + "/");
+          if (hit && t.to.length > bestLen) { bestLen = t.to.length; currentIdx = i; }
+        });
         const base = currentIdx < 0 ? 0 : currentIdx;
         const nextIdx = e.shiftKey
           ? (base - 1 + visibleTabs.length) % visibleTabs.length
           : (base + 1) % visibleTabs.length;
-        forceCloseOverlays();
-        navigate({ to: visibleTabs[nextIdx].to });
+        go(visibleTabs[nextIdx].to);
         return;
       }
 
@@ -176,15 +160,16 @@ function AppLayout() {
       if (!combo) return;
       const to = hotkeyMap.get(normaliseCombo(combo));
       if (!to) return;
+      if (typing && !(e.ctrlKey || e.metaKey || e.altKey)) return;
       e.preventDefault();
       e.stopPropagation();
-      forceCloseOverlays();
-      navigate({ to });
+      go(to);
     };
     // Capture phase so open dialogs/inputs cannot swallow the shortcut.
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
+
 
   // "/" — jump into the current page's search box. Ctrl+/ — top panel search.
   useEffect(() => {

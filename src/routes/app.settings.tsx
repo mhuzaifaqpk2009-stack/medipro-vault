@@ -25,7 +25,9 @@ import { AdminGate } from "@/components/PermissionGate";
 
 import { PasswordInput } from "@/components/PasswordInput";
 import { ResetSetupDialog } from "@/components/ResetSetupDialog";
-import { TABS, effectiveHotkey } from "@/routes/app";
+import { effectiveHotkey } from "@/routes/app";
+import { visibleNavItems } from "@/lib/nav";
+
 import { comboFromEvent } from "@/lib/hotkeys";
 import { pickBackupFolder, readBackupFile } from "@/lib/local-store";
 import { runBackupNow } from "@/lib/backup";
@@ -342,6 +344,21 @@ function SettingsPage() {
       </section>
 
       <section className="surface-card mt-4 p-6">
+        <h2 className="font-display text-base font-semibold">Calculator</h2>
+        <label className="mt-4 flex items-center gap-3">
+          <Switch
+            checked={s.calculatorEnabled !== false}
+            onCheckedChange={(v) => set("calculatorEnabled", v)}
+          />
+          <span className="text-sm font-medium">Show the calculator tab in the sidebar</span>
+        </label>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Its keyboard shortcut can be changed under Shortcuts.
+        </p>
+      </section>
+
+
+      <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Auto save</h2>
 
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -487,7 +504,7 @@ function SettingsPage() {
         </div>
 
         <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
-          {TABS.map((t, i) => {
+          {visibleNavItems(s, currentUser).map((t, i) => {
             const combo = effectiveHotkey(t.to, i, s.tabHotkeys);
             const isCapturing = capturing === t.to;
             return (

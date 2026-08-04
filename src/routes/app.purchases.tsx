@@ -48,7 +48,7 @@ function PurchasesPage() {
               return (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.invoiceNumber}</TableCell>
-                  <TableCell>{sup?.name ?? "—"}</TableCell>
+                  <TableCell>{sup?.name ?? <span className="text-muted-foreground">Untagged</span>}</TableCell>
                   <TableCell>{p.purchaseDate.slice(0, 10)}</TableCell>
                   <TableCell className="text-right tabular-nums">{p.items.length}</TableCell>
                   <TableCell className="text-right tabular-nums">{money(total, sym)}</TableCell>
@@ -82,7 +82,7 @@ function NewPurchase({ onClose, onSave }: {
   onSave: (supplierId: string, invoice: string, items: PurchaseItem[]) => void;
 }) {
   const data = useProjectStore((s) => s.data!);
-  const [supplier, setSupplier] = useState(data.suppliers[0]?.id ?? "");
+  const [supplier, setSupplier] = useState("");
   const [invoice, setInvoice] = useState(`PUR-${Date.now().toString(36).toUpperCase()}`);
   const [rows, setRows] = useState<PurchaseItem[]>([]);
 
@@ -96,12 +96,16 @@ function NewPurchase({ onClose, onSave }: {
       <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>New purchase</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><Label className="text-xs">Supplier *</Label>
-            <Select value={supplier} onValueChange={setSupplier}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Select supplier" /></SelectTrigger>
-              <SelectContent>{data.suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+          <div><Label className="text-xs">Supplier (optional)</Label>
+            <Select value={supplier || "__none"} onValueChange={(v) => setSupplier(v === "__none" ? "" : v)}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Untagged" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Untagged (no supplier)</SelectItem>
+                {data.suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
+
           <div><Label className="text-xs">Invoice #</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
         </div>
         <div className="mt-3 rounded-md border">
@@ -155,10 +159,10 @@ function NewPurchase({ onClose, onSave }: {
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={() => {
-            if (!supplier) { toast.error("Pick a supplier"); return; }
             if (rows.length === 0) { toast.error("Add at least one item"); return; }
             onSave(supplier, invoice, rows);
           }}>Save & restock</Button>
+
         </DialogFooter>
       </DialogContent>
     </Dialog>
