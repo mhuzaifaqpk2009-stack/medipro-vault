@@ -96,12 +96,16 @@ function NewPurchase({ onClose, onSave }: {
       <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>New purchase</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><Label className="text-xs">Supplier *</Label>
-            <Select value={supplier} onValueChange={setSupplier}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Select supplier" /></SelectTrigger>
-              <SelectContent>{data.suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+          <div><Label className="text-xs">Supplier (optional)</Label>
+            <Select value={supplier || "__none"} onValueChange={(v) => setSupplier(v === "__none" ? "" : v)}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Untagged" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Untagged (no supplier)</SelectItem>
+                {data.suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
+
           <div><Label className="text-xs">Invoice #</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
         </div>
         <div className="mt-3 rounded-md border">
