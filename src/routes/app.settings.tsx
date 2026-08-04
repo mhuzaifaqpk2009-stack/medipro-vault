@@ -26,7 +26,7 @@ import { AdminGate } from "@/components/PermissionGate";
 import { PasswordInput } from "@/components/PasswordInput";
 import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { effectiveHotkey } from "@/routes/app";
-import { NAV } from "@/lib/nav";
+import { visibleNavItems } from "@/lib/nav";
 
 import { comboFromEvent } from "@/lib/hotkeys";
 import { pickBackupFolder, readBackupFile } from "@/lib/local-store";
