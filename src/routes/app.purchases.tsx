@@ -48,7 +48,7 @@ function PurchasesPage() {
               return (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.invoiceNumber}</TableCell>
-                  <TableCell>{sup?.name ?? "—"}</TableCell>
+                  <TableCell>{sup?.name ?? <span className="text-muted-foreground">Untagged</span>}</TableCell>
                   <TableCell>{p.purchaseDate.slice(0, 10)}</TableCell>
                   <TableCell className="text-right tabular-nums">{p.items.length}</TableCell>
                   <TableCell className="text-right tabular-nums">{money(total, sym)}</TableCell>
@@ -82,7 +82,7 @@ function NewPurchase({ onClose, onSave }: {
   onSave: (supplierId: string, invoice: string, items: PurchaseItem[]) => void;
 }) {
   const data = useProjectStore((s) => s.data!);
-  const [supplier, setSupplier] = useState(data.suppliers[0]?.id ?? "");
+  const [supplier, setSupplier] = useState("");
   const [invoice, setInvoice] = useState(`PUR-${Date.now().toString(36).toUpperCase()}`);
   const [rows, setRows] = useState<PurchaseItem[]>([]);
 
@@ -159,10 +159,10 @@ function NewPurchase({ onClose, onSave }: {
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={() => {
-            if (!supplier) { toast.error("Pick a supplier"); return; }
             if (rows.length === 0) { toast.error("Add at least one item"); return; }
             onSave(supplier, invoice, rows);
           }}>Save & restock</Button>
+
         </DialogFooter>
       </DialogContent>
     </Dialog>
