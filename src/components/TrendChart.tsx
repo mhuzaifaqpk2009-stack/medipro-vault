@@ -68,7 +68,7 @@ export function TrendChart({
             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
               <polyline
                 fill="none"
-                stroke="hsl(var(--primary))"
+                stroke="var(--primary)"
                 strokeWidth="0.8"
                 vectorEffect="non-scaling-stroke"
                 points={buckets
@@ -89,8 +89,8 @@ export function TrendChart({
                     cy={y}
                     r="3"
                     vectorEffect="non-scaling-stroke"
-                    fill="hsl(var(--background))"
-                    stroke="hsl(var(--primary))"
+                    fill="var(--background)"
+                    stroke="var(--primary)"
                     strokeWidth="0.8"
                   >
                     <title>{`${d.label} · ${compact(d.value, sym)}`}</title>
