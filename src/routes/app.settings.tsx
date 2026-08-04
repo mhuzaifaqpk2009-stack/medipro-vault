@@ -489,7 +489,7 @@ function SettingsPage() {
         </div>
 
         <div className="mt-4 grid gap-2 rounded-md border p-3 sm:grid-cols-2">
-          {NAV.map((t, i) => {
+          {visibleNavItems(s, currentUser).map((t, i) => {
             const combo = effectiveHotkey(t.to, i, s.tabHotkeys);
             const isCapturing = capturing === t.to;
             return (
