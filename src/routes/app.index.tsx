@@ -361,7 +361,19 @@ function Dashboard() {
         </div>
       )}
 
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {metric === "profit" ? "Profit trend" : metric === "purchases" ? "Purchase trend" : "Sales trend"} ·{" "}
+              {range === "week" ? "this week" : range === "month" ? "this month" : "all time"} · {money(series.total, sym)}
+            </DialogTitle>
+          </DialogHeader>
+          <TrendChart buckets={series.buckets} max={series.max} sym={sym} type={chartType} height={420} />
+        </DialogContent>
+      </Dialog>
     </div>
+
 
   );
 }
