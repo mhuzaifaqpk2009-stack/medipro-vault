@@ -246,7 +246,14 @@ function Dashboard() {
       {(showTrend || showMostSold) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           {showTrend && (
-            <div className="surface-card p-6 lg:col-span-2">
+            <div
+              className="surface-card cursor-pointer p-6 lg:col-span-2"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest("button")) return;
+                setExpanded(true);
+              }}
+              title="Click to expand"
+            >
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-base font-semibold">
@@ -280,6 +287,20 @@ function Dashboard() {
                       </button>
                     ))}
                   </div>
+                  <div className="flex rounded-md border p-0.5 text-xs">
+                    {([["bar", "Chart"], ["line", "Graph"]] as const).map(([id, lbl]) => (
+                      <button
+                        key={id}
+                        onClick={() => setChartType(id)}
+                        className={`rounded px-2 py-1 ${chartType === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setExpanded(true)} title="Expand" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
                   <button onClick={() => toggle("_trend")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted">
                     {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -288,35 +309,11 @@ function Dashboard() {
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
               ) : (
-                <>
-                  <div className="flex h-56 items-end gap-1.5">
-                    {series.buckets.map((d, i) => {
-                      const h = (d.value / series.max) * 100;
-                      return (
-                        <div key={i} className="group relative flex flex-1 flex-col items-center justify-end">
-                          <span className="mb-1 text-[9px] tabular-nums text-muted-foreground opacity-0 transition group-hover:opacity-100">
-                            {Math.round(d.value)}
-                          </span>
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: `${Math.max(2, h)}%` }}
-                            transition={{ duration: 0.4, delay: i * 0.02 }}
-                            className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary-glow/60"
-                            title={`${d.label}: ${money(d.value, sym)}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2 flex justify-between gap-1 text-[9px] text-muted-foreground">
-                    {series.buckets.map((d, i) => (
-                      <span key={i} className="flex-1 truncate text-center">{d.label}</span>
-                    ))}
-                  </div>
-                </>
+                <TrendChart buckets={series.buckets} max={series.max} sym={sym} type={chartType} height={224} />
               )}
             </div>
           )}
+
 
 
           {showMostSold && (
