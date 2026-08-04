@@ -11,7 +11,7 @@ import { ItemMenuHost } from "@/lib/pins";
 import { useAutoSave } from "@/hooks/use-autosave";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
-import type { UserPermissions } from "@/lib/users";
+import { visibleNavItems } from "@/lib/nav";
 import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
 } from "@/lib/hotkeys";
