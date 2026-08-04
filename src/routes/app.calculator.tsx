@@ -1,0 +1,103 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { Calculator as CalcIcon, Delete } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useProjectStore } from "@/store/project-store";
+
+export const Route = createFileRoute("/app/calculator")({
+  component: CalculatorPage,
+});
+
+const KEYS = [
+  ["7", "8", "9", "/"],
+  ["4", "5", "6", "*"],
+  ["1", "2", "3", "-"],
+  ["0", ".", "%", "+"],
+];
+
+/** Tiny safe evaluator for + - * / % on decimal numbers. */
+function evaluate(expr: string): string {
+  const clean = expr.replace(/[^0-9.+\-*/%()]/g, "");
+  if (!clean) return "";
+  try {
+    // eslint-disable-next-line no-new-func
+    const val = Function(`"use strict";return (${clean.replace(/%/g, "/100")})`)();
+    if (typeof val !== "number" || !Number.isFinite(val)) return "Error";
+    return String(Math.round(val * 1e6) / 1e6);
+  } catch {
+    return "Error";
+  }
+}
+
+function CalculatorPage() {
+  const disabled = useProjectStore((s) => s.data?.settings.calculatorEnabled) === false;
+  const [expr, setExpr] = useState("");
+  const [result, setResult] = useState("");
+  const [tape, setTape] = useState<string[]>([]);
+
+  if (disabled) {
+    return (
+      <div className="grid place-items-center p-16 text-sm text-muted-foreground">
+        The calculator is disabled in Settings → Workspace.
+      </div>
+    );
+  }
+
+  const push = (k: string) => setExpr((e) => e + k);
+  const equals = () => {
+    const r = evaluate(expr);
+    setResult(r);
+    if (r && r !== "Error") setTape((t) => [`${expr} = ${r}`, ...t].slice(0, 12));
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl p-6 md:p-8">
+      <header className="mb-5 flex items-center gap-3">
+        <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft">
+          <CalcIcon className="h-5 w-5" />
+        </div>
+        <div>
+          <h1 className="font-display text-2xl font-bold">Calculator</h1>
+          <p className="text-sm text-muted-foreground">Quick maths without leaving the counter.</p>
+        </div>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-[1fr,240px]">
+        <div className="surface-card p-4">
+          <div className="rounded-md border bg-muted/40 p-4 text-right">
+            <input
+              value={expr}
+              onChange={(e) => setExpr(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") equals(); }}
+              placeholder="0"
+              className="w-full bg-transparent text-right font-display text-2xl outline-none"
+            />
+            <p className="mt-1 font-display text-3xl font-bold tabular-nums">{result || "—"}</p>
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {KEYS.flat().map((k) => (
+              <Button key={k} variant={/[+\-*/%]/.test(k) ? "secondary" : "outline"} className="h-12 text-base" onClick={() => push(k)}>
+                {k}
+              </Button>
+            ))}
+            <Button variant="ghost" className="h-12" onClick={() => { setExpr(""); setResult(""); }}>C</Button>
+            <Button variant="ghost" className="h-12" onClick={() => setExpr((e) => e.slice(0, -1))}>
+              <Delete className="h-4 w-4" />
+            </Button>
+            <Button className="col-span-2 h-12 text-base" onClick={equals}>=</Button>
+          </div>
+        </div>
+        <div className="surface-card p-4">
+          <h2 className="mb-2 text-sm font-semibold">History</h2>
+          {tape.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nothing yet.</p>
+          ) : (
+            <ul className="space-y-1 text-xs tabular-nums text-muted-foreground">
+              {tape.map((t, i) => <li key={i} className="truncate">{t}</li>)}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

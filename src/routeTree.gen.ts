@@ -21,6 +21,7 @@ import { Route as AppMedicinesRouteImport } from './routes/app.medicines'
 import { Route as AppInventoryRouteImport } from './routes/app.inventory'
 import { Route as AppCustomersRouteImport } from './routes/app.customers'
 import { Route as AppCategoriesRouteImport } from './routes/app.categories'
+import { Route as AppCalculatorRouteImport } from './routes/app.calculator'
 import { Route as AppBillsRouteImport } from './routes/app.bills'
 
 const AppRoute = AppRouteImport.update({
@@ -83,6 +84,11 @@ const AppCategoriesRoute = AppCategoriesRouteImport.update({
   path: '/categories',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCalculatorRoute = AppCalculatorRouteImport.update({
+  id: '/calculator',
+  path: '/calculator',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppBillsRoute = AppBillsRouteImport.update({
   id: '/bills',
   path: '/bills',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/bills': typeof AppBillsRoute
+  '/app/calculator': typeof AppCalculatorRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/bills': typeof AppBillsRoute
+  '/app/calculator': typeof AppCalculatorRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/app/bills': typeof AppBillsRoute
+  '/app/calculator': typeof AppCalculatorRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/app/bills'
+    | '/app/calculator'
     | '/app/categories'
     | '/app/customers'
     | '/app/inventory'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/app/bills'
+    | '/app/calculator'
     | '/app/categories'
     | '/app/customers'
     | '/app/inventory'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/app/bills'
+    | '/app/calculator'
     | '/app/categories'
     | '/app/customers'
     | '/app/inventory'
@@ -272,6 +284,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCategoriesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/calculator': {
+      id: '/app/calculator'
+      path: '/calculator'
+      fullPath: '/app/calculator'
+      preLoaderRoute: typeof AppCalculatorRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/bills': {
       id: '/app/bills'
       path: '/bills'
@@ -284,6 +303,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppBillsRoute: typeof AppBillsRoute
+  AppCalculatorRoute: typeof AppCalculatorRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppCustomersRoute: typeof AppCustomersRoute
   AppInventoryRoute: typeof AppInventoryRoute
@@ -298,6 +318,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppBillsRoute: AppBillsRoute,
+  AppCalculatorRoute: AppCalculatorRoute,
   AppCategoriesRoute: AppCategoriesRoute,
   AppCustomersRoute: AppCustomersRoute,
   AppInventoryRoute: AppInventoryRoute,
