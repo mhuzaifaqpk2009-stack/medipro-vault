@@ -125,23 +125,34 @@ function AppLayout() {
 
   useEffect(() => {
     if (!enabled) return;
+    const go = (to: string) => {
+      forceCloseOverlays();
+      navigate({ to });
+      window.dispatchEvent(new CustomEvent("medicore:nav-flash", { detail: to }));
+    };
     const handler = (e: KeyboardEvent) => {
       // Any open dialog/panel takes precedence — never switch tabs from inside one.
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
+      const el = document.activeElement as HTMLElement | null;
+      const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || !!el?.isContentEditable;
 
-      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from current tab.
+      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from the currently open tab, wrapping around.
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "Tab") {
         if (visibleTabs.length === 0) return;
         e.preventDefault();
-        const currentIdx = visibleTabs.findIndex(
-          (t) => pathname === t.to || pathname.startsWith(t.to + "/"),
-        );
+        e.stopPropagation();
+        // Longest matching path wins so "/app" doesn't shadow "/app/sales".
+        let currentIdx = -1;
+        let bestLen = -1;
+        visibleTabs.forEach((t, i) => {
+          const hit = t.exact ? pathname === t.to : pathname === t.to || pathname.startsWith(t.to + "/");
+          if (hit && t.to.length > bestLen) { bestLen = t.to.length; currentIdx = i; }
+        });
         const base = currentIdx < 0 ? 0 : currentIdx;
         const nextIdx = e.shiftKey
           ? (base - 1 + visibleTabs.length) % visibleTabs.length
           : (base + 1) % visibleTabs.length;
-        forceCloseOverlays();
-        navigate({ to: visibleTabs[nextIdx].to });
+        go(visibleTabs[nextIdx].to);
         return;
       }
 
@@ -149,15 +160,16 @@ function AppLayout() {
       if (!combo) return;
       const to = hotkeyMap.get(normaliseCombo(combo));
       if (!to) return;
+      if (typing && !(e.ctrlKey || e.metaKey || e.altKey)) return;
       e.preventDefault();
       e.stopPropagation();
-      forceCloseOverlays();
-      navigate({ to });
+      go(to);
     };
     // Capture phase so open dialogs/inputs cannot swallow the shortcut.
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
+
 
   // "/" — jump into the current page's search box. Ctrl+/ — top panel search.
   useEffect(() => {
