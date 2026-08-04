@@ -39,6 +39,17 @@ export interface PharmacySettings {
   tabGroups?: Record<string, string>;
   /** Custom display names per tab path (admin only). */
   tabRenames?: Record<string, string>;
+  /** Custom display names per sidebar category (admin only). */
+  groupRenames?: Record<string, string>;
+  /** Show the built-in calculator tab (default true). */
+  calculatorEnabled?: boolean;
+  /** Dashboard cards/panels the current install keeps masked. */
+  dashboardHidden?: string[];
+  /** Remembered dashboard trend preferences. */
+  trendMetric?: "sales" | "profit" | "purchases";
+  trendRange?: "week" | "month" | "all";
+  trendChartType?: "bar" | "line";
+
 
   /** Hidden dashboard quick-action ids. */
   hiddenQuickActions?: string[];
