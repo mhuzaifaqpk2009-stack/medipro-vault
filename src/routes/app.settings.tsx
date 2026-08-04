@@ -344,6 +344,21 @@ function SettingsPage() {
       </section>
 
       <section className="surface-card mt-4 p-6">
+        <h2 className="font-display text-base font-semibold">Calculator</h2>
+        <label className="mt-4 flex items-center gap-3">
+          <Switch
+            checked={s.calculatorEnabled !== false}
+            onCheckedChange={(v) => set("calculatorEnabled", v)}
+          />
+          <span className="text-sm font-medium">Show the calculator tab in the sidebar</span>
+        </label>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Its keyboard shortcut can be changed under Shortcuts.
+        </p>
+      </section>
+
+
+      <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Auto save</h2>
 
         <div className="mt-4 flex flex-wrap items-center gap-6">
