@@ -58,23 +58,6 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-type TabDef = { to: string; label: string; perm?: keyof UserPermissions; adminOnly?: boolean };
-
-// Order matches the visual sidebar order.
-export const TABS: TabDef[] = [
-  { to: "/app", label: "Dashboard", adminOnly: true },
-  { to: "/app/sales", label: "Sales (POS)", perm: "sales" },
-  { to: "/app/bills", label: "Bills", perm: "bills" },
-  { to: "/app/medicines", label: "Medicines", perm: "medicines" },
-  { to: "/app/inventory", label: "Inventory", perm: "inventory" },
-  { to: "/app/purchases", label: "Purchases", perm: "purchases" },
-  { to: "/app/suppliers", label: "Suppliers", perm: "suppliers" },
-  { to: "/app/customers", label: "Customers", perm: "customers" },
-  { to: "/app/categories", label: "Categories", perm: "categories" },
-  { to: "/app/reports", label: "Reports", perm: "reports" },
-  { to: "/app/settings", label: "Settings", adminOnly: true },
-];
-
 function AppLayout() {
   useAutoSave();
   const data = useProjectStore((s) => s.data);
@@ -82,23 +65,13 @@ function AppLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const enabled = data?.settings.tabShortcutsEnabled !== false;
-  const customShortcuts = data?.settings.tabShortcuts;
 
-  const tabOrder = data?.settings.tabOrder;
+  /** Always the sidebar's live visual order — reordering tabs remaps shortcuts. */
+  const visibleTabs = useMemo(
+    () => visibleNavItems(data?.settings, user),
+    [data?.settings, user],
+  );
 
-  const visibleTabs = useMemo(() => {
-    const isAdmin = user?.role === "admin";
-    const shown = TABS.filter((t) => {
-      if (t.adminOnly) return isAdmin;
-      if (t.perm) return isAdmin || !!user?.permissions[t.perm];
-      return true;
-    });
-    if (!tabOrder || tabOrder.length === 0) return shown;
-    const rank = new Map(tabOrder.map((p, i) => [p, i]));
-    return [...shown].sort(
-      (a, b) => (rank.get(a.to) ?? 999) - (rank.get(b.to) ?? 999),
-    );
-  }, [user, tabOrder]);
 
 
   // combo string (normalised) -> tab path
