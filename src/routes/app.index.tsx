@@ -82,12 +82,29 @@ function Dashboard() {
 
   const user = useSession((st) => st.user);
   const mutate = useProjectStore((s) => s.mutate);
-  const [hidden, setHidden] = useState<Record<string, boolean>>({});
-  const toggle = (k: string) => setHidden((h) => ({ ...h, [k]: !h[k] }));
+
+  /* Hidden cards + trend preferences persist with the project so they survive logout. */
+  const hiddenList = data.settings.dashboardHidden ?? [];
+  const hidden = useMemo(
+    () => Object.fromEntries(hiddenList.map((k) => [k, true])) as Record<string, boolean>,
+    [hiddenList],
+  );
+  const toggle = (k: string) =>
+    mutate((d) => {
+      const cur = new Set(d.settings.dashboardHidden ?? []);
+      if (cur.has(k)) cur.delete(k); else cur.add(k);
+      d.settings.dashboardHidden = [...cur];
+    });
 
   /* ---- interactive trend ---- */
-  const [metric, setMetric] = useState<"sales" | "profit" | "purchases">("sales");
-  const [range, setRange] = useState<"week" | "month" | "all">("week");
+  const metric = data.settings.trendMetric ?? "sales";
+  const range = data.settings.trendRange ?? "week";
+  const chartType = data.settings.trendChartType ?? "bar";
+  const setMetric = (v: typeof metric) => mutate((d) => { d.settings.trendMetric = v; });
+  const setRange = (v: typeof range) => mutate((d) => { d.settings.trendRange = v; });
+  const setChartType = (v: typeof chartType) => mutate((d) => { d.settings.trendChartType = v; });
+  const [expanded, setExpanded] = useState(false);
+
 
   const series = useMemo(() => {
     const saleTotal = (s: typeof data.sales[number]) => saleTotalOf(s);
