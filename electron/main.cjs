@@ -179,6 +179,23 @@ ipcMain.handle("recovery:read", async (_e, id) => {
 
 ipcMain.handle("system:userData", () => app.getPath("userData"));
 
+/* -------- local SQLite database (offline desktop data layer) -------- */
+const sqldb = require("./db.cjs");
+function ensureDb() {
+  sqldb.open(app.getPath("userData"));
+  return sqldb.available();
+}
+ipcMain.handle("db:available", () => ensureDb());
+ipcMain.handle("db:loadProject", () => (ensureDb() ? sqldb.loadProject() : null));
+ipcMain.handle("db:saveProject", (_e, data) => (ensureDb() ? sqldb.saveProject(data) : false));
+ipcMain.handle("db:clearProject", () => (ensureDb() ? sqldb.clearProject() : false));
+ipcMain.handle("db:list", (_e, entity) => (ensureDb() ? sqldb[entity]?.list?.() ?? [] : []));
+ipcMain.handle("db:get", (_e, entity, id) => (ensureDb() ? sqldb[entity]?.get?.(id) ?? null : null));
+ipcMain.handle("db:save", (_e, entity, row) => (ensureDb() ? sqldb[entity]?.save?.(row) ?? null : null));
+ipcMain.handle("db:remove", (_e, entity, id) => (ensureDb() ? sqldb[entity]?.remove?.(id) ?? false : false));
+ipcMain.handle("db:getSettings", () => (ensureDb() ? sqldb.settings.get() : null));
+ipcMain.handle("db:saveSettings", (_e, meta, s) => (ensureDb() ? sqldb.settings.save(meta, s) : false));
+
 /* -------- internal app storage (Ctrl+S target) -------- */
 const STORE_FILE = path.join(app.getPath("userData"), "medicore-data.bin");
 ipcMain.handle("store:read", async () => {
