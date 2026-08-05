@@ -302,6 +302,10 @@ function Dashboard() {
                     {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Total {money(series.total, sym)} ·{" "}
+                  {range === "week" ? "this week" : range === "month" ? "this month" : "all time"}
+                </p>
               </div>
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>
