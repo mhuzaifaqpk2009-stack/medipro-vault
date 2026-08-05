@@ -11,7 +11,9 @@
     "dist": "npm run build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:8080 && cross-env MEDICORE_DEV_URL=http://localhost:8080 electron .\"",
+    "electron:build": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -122,6 +124,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Huzaifa Pharmacy"
-    }
+    },
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ]
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.7.0"
   }
 }
