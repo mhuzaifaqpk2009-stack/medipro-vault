@@ -3,6 +3,7 @@ import type { ProjectData } from "@/domain/schema";
 import { encodeProject, decodeProject } from "@/lib/project-codec";
 import { readInternal, writeInternal, clearInternal } from "@/lib/local-store";
 import { reportDirty, writeRecovery, clearRecovery } from "@/lib/electron-bridge";
+import { dbLoadProject, dbSaveProject, dbClearProject } from "@/lib/sqlite-bridge";
 
 /** How many steps Ctrl+Z can walk back. */
 const HISTORY_LIMIT = 40;
@@ -123,8 +124,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!data) return false;
     set({ isSaving: true });
     try {
-      const bytes = await encodeProject(data as unknown as Record<string, unknown>);
-      await writeInternal(bytes);
+      // Desktop (Electron + SQLite) writes to the local database; the browser
+      // preview keeps using the existing encrypted internal storage.
+      const toDb = await dbSaveProject(data);
+      if (!toDb) {
+        const bytes = await encodeProject(data as unknown as Record<string, unknown>);
+        await writeInternal(bytes);
+      }
       set({ dirty: false, lastSavedAt: Date.now() });
       reportDirty(false);
       await clearRecovery(data.meta.id);
@@ -146,6 +152,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
 /** Read the project from internal application storage (startup path). */
 export async function loadProjectFromInternal(): Promise<ProjectData | null> {
+  const fromDb = await dbLoadProject();
+  if (fromDb) {
+    useProjectStore.getState().load(fromDb);
+    return fromDb;
+  }
   const bytes = await readInternal();
   if (!bytes) return null;
   try {
@@ -169,6 +180,7 @@ export async function restoreFromBytes(bytes: Uint8Array, password?: string): Pr
 }
 
 export async function wipeInternalProject() {
+  await dbClearProject();
   await clearInternal();
   useProjectStore.getState().close();
 }

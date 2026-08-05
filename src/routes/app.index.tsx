@@ -257,17 +257,11 @@ function Dashboard() {
               }}
               title="Click to expand"
             >
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
+              <div className="mb-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-display text-base font-semibold">
                     {metric === "profit" ? "Profit trend" : metric === "purchases" ? "Purchase trend" : "Sales trend"}
                   </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Total {money(series.total, sym)} ·{" "}
-                    {range === "week" ? "this week" : range === "month" ? "this month" : "all time"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
                   <div className="flex rounded-md border p-0.5 text-xs">
                     {([["sales", "Sales"], ["profit", "Profit"], ["purchases", "Purchases"]] as const).map(([id, lbl]) => (
                       <button
@@ -308,6 +302,10 @@ function Dashboard() {
                     {hidden._trend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Total {money(series.total, sym)} ·{" "}
+                  {range === "week" ? "this week" : range === "month" ? "this month" : "all time"}
+                </p>
               </div>
               {hidden._trend ? (
                 <div className="grid h-56 place-items-center text-sm text-muted-foreground">Hidden</div>

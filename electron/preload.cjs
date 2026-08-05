@@ -46,3 +46,31 @@ contextBridge.exposeInMainWorld("medicore", {
     html: (html) => ipcRenderer.invoke("app:print-html", html),
   },
 });
+
+/**
+ * Offline SQLite data layer. Present only inside Electron, so the frontend can
+ * feature-detect with `window.electronAPI` and fall back to file storage in the
+ * browser preview.
+ */
+const entity = (name) => ({
+  list: () => ipcRenderer.invoke("db:list", name),
+  get: (id) => ipcRenderer.invoke("db:get", name, id),
+  save: (row) => ipcRenderer.invoke("db:save", name, row),
+  remove: (id) => ipcRenderer.invoke("db:remove", name, id),
+});
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  isAvailable: () => ipcRenderer.invoke("db:available"),
+  loadProject: () => ipcRenderer.invoke("db:loadProject"),
+  saveProject: (data) => ipcRenderer.invoke("db:saveProject", data),
+  clearProject: () => ipcRenderer.invoke("db:clearProject"),
+  getSettings: () => ipcRenderer.invoke("db:getSettings"),
+  saveSettings: (meta, settings) => ipcRenderer.invoke("db:saveSettings", meta, settings),
+  medicines: entity("medicines"),
+  sales: entity("sales"),
+  purchases: entity("purchases"),
+  customers: entity("customers"),
+  suppliers: entity("suppliers"),
+  categories: entity("categories"),
+  stockAdjustments: entity("stockAdjustments"),
+});
