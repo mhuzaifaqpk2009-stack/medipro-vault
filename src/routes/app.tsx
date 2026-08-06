@@ -16,8 +16,9 @@ import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
 } from "@/lib/hotkeys";
 import {
-  QUICK_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId,
+  QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId,
 } from "@/lib/quick-actions";
+import { firePrintAction, hasPrinter } from "@/lib/print-action";
 
 
 
@@ -84,6 +85,7 @@ function AppLayout() {
   const actionMap = useMemo(() => {
     const m = new Map<string, QuickActionId>();
     for (const a of QUICK_ACTIONS) {
+      if (PANEL_ONLY_ACTIONS.includes(a.id)) continue;
       const combo = effectiveActionHotkey(a.id, data?.settings.actionHotkeys);
       if (combo) m.set(normaliseCombo(combo), a.id);
     }
@@ -193,6 +195,28 @@ function AppLayout() {
   }, [pathname]);
 
 
+
+  // Ctrl+P — print (after checking a printer exists). Ctrl+Shift+P — Print As.
+  useEffect(() => {
+    const runPrint = async (skipCheck: boolean) => {
+      if (!skipCheck && !(await hasPrinter())) {
+        toast.error("No printer found — please connect and install a printer, then try again.", {
+          action: { label: "Retry", onClick: () => void runPrint(false) },
+        });
+        return;
+      }
+      firePrintAction({ skipCheck });
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (e.key.toLowerCase() !== "p") return;
+      e.preventDefault();
+      e.stopPropagation();
+      void runPrint(e.shiftKey);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   // F5 — create/overwrite a backup in the saved folder.
   useEffect(() => {

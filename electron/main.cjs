@@ -231,6 +231,18 @@ ipcMain.handle("backup:write", async (_e, dir, fileName, bytes) => {
 });
 
 /* -------- printing -------- */
+ipcMain.handle("app:list-printers", async () => {
+  try {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return { ok: false, printers: [] };
+    const printers = await win.webContents.getPrintersAsync();
+    return { ok: true, printers: (printers || []).map((p) => ({ name: p.name, isDefault: !!p.isDefault, status: p.status })) };
+  } catch (err) {
+    console.error("[print] list printers failed:", err);
+    return { ok: false, printers: [], error: String((err && err.message) || err) };
+  }
+});
+
 ipcMain.handle("app:print-html", async (_e, html) => {
   if (typeof html !== "string" || !html) {
     console.error("[print] empty html payload");
