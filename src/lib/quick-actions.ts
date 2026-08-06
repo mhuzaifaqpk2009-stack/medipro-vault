@@ -8,7 +8,8 @@ export type QuickActionId =
   | "new-medicine"
   | "new-purchase"
   | "new-customer"
-  | "new-supplier";
+  | "new-supplier"
+  | "quick-add-medicine";
 
 export const QUICK_ACTIONS: {
   id: QuickActionId;
@@ -17,10 +18,15 @@ export const QUICK_ACTIONS: {
   hotkey: string;
 }[] = [
   { id: "new-medicine", label: "New medicine", to: "/app/medicines", hotkey: "Ctrl+M" },
-  { id: "new-purchase", label: "New purchase", to: "/app/purchases", hotkey: "Ctrl+Shift+P" },
+  { id: "new-purchase", label: "New purchase", to: "/app/purchases", hotkey: "Ctrl+Shift+O" },
   { id: "new-customer", label: "New customer", to: "/app/customers", hotkey: "Ctrl+Shift+C" },
   { id: "new-supplier", label: "New supplier", to: "/app/suppliers", hotkey: "Ctrl+Shift+U" },
+  // Handled inside the medicine editor (save & keep the panel open), not globally.
+  { id: "quick-add-medicine", label: "Quick Add (save & next medicine)", to: "/app/medicines", hotkey: "Ctrl+Enter" },
 ];
+
+/** Actions that are only meaningful inside an open panel. */
+export const PANEL_ONLY_ACTIONS: QuickActionId[] = ["quick-add-medicine"];
 
 const EVENT = "medicore:quick-action";
 

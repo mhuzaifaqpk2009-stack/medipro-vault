@@ -7,6 +7,7 @@ import { useProjectStore } from "@/store/project-store";
 import { money, useCurrencySymbol } from "@/lib/format";
 import { toast } from "sonner";
 import { printReceipt } from "@/lib/receipt";
+import { usePrintAction } from "@/lib/print-action";
 import { saleTotal } from "@/lib/sale-math";
 import type { Sale } from "@/domain/schema";
 
@@ -54,6 +55,11 @@ function BillsPage() {
     setSelected(fresh);
     await printReceipt(fresh, latest);
   }
+
+  usePrintAction(() => {
+    if (!selected) { toast.message("Select a bill to print"); return; }
+    return reprint(selected);
+  });
 
   return (
     <div className="grid h-full grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr,420px]">
