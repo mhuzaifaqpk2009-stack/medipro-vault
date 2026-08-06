@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("medicore", {
   },
   print: {
     html: (html) => ipcRenderer.invoke("app:print-html", html),
+    printers: () => ipcRenderer.invoke("app:list-printers"),
   },
 });
 
