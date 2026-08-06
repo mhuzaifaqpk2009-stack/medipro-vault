@@ -12,6 +12,8 @@ export interface PharmacySettings {
   taxPercent: number;
   /** Cap on the discount PERCENT for non-admin users at checkout. 0/undefined = unlimited. */
   maxDiscount?: number;
+  /** Multi-computer only: block a second simultaneous login of the same account. */
+  singleSessionOnly?: boolean;
   /** Next invoice number to hand out (never reset by clearing bills). */
   invoiceCounter?: number;
 

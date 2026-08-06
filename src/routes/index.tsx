@@ -2,14 +2,21 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Lock, LogIn, Plus, User as UserIcon, Loader2, RotateCcw } from "lucide-react";
+import {
+  Lock, LogIn, Plus, User as UserIcon, Loader2, Monitor, Network, Server, Wifi,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
-import { ResetSetupDialog } from "@/components/ResetSetupDialog";
 import { useProjectStore, loadProjectFromInternal } from "@/store/project-store";
-import { readInstall, writeInstall, createUser, findUserByLogin } from "@/lib/install";
+import {
+  readInstall, writeInstall, createUser, findUserByLogin, updateInstall, type DeployMode,
+} from "@/lib/install";
+import { hashPassword } from "@/lib/install";
+import {
+  pingServer, serverLogin, serverPullProject, DEFAULT_SERVER_PORT, SERVER_UNREACHABLE,
+} from "@/lib/server-api";
 import { useSession } from "@/store/session-store";
 import { createEmptyProject } from "@/domain/schema";
 
@@ -23,7 +30,7 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
 });
 
-type Screen = "boot" | "setup" | "login";
+type Screen = "boot" | "mode" | "role" | "setup" | "client-setup" | "login";
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -33,40 +40,54 @@ function LandingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Setup form
+  /** Chosen during the wizard; "single" is the simple default path. */
+  const [mode, setMode] = useState<DeployMode>("single");
+
+  // Setup form (single computer or server)
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [adminUser, setAdminUser] = useState("");
   const [adminPw, setAdminPw] = useState("");
   const [adminPw2, setAdminPw2] = useState("");
+  const [resetPw, setResetPw] = useState("");
   const protect = true;
-  const [showReset, setShowReset] = useState(false);
+
+  // Client setup
+  const [serverHost, setServerHost] = useState("");
+  const [tested, setTested] = useState(false);
 
   // Login form
   const [loginUser, setLoginUser] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [pharmacyLabel, setPharmacyLabel] = useState("");
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const rec = readInstall();
-      if (!rec || !rec.users?.length) {
-        if (!cancelled) setScreen("setup");
+      if (!rec) { if (!cancelled) setScreen("mode"); return; }
+
+      if (rec.deployMode === "client") {
+        // Clients never create accounts — straight to sign-in against the server.
+        setIsClient(true);
+        setServerHost(rec.serverHost ?? "");
+        setPharmacyLabel(rec.pharmacyName || "");
+        if (!cancelled) setScreen("login");
         return;
       }
+
+      if (!rec.users?.length) { if (!cancelled) setScreen("mode"); return; }
       setPharmacyLabel(rec.pharmacyName || "");
       let data = useProjectStore.getState().data;
       if (!data) data = await loadProjectFromInternal();
       if (!data) {
-        // Install exists but internal data was wiped — recreate an empty project.
         const fresh = createEmptyProject(rec.pharmacyName || "Pharmacy", !!rec.requireLogin);
         fresh.settings.address = rec.address || "";
         useProjectStore.getState().load(fresh);
         await useProjectStore.getState().save();
       }
       if (cancelled) return;
-      // Resume straight into the app after an in-app restore/reload.
       const resuming = sessionStorage.getItem("medicore.resume") === "1";
       const cached = useSession.getState().user;
       if (resuming && cached) {
@@ -81,7 +102,6 @@ function LandingPage() {
         return;
       }
       setScreen("login");
-
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,6 +113,7 @@ function LandingPage() {
     if (!adminUser.trim()) return setError("Admin username is required");
     if (adminPw.length < 4) return setError("Password must be at least 4 characters");
     if (adminPw !== adminPw2) return setError("Passwords do not match");
+    if (resetPw.length < 4) return setError("Reset Setup password must be at least 4 characters");
 
     setBusy(true);
     try {
@@ -105,8 +126,13 @@ function LandingPage() {
       const admin = await createUser({
         username: adminUser.trim(), password: adminPw, role: "admin",
       });
+      const reset = await hashPassword(resetPw);
       writeInstall({
         setupDone: true,
+        deployMode: mode === "server" ? "server" : "single",
+        serverPort: DEFAULT_SERVER_PORT,
+        resetSaltHex: reset.saltHex,
+        resetHashHex: reset.hashHex,
         pharmacyName: name.trim(),
         address: address.trim(),
         users: [admin],
@@ -122,15 +148,59 @@ function LandingPage() {
     }
   }
 
+  async function testServer() {
+    setError(null);
+    if (!serverHost.trim()) return setError("Enter the server's IP address");
+    setBusy(true);
+    try {
+      const res = await pingServer(serverHost.trim());
+      setTested(true);
+      setPharmacyLabel(res.pharmacyName || "");
+      toast.success(`Connected to ${res.pharmacyName || serverHost.trim()}`);
+    } catch (e: any) {
+      setTested(false);
+      setError(e?.message ?? SERVER_UNREACHABLE);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function finishClientSetup() {
+    writeInstall({
+      setupDone: true,
+      deployMode: "client",
+      serverHost: serverHost.trim(),
+      serverPort: DEFAULT_SERVER_PORT,
+      pharmacyName: pharmacyLabel,
+      address: "",
+      users: [],
+      requireLogin: true,
+    });
+    setIsClient(true);
+    setScreen("login");
+  }
+
   async function doLogin() {
     setError(null);
     setBusy(true);
     try {
+      if (isClient) {
+        const res = await serverLogin(loginUser.trim(), loginPw);
+        const snapshot = await serverPullProject();
+        useProjectStore.getState().load(snapshot.data);
+        sessionStorage.setItem("medicore.sessionId", res.sessionId);
+        setUser(res.user);
+        toast.success(`Welcome, ${res.user.username}`);
+        navigate({ to: "/app" });
+        return;
+      }
       const u = await findUserByLogin(loginUser, loginPw);
       if (!u) { setError("Wrong username or password"); return; }
       setUser(u);
       toast.success(`Welcome, ${u.username}`);
       navigate({ to: "/app" });
+    } catch (e: any) {
+      setError(e?.message ?? "Sign in failed");
     } finally {
       setBusy(false);
     }
@@ -160,11 +230,85 @@ function LandingPage() {
           </section>
         )}
 
+        {screen === "mode" && (
+          <section className="surface-card p-8">
+            <h2 className="font-display text-xl font-semibold">How will you use this software?</h2>
+            <p className="mt-2 mb-6 text-sm text-muted-foreground">
+              You can change this later in Settings → Workspace.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ChoiceCard
+                icon={<Monitor className="h-5 w-5 text-primary" />}
+                title="Single computer"
+                desc="Everything runs on this computer. Multiple local accounts, no networking."
+                onClick={() => { setMode("single"); setScreen("setup"); }}
+              />
+              <ChoiceCard
+                icon={<Network className="h-5 w-5 text-primary" />}
+                title="Multi computer"
+                desc="One computer holds the data; others connect over your local network."
+                onClick={() => { setMode("server"); setScreen("role"); }}
+              />
+            </div>
+          </section>
+        )}
+
+        {screen === "role" && (
+          <section className="surface-card p-8">
+            <h2 className="font-display text-xl font-semibold">Is this computer the Server or a Client?</h2>
+            <p className="mt-2 mb-6 text-sm text-muted-foreground">
+              The Server holds the real database. Clients connect to it and never store their own copy.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ChoiceCard
+                icon={<Server className="h-5 w-5 text-primary" />}
+                title="Server"
+                desc="Create the admin account and pharmacy details on this computer."
+                onClick={() => { setMode("server"); setScreen("setup"); }}
+              />
+              <ChoiceCard
+                icon={<Wifi className="h-5 w-5 text-primary" />}
+                title="Client"
+                desc="Connect to the server's IP address and sign in with an existing account."
+                onClick={() => { setMode("client"); setScreen("client-setup"); }}
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="mt-5" onClick={() => setScreen("mode")}>Back</Button>
+          </section>
+        )}
+
+        {screen === "client-setup" && (
+          <section className="surface-card p-8">
+            <div className="mb-6 flex items-center gap-2">
+              <Wifi className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Connect to the server</h2>
+            </div>
+            <div className="grid gap-4">
+              <Field label="Server IP address (e.g. 192.168.1.20)">
+                <Input
+                  value={serverHost} autoFocus
+                  onChange={(e) => { setServerHost(e.target.value); setTested(false); }}
+                />
+              </Field>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={() => void testServer()} disabled={busy}>
+                  {busy ? "Testing…" : "Test connection"}
+                </Button>
+                <Button onClick={finishClientSetup} disabled={!tested}>Continue</Button>
+                <Button variant="ghost" onClick={() => setScreen("role")}>Back</Button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {screen === "setup" && (
           <section className="surface-card p-8">
             <div className="mb-6 flex items-center gap-2">
               <Plus className="h-5 w-5 text-primary" />
-              <h2 className="font-display text-xl font-semibold">First-time setup</h2>
+              <h2 className="font-display text-xl font-semibold">
+                First-time setup{mode === "server" ? " — Server" : ""}
+              </h2>
             </div>
             <p className="mb-6 text-sm text-muted-foreground">
               Create the admin account for this computer. All data is stored inside the
@@ -188,10 +332,16 @@ function LandingPage() {
                   <PasswordInput value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
                 </Field>
               </div>
+              <Field label="Reset Setup password (asked before wiping this computer's setup)">
+                <PasswordInput value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
+              </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button size="lg" onClick={doSetup} disabled={busy} className="mt-2">
-                <Plus className="mr-2 h-4 w-4" /> {busy ? "Setting up…" : "Finish setup"}
-              </Button>
+              <div className="mt-2 flex gap-2">
+                <Button size="lg" onClick={doSetup} disabled={busy}>
+                  <Plus className="mr-2 h-4 w-4" /> {busy ? "Setting up…" : "Finish setup"}
+                </Button>
+                <Button size="lg" variant="ghost" onClick={() => setScreen("mode")}>Back</Button>
+              </div>
             </div>
           </section>
         )}
@@ -203,7 +353,9 @@ function LandingPage() {
               <h2 className="font-display text-xl font-semibold">Sign in</h2>
             </div>
             <p className="mb-6 text-sm text-muted-foreground">
-              {pharmacyLabel ? (
+              {isClient ? (
+                <>Signing in to the server at <span className="font-medium text-foreground">{serverHost}</span>.</>
+              ) : pharmacyLabel ? (
                 <><span className="font-medium text-foreground">{pharmacyLabel}</span> — enter your account.</>
               ) : (
                 "Enter your local account for this computer."
@@ -221,40 +373,54 @@ function LandingPage() {
                 </div>
               </Field>
               <Field label="Password">
-                <PasswordInput
-                  value={loginPw}
-                  onChange={(e) => setLoginPw(e.target.value)}
-                />
+                <PasswordInput value={loginPw} onChange={(e) => setLoginPw(e.target.value)} />
               </Field>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button size="lg" type="submit" disabled={busy || !loginPw || !loginUser}>
                 <LogIn className="mr-2 h-4 w-4" /> {busy ? "Signing in…" : "Sign in"}
               </Button>
-              <Button
-                type="button" variant="ghost" size="sm"
-                className="justify-self-start text-muted-foreground"
-                onClick={() => setShowReset(true)}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset setup
-              </Button>
+              {isClient && (
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  className="justify-self-start text-muted-foreground"
+                  onClick={() => {
+                    updateInstall({ serverHost: "" });
+                    setTested(false);
+                    setScreen("client-setup");
+                  }}
+                >
+                  <Wifi className="mr-2 h-4 w-4" /> Change server IP
+                </Button>
+              )}
             </form>
           </section>
         )}
       </div>
-
-      <ResetSetupDialog
-        open={showReset}
-        onOpenChange={setShowReset}
-        onDone={() => { setScreen("setup"); setLoginUser(""); setLoginPw(""); }}
-      />
     </div>
+  );
+}
+
+function ChoiceCard({ icon, title, desc, onClick }: {
+  icon: React.ReactNode; title: string; desc: string; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button" onClick={onClick}
+      className="rounded-xl border bg-card p-5 text-left transition hover:border-primary hover:shadow-soft"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        {icon}
+        <span className="font-display font-semibold">{title}</span>
+      </div>
+      <p className="text-sm text-muted-foreground">{desc}</p>
+    </button>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+    <div>
+      <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">{label}</Label>
       {children}
     </div>
   );

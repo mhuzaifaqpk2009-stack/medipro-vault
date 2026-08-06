@@ -8,8 +8,19 @@ import { defaultPermissions, type StoredUser, type UserRole } from "./users";
 const KEY = "medicore.install";
 const LEGACY_SINGLE_USER_NAME = "admin";
 
+/** How this computer participates: alone, as the shared server, or as a client. */
+export type DeployMode = "single" | "server" | "client";
+
 export interface InstallRecord {
   setupDone: true;
+  /** Missing = legacy install, treated as "single". */
+  deployMode?: DeployMode;
+  /** Server LAN address a client talks to, e.g. "192.168.1.20". */
+  serverHost?: string;
+  serverPort?: number;
+  /** Admin-chosen Reset Setup password (PBKDF2). No hardcoded default exists. */
+  resetSaltHex?: string;
+  resetHashHex?: string;
   pharmacyName: string;
   address: string;
   users: StoredUser[];
@@ -91,6 +102,26 @@ export function updateInstall(patch: Partial<InstallRecord>) {
   if (!cur) return;
   writeInstall({ ...cur, ...patch });
 }
+export function deployMode(): DeployMode {
+  return readInstall()?.deployMode ?? "single";
+}
+export function isClientMode() { return deployMode() === "client"; }
+export function isMultiMode() { return deployMode() !== "single"; }
+
+/** Store the admin's Reset Setup password. */
+export async function setResetPassword(password: string) {
+  const { saltHex, hashHex } = await hashPassword(password);
+  updateInstall({ resetSaltHex: saltHex, resetHashHex: hashHex });
+  return { saltHex, hashHex };
+}
+
+/** Verify the Reset Setup password. Returns false when none was ever set. */
+export async function verifyResetPassword(password: string) {
+  const rec = readInstall();
+  if (!rec?.resetSaltHex || !rec?.resetHashHex) return false;
+  return verifyPassword(password, rec.resetSaltHex, rec.resetHashHex);
+}
+
 export function clearInstall() {
   localStorage.removeItem(KEY);
 }

@@ -5,15 +5,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/PasswordInput";
-import { clearInstall } from "@/lib/install";
+import { clearInstall, verifyResetPassword } from "@/lib/install";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 
-export const RESET_PASSWORD = "resetpassword";
-
 /**
- * Shared "Reset setup" confirmation. Removes every local account on this
- * computer and returns to first-time setup. Backup files are untouched.
+ * "Reset setup" confirmation. The password is the one the admin chose during
+ * first-time setup — there is no hardcoded fallback. Reachable only from
+ * Settings → Danger zone while signed in as Admin.
  */
 export function ResetSetupDialog({
   open, onOpenChange, onDone,
@@ -23,17 +22,24 @@ export function ResetSetupDialog({
   onDone: () => void;
 }) {
   const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function submit() {
-    if (pw !== RESET_PASSWORD) { toast.error("Wrong reset password"); return; }
-    if (!window.confirm("Reset the entire setup? All local accounts on this computer will be removed. Your backup files are not deleted.")) return;
-    clearInstall();
-    useProjectStore.getState().close();
-    useSession.getState().clear();
-    setPw("");
-    onOpenChange(false);
-    toast.success("Setup reset");
-    onDone();
+  async function submit() {
+    setBusy(true);
+    try {
+      const ok = await verifyResetPassword(pw);
+      if (!ok) { toast.error("Wrong reset password"); return; }
+      if (!window.confirm("Reset the entire setup? All local accounts on this computer will be removed. Your backup files are not deleted.")) return;
+      clearInstall();
+      useProjectStore.getState().close();
+      useSession.getState().clear();
+      setPw("");
+      onOpenChange(false);
+      toast.success("Setup reset");
+      onDone();
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -42,16 +48,18 @@ export function ResetSetupDialog({
         <DialogHeader><DialogTitle>Reset setup</DialogTitle></DialogHeader>
         <div className="grid gap-3">
           <p className="text-sm text-muted-foreground">
-            Enter the reset password to remove all local accounts on this computer and return to
-            first-time setup.
+            Enter the Reset Setup password you chose during setup. This removes all local
+            accounts on this computer and returns to first-time setup.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <PasswordInput autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
           </form>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={submit} disabled={!pw}>Reset setup</Button>
+          <Button variant="destructive" onClick={() => void submit()} disabled={!pw || busy}>
+            Reset setup
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
