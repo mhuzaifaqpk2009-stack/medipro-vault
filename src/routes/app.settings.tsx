@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QUICK_ACTIONS, effectiveActionHotkey } from "@/lib/quick-actions";
+import { DeploymentSettings } from "@/components/settings/DeploymentSettings";
 import { AdminGate } from "@/components/PermissionGate";
 
 import { PasswordInput } from "@/components/PasswordInput";
@@ -320,6 +321,7 @@ function SettingsPage() {
 
         </TabsContent>
         <TabsContent value="workspace">
+          <DeploymentSettings />
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pinned bottom panel</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
