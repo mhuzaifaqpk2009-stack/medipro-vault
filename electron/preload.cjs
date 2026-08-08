@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   suppliers: entity("suppliers"),
   categories: entity("categories"),
   stockAdjustments: entity("stockAdjustments"),
+  auditLog: {
+    add: (entry) => ipcRenderer.invoke("db:auditLog:add", entry),
+    forEntity: (entityType, entityId) => ipcRenderer.invoke("db:auditLog:forEntity", entityType, entityId),
+  },
 });
 
 /**

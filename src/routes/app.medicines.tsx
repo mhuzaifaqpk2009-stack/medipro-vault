@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pill, Plus, Search, Pencil, Trash2, AlertTriangle, CalendarX } from "lucide-react";
+import { Pill, Plus, Search, Pencil, Trash2, AlertTriangle, CalendarX, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type { Medicine } from "@/domain/schema";
+import { isMultiMode } from "@/lib/install";
+import { isAdmin, currentUser } from "@/store/session-store";
+import { logMedicineAudit, getMedicineAuditLog, type AuditEntry } from "@/lib/audit-log";
 
 export const Route = createFileRoute("/app/medicines")({
   component: () => <PermissionGate perm="medicines"><MedicinesPage /></PermissionGate>,
@@ -50,6 +56,8 @@ function MedicinesPage() {
   // no values from a previous entry survive.
   const [formKey, setFormKey] = useState(0);
   const [dupe, setDupe] = useState<{ m: Medicine; existingId: string; keepOpen: boolean } | null>(null);
+  const [historyFor, setHistoryFor] = useState<Medicine | null>(null);
+  const canSeeHistory = isMultiMode() && isAdmin();
   const openNew = () => { setFormKey((k) => k + 1); setEditing(empty()); };
   useQuickAction("new-medicine", openNew);
 
@@ -63,16 +71,28 @@ function MedicinesPage() {
   }, [meds, q]);
 
   function commit(m: Medicine, keepOpen: boolean, overrideId?: string) {
+    const targetId = m.id || overrideId;
+    const isEdit = !!targetId;
+    const finalId = targetId || uid("med_");
     mutate((d) => {
-      const targetId = m.id || overrideId;
       if (targetId) {
         const i = d.medicines.findIndex((x) => x.id === targetId);
         if (i >= 0) d.medicines[i] = { ...m, id: targetId };
       } else {
-        d.medicines.push({ ...m, id: uid("med_") });
+        d.medicines.push({ ...m, id: finalId });
       }
     });
     toast.success(overrideId ? "Existing medicine updated" : "Medicine saved");
+    const user = currentUser();
+    void logMedicineAudit({
+      entityId: finalId,
+      action: isEdit ? "edit" : "add",
+      username: user?.username,
+      userId: user?.id,
+      medicineName: m.name,
+      quantity: m.stockQuantity,
+      price: m.salePrice,
+    });
     if (keepOpen) { setFormKey((k) => k + 1); setEditing(empty()); }
     else setEditing(null);
   }
@@ -129,41 +149,22 @@ function MedicinesPage() {
             {filtered.length === 0 && (
               <TableRow><TableCell colSpan={7} className="py-14 text-center text-sm text-muted-foreground">No medicines. Add your first SKU.</TableCell></TableRow>
             )}
-            {filtered.map((m) => {
-              const low = m.stockQuantity <= (m.minimumStock ?? 0);
-              const d = daysUntil(m.expiryDate);
-              const expired = d !== null && d < 0;
-              const near = d !== null && d >= 0 && d <= 30;
-              return (
-                <TableRow key={m.id}>
-                  <TableCell>
-                    <div className="font-medium">{m.name}</div>
-                    <div className="text-xs text-muted-foreground">{m.genericName || m.company || "—"}</div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{m.batchNumber || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{m.barcode || "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <span className={low ? "font-semibold text-warning" : ""}>{m.stockQuantity}</span>
-                    {low && <AlertTriangle className="ml-1 inline h-3 w-3 text-warning" />}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{money(m.salePrice, sym)}</TableCell>
-                  <TableCell className="text-xs">
-                    {m.expiryDate ? (
-                      <span className={expired ? "text-destructive font-medium" : near ? "text-warning" : ""}>
-                        {m.expiryDate}{expired && <> · <CalendarX className="inline h-3 w-3" /></>}
-                      </span>
-                    ) : "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" onClick={() => { setFormKey((k) => k + 1); setEditing(m); }}><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => remove(m.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {filtered.map((m) => (
+              <MedicineRow
+                key={m.id}
+                m={m}
+                sym={sym}
+                canSeeHistory={canSeeHistory}
+                onEdit={() => { setFormKey((k) => k + 1); setEditing(m); }}
+                onDelete={() => remove(m.id)}
+                onHistory={() => setHistoryFor(m)}
+              />
+            ))}
           </TableBody>
         </Table>
       </div>
+
+      <MedicineHistoryDialog medicine={historyFor} onClose={() => setHistoryFor(null)} />
 
       <MedicineEditor key={formKey} value={editing} onCancel={() => setEditing(null)} onSave={save} />
 
@@ -260,4 +261,101 @@ function MedicineEditor({ value, onCancel, onSave }: {
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><Label className="mb-1 block text-xs font-medium text-muted-foreground">{label}</Label>{children}</div>;
+}
+
+/**
+ * A single medicine row. Single computer mode (or a non-admin in Multi
+ * computer mode) gets exactly the plain row that existed before this
+ * feature — `canSeeHistory` only wraps it in a right-click menu when true,
+ * so nothing changes visually otherwise.
+ */
+function MedicineRow({ m, sym, canSeeHistory, onEdit, onDelete, onHistory }: {
+  m: Medicine; sym: string; canSeeHistory: boolean;
+  onEdit: () => void; onDelete: () => void; onHistory: () => void;
+}) {
+  const low = m.stockQuantity <= (m.minimumStock ?? 0);
+  const d = daysUntil(m.expiryDate);
+  const expired = d !== null && d < 0;
+  const near = d !== null && d >= 0 && d <= 30;
+
+  const row = (
+    <TableRow>
+      <TableCell>
+        <div className="font-medium">{m.name}</div>
+        <div className="text-xs text-muted-foreground">{m.genericName || m.company || "—"}</div>
+      </TableCell>
+      <TableCell className="font-mono text-xs">{m.batchNumber || "—"}</TableCell>
+      <TableCell className="font-mono text-xs">{m.barcode || "—"}</TableCell>
+      <TableCell className="text-right tabular-nums">
+        <span className={low ? "font-semibold text-warning" : ""}>{m.stockQuantity}</span>
+        {low && <AlertTriangle className="ml-1 inline h-3 w-3 text-warning" />}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{money(m.salePrice, sym)}</TableCell>
+      <TableCell className="text-xs">
+        {m.expiryDate ? (
+          <span className={expired ? "text-destructive font-medium" : near ? "text-warning" : ""}>
+            {m.expiryDate}{expired && <> · <CalendarX className="inline h-3 w-3" /></>}
+          </span>
+        ) : "—"}
+      </TableCell>
+      <TableCell className="text-right">
+        <Button size="icon" variant="ghost" onClick={onEdit}><Pencil className="h-4 w-4" /></Button>
+        <Button size="icon" variant="ghost" onClick={onDelete}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+      </TableCell>
+    </TableRow>
+  );
+
+  if (!canSeeHistory) return row;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onHistory}>
+          <History className="mr-2 h-4 w-4" /> Report
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** Part 6: full add/edit history for one medicine, Admin + Multi computer mode only. */
+function MedicineHistoryDialog({ medicine, onClose }: { medicine: Medicine | null; onClose: () => void }) {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const sym = useCurrencySymbol();
+
+  useEffect(() => {
+    if (!medicine) return;
+    let cancelled = false;
+    setLoading(true);
+    getMedicineAuditLog(medicine.id)
+      .then((rows) => { if (!cancelled) setEntries(rows); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [medicine]);
+
+  return (
+    <Dialog open={!!medicine} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[75vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{medicine?.name} — history</DialogTitle></DialogHeader>
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+        ) : entries.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No recorded history for this medicine yet.</p>
+        ) : (
+          <ul className="divide-y">
+            {entries.map((e) => (
+              <li key={e.id} className="py-2.5 text-sm">
+                <span className="font-medium">{e.action === "add" ? "Added" : "Edited"} by {e.username || "Unknown"}</span>
+                <span className="text-muted-foreground"> on {new Date(e.timestamp).toLocaleString()}</span>
+                {" — "}
+                {e.quantity ?? 0} stock at {money(e.price ?? 0, sym)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }

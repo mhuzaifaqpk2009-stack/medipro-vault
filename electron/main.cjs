@@ -218,6 +218,11 @@ ipcMain.handle("db:saveSettings", (_e, meta, s) => {
   return ok;
 });
 
+ipcMain.handle("db:auditLog:add", (_e, entry) => (ensureDb() ? sqldb.auditLog.add(entry) : false));
+ipcMain.handle("db:auditLog:forEntity", (_e, entityType, entityId) =>
+  ensureDb() ? sqldb.auditLog.forEntity(entityType, entityId) : [],
+);
+
 /* -------- LAN server (Multi computer mode — Server side only) --------
  * Exposes a tiny local-network HTTP API so Client computers can log in and
  * sync the whole project snapshot, matching the contract already used by
@@ -344,6 +349,21 @@ function startLanServer(port) {
 
         if (url.pathname === "/revision" && req.method === "GET") {
           return sendJson(res, 200, { ok: true, revision });
+        }
+
+        if (url.pathname === "/audit" && req.method === "POST") {
+          if (!ensureDb()) return sendJson(res, 503, { error: "Server database unavailable" });
+          const entry = JSON.parse(body || "{}");
+          const ok = sqldb.auditLog.add(entry);
+          return sendJson(res, ok ? 200 : 500, ok ? { ok: true } : { error: "Failed to log" });
+        }
+
+        if (url.pathname === "/audit" && req.method === "GET") {
+          if (!ensureDb()) return sendJson(res, 503, { error: "Server database unavailable" });
+          const entityType = url.searchParams.get("entityType") || "";
+          const entityId = url.searchParams.get("entityId") || "";
+          const entries = sqldb.auditLog.forEntity(entityType, entityId);
+          return sendJson(res, 200, { ok: true, entries });
         }
 
         return sendJson(res, 404, { error: "Not found" });

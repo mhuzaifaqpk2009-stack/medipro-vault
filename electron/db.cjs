@@ -107,6 +107,23 @@ function migrate() {
       id TEXT PRIMARY KEY, medicineId TEXT, date TEXT,
       delta REAL NOT NULL DEFAULT 0, reason TEXT
     );
+
+    -- Append-only audit trail (Part 6). Deliberately NOT touched by
+    -- saveProject()'s delete-and-reinsert of the other tables, so history
+    -- survives every whole-project sync instead of getting wiped and redone.
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      entityType TEXT NOT NULL,
+      entityId TEXT NOT NULL,
+      action TEXT NOT NULL,
+      username TEXT,
+      userId TEXT,
+      medicineName TEXT,
+      quantity REAL,
+      price REAL,
+      timestamp TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entityType, entityId);
   `);
 }
 
@@ -225,6 +242,35 @@ const settings = {
   },
 };
 
+/** Append-only audit trail (Part 6) — never deleted/reinserted by saveProject. */
+const auditLog = {
+  add: (entry) => {
+    if (!available()) return false;
+    db.prepare(`
+      INSERT INTO audit_log (id, entityType, entityId, action, username, userId, medicineName, quantity, price, timestamp)
+      VALUES (@id, @entityType, @entityId, @action, @username, @userId, @medicineName, @quantity, @price, @timestamp)
+    `).run({
+      id: entry.id,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      action: entry.action,
+      username: entry.username ?? null,
+      userId: entry.userId ?? null,
+      medicineName: entry.medicineName ?? null,
+      quantity: entry.quantity ?? null,
+      price: entry.price ?? null,
+      timestamp: entry.timestamp,
+    });
+    return true;
+  },
+  forEntity: (entityType, entityId) =>
+    available()
+      ? db.prepare(
+          "SELECT * FROM audit_log WHERE entityType = ? AND entityId = ? ORDER BY timestamp DESC",
+        ).all(entityType, entityId)
+      : [],
+};
+
 /* ------------------------------------------------------------------ *
  * Whole-project snapshot (what the Zustand store uses)                *
  * ------------------------------------------------------------------ */
@@ -281,5 +327,6 @@ function clearProject() {
 module.exports = {
   open, available,
   medicines, sales, purchases, customers, suppliers, categories, stockAdjustments, settings,
+  auditLog,
   loadProject, saveProject, clearProject,
 };

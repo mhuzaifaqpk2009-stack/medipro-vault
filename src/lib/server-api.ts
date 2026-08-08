@@ -80,3 +80,16 @@ export async function serverPushProject(data: ProjectData) {
 export async function serverRevision() {
   return req<{ ok: true; revision: number }>("/revision", { method: "GET" });
 }
+
+/** Part 6: audit log — a Client logs a medicine add/edit event directly to
+ * the Server in real time, separate from the coarser whole-project sync. */
+export async function serverLogAudit(entry: unknown) {
+  return req<{ ok: true }>("/audit", { method: "POST", body: JSON.stringify(entry) });
+}
+
+export async function serverGetAuditLog(entityType: string, entityId: string) {
+  return req<{ ok: true; entries: unknown[] }>(
+    `/audit?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`,
+    { method: "GET" },
+  );
+}
