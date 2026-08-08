@@ -75,3 +75,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   categories: entity("categories"),
   stockAdjustments: entity("stockAdjustments"),
 });
+
+/**
+ * Multi-computer LAN server bridge (Server side). No-ops harmlessly when
+ * called from a Client or Single computer install — the main process just
+ * won't start a listener unless deployMode is "server".
+ */
+contextBridge.exposeInMainWorld("medicoreServer", {
+  configure: (opts) => ipcRenderer.invoke("server:configure", opts),
+  syncUsers: (users) => ipcRenderer.invoke("server:syncUsers", users),
+  status: () => ipcRenderer.invoke("server:status"),
+  onRevisionBumped: (cb) => {
+    const listener = (_e, rev) => cb(rev);
+    ipcRenderer.on("server:revision-bumped", listener);
+    return () => ipcRenderer.removeListener("server:revision-bumped", listener);
+  },
+});

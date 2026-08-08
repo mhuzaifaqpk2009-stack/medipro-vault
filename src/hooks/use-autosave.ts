@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useProjectStore } from "@/store/project-store";
 import { runAutoBackupIfDue } from "@/lib/auto-backup";
+import { isMultiMode } from "@/lib/install";
 
 export function useAutoSave() {
   const data = useProjectStore((s) => s.data);
@@ -19,6 +20,20 @@ export function useAutoSave() {
     }, ms);
     return () => window.clearInterval(id);
   }, [enabled, interval]);
+
+  // Multi computer mode (Server or Client): push local edits out within a
+  // few seconds rather than waiting for the (much longer) single-computer
+  // autosave interval above — that's what makes "live sync" actually feel
+  // live for other computers on the network. Single computer mode is
+  // completely untouched by this effect.
+  useEffect(() => {
+    if (!isMultiMode()) return;
+    const id = window.setInterval(() => {
+      const s = useProjectStore.getState();
+      if (s.dirty && !s.isSaving) void s.save();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Periodic auto-backup check (every 5 minutes; the helper decides if due).
   useEffect(() => {

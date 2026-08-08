@@ -7,6 +7,8 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const fssync = require("fs");
+const http = require("node:http");
+const nodeCrypto = require("node:crypto");
 
 const isDev = !app.isPackaged;
 let mainWindow = null;
@@ -187,14 +189,209 @@ function ensureDb() {
 }
 ipcMain.handle("db:available", () => ensureDb());
 ipcMain.handle("db:loadProject", () => (ensureDb() ? sqldb.loadProject() : null));
-ipcMain.handle("db:saveProject", (_e, data) => (ensureDb() ? sqldb.saveProject(data) : false));
+ipcMain.handle("db:saveProject", (_e, data) => {
+  if (!ensureDb()) return false;
+  const ok = sqldb.saveProject(data);
+  if (ok) bumpRevision();
+  return ok;
+});
 ipcMain.handle("db:clearProject", () => (ensureDb() ? sqldb.clearProject() : false));
 ipcMain.handle("db:list", (_e, entity) => (ensureDb() ? sqldb[entity]?.list?.() ?? [] : []));
 ipcMain.handle("db:get", (_e, entity, id) => (ensureDb() ? sqldb[entity]?.get?.(id) ?? null : null));
-ipcMain.handle("db:save", (_e, entity, row) => (ensureDb() ? sqldb[entity]?.save?.(row) ?? null : null));
-ipcMain.handle("db:remove", (_e, entity, id) => (ensureDb() ? sqldb[entity]?.remove?.(id) ?? false : false));
+ipcMain.handle("db:save", (_e, entity, row) => {
+  if (!ensureDb()) return null;
+  const result = sqldb[entity]?.save?.(row) ?? null;
+  if (result !== null) bumpRevision();
+  return result;
+});
+ipcMain.handle("db:remove", (_e, entity, id) => {
+  if (!ensureDb()) return false;
+  const ok = sqldb[entity]?.remove?.(id) ?? false;
+  if (ok) bumpRevision();
+  return ok;
+});
 ipcMain.handle("db:getSettings", () => (ensureDb() ? sqldb.settings.get() : null));
-ipcMain.handle("db:saveSettings", (_e, meta, s) => (ensureDb() ? sqldb.settings.save(meta, s) : false));
+ipcMain.handle("db:saveSettings", (_e, meta, s) => {
+  if (!ensureDb()) return false;
+  const ok = sqldb.settings.save(meta, s);
+  if (ok) bumpRevision();
+  return ok;
+});
+
+/* -------- LAN server (Multi computer mode — Server side only) --------
+ * Exposes a tiny local-network HTTP API so Client computers can log in and
+ * sync the whole project snapshot, matching the contract already used by
+ * src/lib/server-api.ts on the frontend (health/login/logout/project/revision).
+ * Only ever listens when this computer's deployMode is "server"; never
+ * touches the internet — LAN only, started/stopped via IPC from the renderer.
+ */
+let lanServer = null;
+let currentPharmacyName = "";
+let revision = 0;
+
+/** Sessions live in memory only — signing out on one computer never affects
+ * another (Part 2), and nothing here persists across a Server restart. */
+const activeSessions = new Map(); // sessionId -> { userId, username, loginAt }
+
+/** Users are created/edited on the Server's own renderer (localStorage), so
+ * the main process needs its own copy to answer /login without touching the
+ * renderer. Kept in memory and mirrored to disk as a restart-safety net. */
+let serverUsers = [];
+const SERVER_USERS_FILE = path.join(app.getPath("userData"), "server-users.json");
+try {
+  const raw = fssync.readFileSync(SERVER_USERS_FILE, "utf8");
+  serverUsers = JSON.parse(raw);
+} catch { /* no cached users yet, fine */ }
+
+function bumpRevision() {
+  revision += 1;
+}
+
+/** Matches src/lib/install.ts's hashPassword/verifyPassword exactly:
+ * PBKDF2-HMAC-SHA256, 200,000 iterations, 256-bit output. Node's pbkdf2Sync
+ * with these same parameters produces byte-identical output to the
+ * renderer's Web Crypto implementation, so passwords hashed in the browser
+ * verify correctly here in the main process. */
+function verifyPasswordNode(password, saltHex, hashHex) {
+  const salt = Buffer.from(saltHex, "hex");
+  const derived = nodeCrypto.pbkdf2Sync(password, salt, 200_000, 32, "sha256");
+  return derived.toString("hex") === hashHex;
+}
+
+function sendJson(res, code, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(code, {
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+function startLanServer(port) {
+  if (lanServer) return; // already running — safe to call repeatedly
+  lanServer = http.createServer((req, res) => {
+    // LAN-only API, but the Client is also an Electron renderer making a
+    // cross-origin fetch() — needs permissive CORS to actually work.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      let url;
+      try { url = new URL(req.url, `http://${req.headers.host}`); }
+      catch { return sendJson(res, 400, { error: "Bad request" }); }
+
+      try {
+        if (url.pathname === "/health" && req.method === "GET") {
+          return sendJson(res, 200, { ok: true, pharmacyName: currentPharmacyName });
+        }
+
+        if (url.pathname === "/login" && req.method === "POST") {
+          const { username, password } = JSON.parse(body || "{}");
+          const uname = String(username || "").trim().toLowerCase();
+          const user = serverUsers.find((u) => u.username.toLowerCase() === uname);
+          if (!user || !verifyPasswordNode(password || "", user.saltHex, user.hashHex)) {
+            return sendJson(res, 401, { error: "Wrong username or password" });
+          }
+
+          // Part 2: optional single-active-login enforcement, read from the
+          // project's own settings (synced like everything else).
+          const snapshot = ensureDb() ? sqldb.loadProject() : null;
+          const singleSessionOnly = snapshot?.settings?.singleSessionOnly === true;
+          if (singleSessionOnly) {
+            for (const s of activeSessions.values()) {
+              if (s.userId === user.id) {
+                return sendJson(res, 409, {
+                  error: "This account is already signed in on another computer. Sign out there first.",
+                });
+              }
+            }
+          }
+
+          const sessionId = nodeCrypto.randomUUID();
+          activeSessions.set(sessionId, { userId: user.id, username: user.username, loginAt: Date.now() });
+          return sendJson(res, 200, { ok: true, user, sessionId });
+        }
+
+        if (url.pathname === "/logout" && req.method === "POST") {
+          const { sessionId } = JSON.parse(body || "{}");
+          activeSessions.delete(sessionId);
+          return sendJson(res, 200, { ok: true });
+        }
+
+        if (url.pathname === "/project" && req.method === "GET") {
+          if (!ensureDb()) return sendJson(res, 503, { error: "Server database unavailable" });
+          const data = sqldb.loadProject();
+          if (!data) return sendJson(res, 404, { error: "No project data yet" });
+          return sendJson(res, 200, { ok: true, data, revision });
+        }
+
+        if (url.pathname === "/project" && req.method === "PUT") {
+          if (!ensureDb()) return sendJson(res, 503, { error: "Server database unavailable" });
+          const { data } = JSON.parse(body || "{}");
+          const ok = sqldb.saveProject(data);
+          if (ok) {
+            bumpRevision();
+            // Let the Server computer's own open window live-update too,
+            // when a Client pushes a change while someone's watching here.
+            if (mainWindow) mainWindow.webContents.send("server:revision-bumped", revision);
+          }
+          return sendJson(res, ok ? 200 : 500, ok ? { ok: true, revision } : { error: "Save failed" });
+        }
+
+        if (url.pathname === "/revision" && req.method === "GET") {
+          return sendJson(res, 200, { ok: true, revision });
+        }
+
+        return sendJson(res, 404, { error: "Not found" });
+      } catch (err) {
+        console.error("[server] request error:", err);
+        return sendJson(res, 500, { error: String((err && err.message) || err) });
+      }
+    });
+  });
+
+  lanServer.on("error", (err) => {
+    console.error("[server] failed to start:", err);
+    lanServer = null;
+  });
+
+  lanServer.listen(port, () => {
+    console.log(`[server] LAN server listening on :${port}`);
+  });
+}
+
+function stopLanServer() {
+  if (!lanServer) return;
+  lanServer.close();
+  lanServer = null;
+}
+
+ipcMain.handle("server:configure", (_e, opts) => {
+  const { deployMode, port, pharmacyName } = opts || {};
+  currentPharmacyName = pharmacyName || currentPharmacyName;
+  if (deployMode === "server") {
+    ensureDb();
+    startLanServer(port || 4000);
+  } else {
+    stopLanServer();
+  }
+  return true;
+});
+
+ipcMain.handle("server:syncUsers", (_e, users) => {
+  serverUsers = Array.isArray(users) ? users : [];
+  try { fssync.writeFileSync(SERVER_USERS_FILE, JSON.stringify(serverUsers)); } catch { /* best effort */ }
+  return true;
+});
+
+ipcMain.handle("server:status", () => ({
+  running: !!lanServer,
+  port: lanServer ? lanServer.address()?.port ?? null : null,
+}));
 
 /* -------- internal app storage (Ctrl+S target) -------- */
 const STORE_FILE = path.join(app.getPath("userData"), "medicore-data.bin");

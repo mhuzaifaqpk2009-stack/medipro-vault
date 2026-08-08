@@ -17,6 +17,7 @@ import { hashPassword } from "@/lib/install";
 import {
   pingServer, serverLogin, serverPullProject, DEFAULT_SERVER_PORT, SERVER_UNREACHABLE,
 } from "@/lib/server-api";
+import { configureServer, syncServerUsers } from "@/lib/server-bridge";
 import { useSession } from "@/store/session-store";
 import { createEmptyProject } from "@/domain/schema";
 
@@ -67,6 +68,12 @@ function LandingPage() {
     (async () => {
       const rec = readInstall();
       if (!rec) { if (!cancelled) setScreen("mode"); return; }
+
+      // Part 5: make sure the main process's LAN server is actually running
+      // (Server mode) or stopped (Single/Client) right from boot — writeInstall
+      // only fires on writes, not on every read, so this can't be skipped.
+      void configureServer(rec.deployMode ?? "single", rec.serverPort ?? DEFAULT_SERVER_PORT, rec.pharmacyName);
+      if ((rec.deployMode ?? "single") === "server") void syncServerUsers(rec.users ?? []);
 
       if (rec.deployMode === "client") {
         // Clients never create accounts — straight to sign-in against the server.

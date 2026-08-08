@@ -9,8 +9,9 @@ import { PinBar } from "@/components/PinBar";
 import { ResizeHandle } from "@/components/ResizeHandle";
 import { ItemMenuHost } from "@/lib/pins";
 import { useAutoSave } from "@/hooks/use-autosave";
-import { useProjectStore } from "@/store/project-store";
+import { useProjectStore, startClientLiveSync } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
+import { isClientMode } from "@/lib/install";
 import { visibleNavItems } from "@/lib/nav";
 import {
   comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
@@ -61,6 +62,15 @@ export const Route = createFileRoute("/app")({
 
 function AppLayout() {
   useAutoSave();
+
+  // Part 5 live sync: a Client polls the Server for changes made anywhere
+  // else on the network. Single computer and Server mode never start this —
+  // the Server IS the source of truth, it doesn't need to poll itself.
+  useEffect(() => {
+    if (!isClientMode()) return;
+    return startClientLiveSync();
+  }, []);
+
   const data = useProjectStore((s) => s.data);
   const user = useSession((s) => s.user);
   const navigate = useNavigate();

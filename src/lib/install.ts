@@ -4,6 +4,7 @@
  */
 
 import { defaultPermissions, type StoredUser, type UserRole } from "./users";
+import { configureServer, syncServerUsers } from "./server-bridge";
 
 const KEY = "medicore.install";
 const LEGACY_SINGLE_USER_NAME = "admin";
@@ -96,6 +97,13 @@ export function readInstall(): InstallRecord | null {
 
 export function writeInstall(rec: InstallRecord) {
   localStorage.setItem(KEY, JSON.stringify(rec));
+  // Best-effort, fire-and-forget: keeps the Electron main process's LAN
+  // server (if this is the Server computer) in sync with mode + users on
+  // every write — mode switches, admin setup, and every user create/edit/
+  // delete all flow through here already, so one hook point covers all of it.
+  const mode = rec.deployMode ?? "single";
+  void configureServer(mode, rec.serverPort ?? 4000, rec.pharmacyName);
+  if (mode === "server") void syncServerUsers(rec.users ?? []);
 }
 export function updateInstall(patch: Partial<InstallRecord>) {
   const cur = readInstall();
