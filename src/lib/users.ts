@@ -49,6 +49,20 @@ export const ALL_COUNTERS: { id: CounterId; label: string }[] = [
   { id: "mostSold", label: "Most sold panel" },
 ];
 
+/**
+ * Role templates offered when creating a user in Multi computer mode only.
+ * Single computer mode keeps the plain Admin/User(limited) picker untouched —
+ * these templates just pre-fill the same UserPermissions object that already
+ * drives PermissionGate everywhere else, so nothing downstream needs to change.
+ */
+export type RoleTemplate = "seller" | "custom" | "manager";
+
+export const ROLE_TEMPLATE_LABELS: Record<RoleTemplate, string> = {
+  seller: "Seller — Sales (POS) + Bills only",
+  custom: "Custom — pick exact permissions",
+  manager: "Manager — every panel except Settings",
+};
+
 export interface StoredUser {
   id: string;
   username: string;
@@ -60,6 +74,36 @@ export interface StoredUser {
   dashboardVisibility?: Partial<Record<CounterId, boolean>>;
   /** Per-user override for maximum discount amount. 0/undefined = fall back to settings. */
   maxDiscount?: number;
+  /**
+   * Which role template this user was created/last edited as, in Multi computer
+   * mode. Cosmetic only — re-selects the right option when editing. The
+   * `permissions` object above is still the only thing PermissionGate reads.
+   */
+  roleTemplate?: RoleTemplate;
+}
+
+/**
+ * Permission preset for a Multi-computer role template. "custom" starts from
+ * the same blank slate as today's User(limited) so the admin picks manually.
+ */
+export function permissionsForTemplate(template: RoleTemplate): UserPermissions {
+  if (template === "manager") {
+    return {
+      sales: true, bills: true, medicines: true, inventory: true,
+      purchases: true, reports: true, suppliers: true, categories: true,
+      customers: true, applyDiscount: true, changeTax: true, forceSale: true,
+      pinPanel: true,
+    };
+  }
+  if (template === "seller") {
+    return {
+      sales: true, bills: true, medicines: false, inventory: false,
+      purchases: false, reports: false, suppliers: false, categories: false,
+      customers: false, applyDiscount: false, changeTax: false, forceSale: false,
+      pinPanel: false,
+    };
+  }
+  return defaultPermissions("user");
 }
 
 export function defaultPermissions(role: UserRole): UserPermissions {

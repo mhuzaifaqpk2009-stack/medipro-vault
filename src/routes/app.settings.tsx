@@ -39,8 +39,8 @@ import {
   readInstall, createUser, upsertUser, removeUser, hashPassword,
 } from "@/lib/install";
 import {
-  defaultPermissions,
-  type StoredUser, type UserPermissions,
+  defaultPermissions, permissionsForTemplate, ROLE_TEMPLATE_LABELS,
+  type StoredUser, type UserPermissions, type RoleTemplate,
 } from "@/lib/users";
 
 export const Route = createFileRoute("/app/settings")({
@@ -641,15 +641,41 @@ function UserDialog({
   onClose: () => void;
   onSaved: (u?: StoredUser) => void;
 }) {
+  // Multi computer mode gets the new Seller/Custom/Manager role picker.
+  // Single computer mode is completely untouched below (isMultiComputer === false path).
+  const isMultiComputer = (readInstall()?.deployMode ?? "single") !== "single";
+
   const [username, setUsername] = useState(existing?.username ?? "");
   const [password, setPassword] = useState("");
+
+  // --- Single computer mode state (unchanged behavior) ---
   const [role, setRole] = useState<"admin" | "user">(existing?.role ?? "user");
   const [perms, setPerms] = useState<UserPermissions>(existing?.permissions ?? defaultPermissions("user"));
+
+  // --- Multi computer mode state ---
+  const [template, setTemplate] = useState<RoleTemplate>(existing?.roleTemplate ?? "seller");
+  const [templatePerms, setTemplatePerms] = useState<UserPermissions>(
+    existing?.permissions ?? permissionsForTemplate(existing?.roleTemplate ?? "seller"),
+  );
+
   const [userMaxDiscount, setUserMaxDiscount] = useState<number>(existing?.maxDiscount ?? 0);
+
+  function pickTemplate(next: RoleTemplate) {
+    setTemplate(next);
+    setTemplatePerms(permissionsForTemplate(next));
+  }
 
   async function submit() {
     if (!username.trim()) { toast.error("Username required"); return; }
     if (!existing && password.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+
+    // Multi computer mode: role is always "user" (Admin is only created once,
+    // during Server first-time setup) — roleTemplate records which preset was used.
+    const finalRole: "admin" | "user" = isMultiComputer ? "user" : role;
+    const finalPerms: UserPermissions = isMultiComputer
+      ? templatePerms
+      : (role === "admin" ? defaultPermissions("admin") : perms);
+    const finalMaxDiscount = finalRole !== "admin" && finalPerms.applyDiscount ? (userMaxDiscount || 0) : undefined;
 
     if (existing) {
       let saltHex = existing.saltHex, hashHex = existing.hashHex;
@@ -660,19 +686,21 @@ function UserDialog({
       const updated: StoredUser = {
         ...existing,
         username: username.trim(),
-        role,
+        role: finalRole,
         saltHex, hashHex,
-        permissions: role === "admin" ? defaultPermissions("admin") : perms,
-        maxDiscount: role !== "admin" && perms.applyDiscount ? (userMaxDiscount || 0) : undefined,
+        permissions: finalPerms,
+        maxDiscount: finalMaxDiscount,
+        roleTemplate: isMultiComputer ? template : existing.roleTemplate,
       };
       upsertUser(updated);
       toast.success("User updated");
       onSaved(updated);
     } else {
-      const u = await createUser({ username, password, role, permissions: role === "admin" ? undefined : perms });
-      if (role !== "admin" && perms.applyDiscount && userMaxDiscount > 0) {
+      const u = await createUser({ username, password, role: finalRole, permissions: finalRole === "admin" ? undefined : finalPerms });
+      if (finalRole !== "admin" && finalPerms.applyDiscount && userMaxDiscount > 0) {
         u.maxDiscount = userMaxDiscount;
       }
+      if (isMultiComputer) u.roleTemplate = template;
       upsertUser(u);
       toast.success("User created");
       onSaved(u);
@@ -690,42 +718,120 @@ function UserDialog({
           <Field label={existing ? "New password (leave blank to keep current)" : "Password"}>
             <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
-          <Field label="Role">
-            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">User (limited)</SelectItem>
-                <SelectItem value="admin">Admin (full access)</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
 
-          {role !== "admin" && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
-              <div className="grid gap-2 rounded-md border p-3">
-                {PERM_LABELS.map(({ key, label }) => (
-                  <label key={key} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={perms[key]}
-                      onCheckedChange={(v) => setPerms((p) => ({ ...p, [key]: v === true }))}
+          {isMultiComputer ? (
+            <>
+              <Field label="Role">
+                <Select value={template} onValueChange={(v) => pickTemplate(v as RoleTemplate)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="seller">{ROLE_TEMPLATE_LABELS.seller}</SelectItem>
+                    <SelectItem value="custom">{ROLE_TEMPLATE_LABELS.custom}</SelectItem>
+                    <SelectItem value="manager">{ROLE_TEMPLATE_LABELS.manager}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {template === "seller" && (
+                <div className="rounded-md border p-3">
+                  <label className="flex items-center justify-between gap-2 text-sm">
+                    <span>Can apply discount at checkout</span>
+                    <Switch
+                      checked={templatePerms.applyDiscount}
+                      onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, applyDiscount: v }))}
                     />
-                    <span>{label}</span>
                   </label>
-                ))}
-              </div>
-              {perms.applyDiscount && (
-                <div className="mt-3">
-                  <Field label="Max discount % for this user (0 = unlimited)">
-                    <Input
-                      type="number"
-                      value={userMaxDiscount || ""}
-                      onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
-                    />
-                  </Field>
+                  {templatePerms.applyDiscount && (
+                    <div className="mt-3">
+                      <Field label="Max discount % for this user (0 = unlimited)">
+                        <Input
+                          type="number"
+                          value={userMaxDiscount || ""}
+                          onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Sellers only see the Sales (POS) and Bills panels.
+                  </p>
                 </div>
               )}
-            </div>
+
+              {template === "custom" && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
+                  <div className="grid gap-2 rounded-md border p-3">
+                    {PERM_LABELS.map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={templatePerms[key]}
+                          onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, [key]: v === true }))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {templatePerms.applyDiscount && (
+                    <div className="mt-3">
+                      <Field label="Max discount % for this user (0 = unlimited)">
+                        <Input
+                          type="number"
+                          value={userMaxDiscount || ""}
+                          onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {template === "manager" && (
+                <div className="rounded-md border p-3 text-xs text-muted-foreground">
+                  Managers get every panel except Settings automatically.
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Field label="Role">
+                <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User (limited)</SelectItem>
+                    <SelectItem value="admin">Admin (full access)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {role !== "admin" && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Permissions</p>
+                  <div className="grid gap-2 rounded-md border p-3">
+                    {PERM_LABELS.map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={perms[key]}
+                          onCheckedChange={(v) => setPerms((p) => ({ ...p, [key]: v === true }))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {perms.applyDiscount && (
+                    <div className="mt-3">
+                      <Field label="Max discount % for this user (0 = unlimited)">
+                        <Input
+                          type="number"
+                          value={userMaxDiscount || ""}
+                          onChange={(e) => setUserMaxDiscount(Number(e.target.value) || 0)}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
         <DialogFooter>
