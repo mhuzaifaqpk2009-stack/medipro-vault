@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +19,27 @@ export const Route = createFileRoute("/app/suppliers")({
 });
 
 const empty = (): Supplier => ({ id: "", name: "", phone: "", email: "", address: "", company: "", balance: 0 });
+const PAGE_SIZE = 100;
 
 function SuppliersPage() {
   const list = useProjectStore((s) => s.data!.suppliers);
   const mutate = useProjectStore((s) => s.mutate);
   const [editing, setEditing] = useState<Supplier | null>(null);
+  const [q, setQ] = useState("");
   useQuickAction("new-supplier", () => setEditing(empty()));
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return list;
+    return list.filter((x) => [x.name, x.company, x.phone, x.email].some((v) => (v ?? "").toLowerCase().includes(s)));
+  }, [list, q]);
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [q]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [totalPages, page]);
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const pageItems = useMemo(() => filtered.slice(pageStart, pageStart + PAGE_SIZE), [filtered, pageStart]);
 
   function save(v: Supplier) {
     if (!v.name.trim()) { toast.error("Name required"); return; }
@@ -47,7 +62,13 @@ function SuppliersPage() {
       <header className="mb-5 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft"><Building2 className="h-5 w-5" /></div>
         <div><h1 className="font-display text-2xl font-bold">Suppliers</h1><p className="text-sm text-muted-foreground">{list.length} vendor{list.length === 1 ? "" : "s"}</p></div>
-        <Button className="ml-auto" {...pinContext({ id: "action:new-supplier", label: "New supplier", kind: "action", to: "/app/suppliers" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add supplier</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Search name, company, phone…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-64 pl-8" />
+          </div>
+          <Button {...pinContext({ id: "action:new-supplier", label: "New supplier", kind: "action", to: "/app/suppliers" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add supplier</Button>
+        </div>
       </header>
 
       <div className="surface-card overflow-hidden">
@@ -57,8 +78,8 @@ function SuppliersPage() {
             <TableHead>Email</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="w-24"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {list.length === 0 && <TableRow><TableCell colSpan={6} className="py-14 text-center text-sm text-muted-foreground">No suppliers yet.</TableCell></TableRow>}
-            {list.map((s) => (
+            {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="py-14 text-center text-sm text-muted-foreground">No suppliers yet.</TableCell></TableRow>}
+            {pageItems.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.name}</TableCell>
                 <TableCell>{s.company || "—"}</TableCell>
@@ -74,6 +95,17 @@ function SuppliersPage() {
           </TableBody>
         </Table>
       </div>
+
+      {filtered.length > PAGE_SIZE && (
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+          <span>Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
+            <span className="tabular-nums">Page {page} of {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+          </div>
+        </div>
+      )}
 
       {editing && <Editor value={editing} onCancel={() => setEditing(null)} onSave={save} />}
     </div>

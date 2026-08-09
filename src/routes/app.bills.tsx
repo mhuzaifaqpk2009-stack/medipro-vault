@@ -24,16 +24,28 @@ function BillsPage() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Sale | null>(null);
 
+  const BILLS_LIMIT = 200;
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     const all = [...data.sales].sort((a, b) => +new Date(b.date) - +new Date(a.date));
-    if (!s) return all.slice(0, 100);
-    return all.filter((sale) => {
+    if (!s) return all.slice(0, BILLS_LIMIT);
+    const matches = all.filter((sale) => {
       if (sale.invoiceNumber.toLowerCase().includes(s)) return true;
       const cust = data.customers.find((c) => c.id === sale.customerId);
       if (cust?.name.toLowerCase().includes(s)) return true;
       return false;
     });
+    return matches.slice(0, BILLS_LIMIT);
+  }, [q, data.sales, data.customers]);
+
+  const totalMatchCount = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return data.sales.length;
+    return data.sales.filter((sale) => {
+      if (sale.invoiceNumber.toLowerCase().includes(s)) return true;
+      const cust = data.customers.find((c) => c.id === sale.customerId);
+      return !!cust?.name.toLowerCase().includes(s);
+    }).length;
   }, [q, data.sales, data.customers]);
 
   const totalOf = (sale: Sale) => saleTotal(sale);
@@ -80,6 +92,11 @@ function BillsPage() {
           />
 
         </div>
+        {totalMatchCount > BILLS_LIMIT && (
+          <div className="border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+            Showing the {BILLS_LIMIT} most recent of {totalMatchCount} matches — refine your search to see more.
+          </div>
+        )}
         <div className="flex-1 overflow-auto">
           {list.length === 0 ? (
             <div className="grid place-items-center py-24 text-sm text-muted-foreground">
