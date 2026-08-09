@@ -70,6 +70,22 @@ function MedicinesPage() {
     );
   }, [meds, q]);
 
+  // Pagination — rendering thousands of <TableRow> at once is what actually
+  // causes lag at real scale, not the SQLite database underneath (SQLite
+  // handles far more rows than any real pharmacy inventory needs without
+  // trouble). Keeping the page size modest keeps the DOM small regardless
+  // of how large the catalog grows.
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [q]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [totalPages, page]);
+  const pageStart = (page - 1) * PAGE_SIZE;
+  const pageItems = useMemo(
+    () => filtered.slice(pageStart, pageStart + PAGE_SIZE),
+    [filtered, pageStart],
+  );
+
   function commit(m: Medicine, keepOpen: boolean, overrideId?: string) {
     const targetId = m.id || overrideId;
     const isEdit = !!targetId;
@@ -149,7 +165,7 @@ function MedicinesPage() {
             {filtered.length === 0 && (
               <TableRow><TableCell colSpan={7} className="py-14 text-center text-sm text-muted-foreground">No medicines. Add your first SKU.</TableCell></TableRow>
             )}
-            {filtered.map((m) => (
+            {pageItems.map((m) => (
               <MedicineRow
                 key={m.id}
                 m={m}
@@ -163,6 +179,23 @@ function MedicinesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {filtered.length > PAGE_SIZE && (
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <span className="tabular-nums">Page {page} of {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <MedicineHistoryDialog medicine={historyFor} onClose={() => setHistoryFor(null)} />
 
