@@ -13,6 +13,8 @@ import { runBackupNow } from "@/lib/backup";
 import { useProjectStore } from "@/store/project-store";
 import { confirmUnsaved } from "@/hooks/use-unsaved-guard";
 import { useSession } from "@/store/session-store";
+import { NotificationBell } from "@/components/NotificationBell";
+import { isMultiMode } from "@/lib/install";
 
 export function AppTopbar() {
   const navigate = useNavigate();
@@ -92,6 +94,7 @@ export function AppTopbar() {
 
         <div className="ml-auto flex items-center gap-2">
           <MedicineSearch />
+          {isAdmin && isMultiMode() && <NotificationBell />}
           <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle theme">
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>

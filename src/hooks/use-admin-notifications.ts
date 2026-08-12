@@ -1,19 +1,20 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 import { useProjectStore } from "@/store/project-store";
 import { isMultiMode } from "@/lib/install";
 import { isAdmin } from "@/store/session-store";
 import { getRecentEvents, type AuditEntry } from "@/lib/audit-log";
-import { money } from "@/lib/format";
+import { useNotificationStore, type NotificationType } from "@/store/notification-store";
 
 /**
  * Item 9: notifies the logged-in admin, in Multi computer mode, about
  * events other users cause — configurable per condition in Settings.
  * Completely inactive for Single computer mode or a non-admin session.
+ * Matching events land in the persisted notification store, shown via
+ * the bell icon in the topbar.
  */
 export function useAdminNotifications() {
   const settings = useProjectStore((s) => s.data?.settings);
-  const sym = settings?.currencySymbol || "$";
+  const addNotification = useNotificationStore((s) => s.add);
   const sinceRef = useRef<string | null>(null);
 
   const active = isMultiMode() && isAdmin();
@@ -35,7 +36,13 @@ export function useAdminNotifications() {
       if (events.length === 0) return;
 
       for (const e of events as AuditEntry[]) {
-        describeAndNotify(e, { notifyDelete, notifyAdd, notifyCustomer, notifySale, threshold, sym });
+        const type = matchType(e, { notifyDelete, notifyAdd, notifyCustomer, notifySale, threshold });
+        if (type) {
+          addNotification({
+            id: e.id, type, username: e.username || "Someone", timestamp: e.timestamp,
+            entityId: e.entityId, medicineName: e.medicineName, quantity: e.quantity, price: e.price,
+          });
+        }
       }
       sinceRef.current = events[events.length - 1].timestamp;
     };
@@ -46,28 +53,13 @@ export function useAdminNotifications() {
   }, [active, notifyDelete, notifyAdd, notifyCustomer, notifySale, threshold]);
 }
 
-function describeAndNotify(
+function matchType(
   e: AuditEntry,
-  opts: { notifyDelete: boolean; notifyAdd: boolean; notifyCustomer: boolean; notifySale: boolean; threshold: number; sym: string },
-) {
-  const who = e.username || "Someone";
-
-  if (e.entityType === "medicine" && e.action === "delete" && opts.notifyDelete) {
-    toast.warning(`${who} deleted medicine "${e.medicineName ?? "?"}"`);
-    return;
-  }
-  if (e.entityType === "medicine" && e.action === "add" && opts.notifyAdd) {
-    toast.info(`${who} added medicine "${e.medicineName ?? "?"}"`);
-    return;
-  }
-  if (e.entityType === "customer" && opts.notifyCustomer) {
-    toast.info(`${who} added customer "${e.medicineName ?? "?"}"`);
-    return;
-  }
-  if (e.entityType === "sale" && opts.notifySale) {
-    const amount = e.price ?? 0;
-    if (amount > opts.threshold) {
-      toast.warning(`${who} made a sale of ${money(amount, opts.sym)}`);
-    }
-  }
+  opts: { notifyDelete: boolean; notifyAdd: boolean; notifyCustomer: boolean; notifySale: boolean; threshold: number },
+): NotificationType | null {
+  if (e.entityType === "medicine" && e.action === "delete" && opts.notifyDelete) return "medicineDelete";
+  if (e.entityType === "medicine" && e.action === "add" && opts.notifyAdd) return "medicineAdd";
+  if (e.entityType === "customer" && opts.notifyCustomer) return "customerAdd";
+  if (e.entityType === "sale" && opts.notifySale && (e.price ?? 0) > opts.threshold) return "sale";
+  return null;
 }

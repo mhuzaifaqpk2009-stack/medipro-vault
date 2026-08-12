@@ -55,15 +55,19 @@ function SalesPage() {
   const setPrintBill = useCartStore((s) => s.setPrintBill);
   const reset = useCartStore((s) => s.reset);
 
+  type SearchBy = "name" | "generic" | "company";
   const [q, setQ] = useState("");
+  const [by, setBy] = useState<SearchBy>(data.settings.defaultSearchBy ?? "name");
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
+    const field = (m: (typeof data.medicines)[number]) =>
+      by === "generic" ? m.genericName : by === "company" ? m.company : m.name;
     return data.medicines
-      .filter((m) => [m.name, m.barcode, m.genericName].some((x) => (x ?? "").toLowerCase().includes(t)))
+      .filter((m) => (m.barcode ?? "").toLowerCase().includes(t) || (field(m) ?? "").toLowerCase().includes(t))
       .slice(0, 8);
-  }, [q, data.medicines]);
+  }, [q, data.medicines, by]);
 
   function add(medId: string) {
     const med = data.medicines.find((m) => m.id === medId);
@@ -172,21 +176,33 @@ function SalesPage() {
           )}
         </div>
         <div className="relative border-b p-3">
-          <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <SearchInput
-            data-search
-            phrases={[
-              "Scan barcode or search medicine…",
-              "Enter adds the top match…",
-            ]}
-            value={q}
-            autoFocus
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && results[0]) add(results[0].id);
-            }}
-            className="h-11 pl-8 text-sm"
-          />
+          <div className="flex items-center gap-1.5">
+            <Select value={by} onValueChange={(v) => setBy(v as SearchBy)}>
+              <SelectTrigger className="h-11 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="generic">Generic</SelectItem>
+                <SelectItem value="company">Company</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <SearchInput
+                data-search
+                phrases={[
+                  "Scan barcode or search medicine…",
+                  "Enter adds the top match…",
+                ]}
+                value={q}
+                autoFocus
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && results[0]) add(results[0].id);
+                }}
+                className="h-11 pl-8 text-sm"
+              />
+            </div>
+          </div>
 
           {results.length > 0 && (
             <div className="absolute left-3 right-3 top-14 z-10 max-h-72 overflow-auto rounded-md border bg-popover shadow-elevated">

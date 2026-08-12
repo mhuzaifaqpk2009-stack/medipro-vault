@@ -212,3 +212,28 @@
 @utility hero-bg {
   background-image: var(--gradient-hero);
 }
+
+/* Thin, theme-aware scrollbars everywhere (sidebar, tables, dialogs, etc.) —
+ * the default browser scrollbar is thick and stays light-colored regardless
+ * of theme, which looks especially out of place in dark mode. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-muted-foreground);
+  background-clip: content-box;
+}
