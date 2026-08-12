@@ -8,7 +8,7 @@ export interface PharmacySettings {
   taxPercent: number; maxDiscount?: number; singleSessionOnly?: boolean;
   defaultSearchBy?: "name" | "generic" | "company"; notifyOnDeleteMedicine?: boolean;
   notifyOnAddMedicine?: boolean; notifyOnAddCustomer?: boolean; notifyOnLargeSale?: boolean;
-  largeSaleThreshold?: number; invoiceCounter?: number; currency: string; currencySymbol: string;
+  notifyOnForceSale?: boolean; largeSaleThreshold?: number; invoiceCounter?: number; currency: string; currencySymbol: string;
   receiptFooter: string; receiptLogoDataUrl?: string; billFooter1: string; billFooter2: string;
   autoSaveEnabled: boolean; autoSaveIntervalMinutes: 1 | 2 | 5 | 10 | 15;
   theme: "light" | "dark"; passwordProtected: boolean; tabShortcutsEnabled?: boolean;
@@ -21,6 +21,8 @@ export interface PharmacySettings {
   pinPanelMinimized?: boolean; sidebarWidth?: number; topbarHeight?: number; pinBarHeight?: number;
   autoBackupEnabled?: boolean; autoBackupIntervalHours?: number; autoBackupFolder?: string;
   lastAutoBackupAt?: number; backupPasswordEnabled?: boolean; backupPassword?: string;
+  /** Admin-controlled global switch for checkout price overrides. Defaults to enabled. */
+  allowCheckoutPriceChange?: boolean;
 }
 export type PinKind = "nav" | "action" | "cmd" | "counter";
 export interface PinnedItem { id: string; label: string; kind: PinKind; to?: string; }
@@ -36,7 +38,7 @@ export interface Medicine {
 export interface PurchaseItem { medicineId: string; quantity: number; purchasePrice: number; batchNumber?: string; expiryDate?: string; }
 export interface Purchase { id: string; supplierId: string; invoiceNumber: string; purchaseDate: string; receivedDate?: string; items: PurchaseItem[]; taxPercent: number; discount: number; notes?: string; }
 export type PaymentMethod = "cash" | "card" | "online" | "mixed";
-export interface SaleItem { medicineId: string; quantity: number; salePrice: number; discountPercent: number; costPriceAtSale?: number; }
+export interface SaleItem { medicineId: string; quantity: number; salePrice: number; discountPercent: number; costPriceAtSale?: number; forcedSale?: boolean; }
 export interface SalePayment { method: "cash" | "card" | "online"; amount: number; reference?: string; }
 export interface Sale {
   id: string; invoiceNumber: string; date: string; customerId?: string; remark?: string; items: SaleItem[];
@@ -60,7 +62,7 @@ export function createEmptyProject(name: string, passwordProtected: boolean): Pr
       billFooter1: "Thanks for purchasing",
       billFooter2: "Please check & verify your medicines. Medicines will be returned within 15 days. Fridge items are not returnable. Pharmacy is not responsible after this period.",
       autoSaveEnabled: true, autoBackupEnabled: false, autoBackupIntervalHours: 24, autoSaveIntervalMinutes: 5,
-      theme: "light", passwordProtected,
+      theme: "light", passwordProtected, allowCheckoutPriceChange: true,
     },
     categories: [], suppliers: [], customers: [], medicines: [], purchases: [], sales: [], stockAdjustments: [],
   };
