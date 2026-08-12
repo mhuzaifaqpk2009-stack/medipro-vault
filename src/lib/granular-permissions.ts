@@ -1,13 +1,11 @@
 /** Action-level permission checks used by both Single and Multi computer modes. */
 import type { StoredUser } from "./users";
-
 export type CrudEntity = "medicines" | "customers" | "purchases" | "suppliers" | "categories";
-export type CrudAction = "Add" | "Edit" | "Delete";
-
 function allowed(u: StoredUser | null, key: string, page: keyof StoredUser["permissions"]): boolean {
   if (!u || u.role === "admin") return true;
   if (!u.permissions[page]) return false;
-  return u.permissions[key as keyof StoredUser["permissions"]] === true;
+  const value = u.permissions[key as keyof StoredUser["permissions"]];
+  return value === undefined ? true : value === true;
 }
 export function canAddMedicine(u: StoredUser | null) { return allowed(u, "medicinesAdd", "medicines"); }
 export function canEditMedicine(u: StoredUser | null) { return allowed(u, "medicinesEdit", "medicines"); }
@@ -24,8 +22,8 @@ export function canDeleteSupplier(u: StoredUser | null) { return allowed(u, "sup
 export function canAddCategory(u: StoredUser | null) { return allowed(u, "categoriesAdd", "categories"); }
 export function canEditCategory(u: StoredUser | null) { return allowed(u, "categoriesEdit", "categories"); }
 export function canDeleteCategory(u: StoredUser | null) { return allowed(u, "categoriesDelete", "categories"); }
-export function canExportReports(u: StoredUser | null) { return !u || u.role === "admin" || (u.permissions.reports && u.permissions.reportsExport === true); }
-export function canPrintReports(u: StoredUser | null) { return !u || u.role === "admin" || (u.permissions.reports && u.permissions.reportsPrint === true); }
+export function canExportReports(u: StoredUser | null) { if (!u || u.role === "admin" || !u.permissions.reports) return u?.role === "admin"; const v = u.permissions.reportsExport; return v === undefined ? true : v; }
+export function canPrintReports(u: StoredUser | null) { if (!u || u.role === "admin") return true; if (!u.permissions.reports) return false; const v = u.permissions.reportsPrint; return v === undefined ? true : v; }
 export function canApplyDiscount(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.applyDiscount === true; }
 export function canForceSale(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.forceSale === true; }
 export function canChangeCheckoutPrice(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.changeCheckoutPrice === true; }
