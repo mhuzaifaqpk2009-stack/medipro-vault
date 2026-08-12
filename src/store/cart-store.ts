@@ -45,11 +45,5 @@ export const useCartStore = create<CartState>((set) => ({
   setReceived: (v) => set({ received: v }),
   setPrintBill: (v) => set({ printBill: v }),
   reset: () =>
-    set({
-      cart: [],
-      customerId: "",
-      remark: "",
-      discount: 0,
-      received: 0,
-    }),
+    set({ cart: [], customerId: "", remark: "", discount: 0, received: 0 }),
 }));
