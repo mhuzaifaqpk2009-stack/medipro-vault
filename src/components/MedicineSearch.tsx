@@ -1,17 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { SearchInput } from "@/components/SearchInput";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProjectStore } from "@/store/project-store";
 import { money } from "@/lib/format";
 
 type SearchBy = "name" | "generic" | "company";
-const SEARCH_BY_LABEL: Record<SearchBy, string> = { name: "Name", generic: "Generic", company: "Company" };
 
-/** Quick medicine lookup available from anywhere in the app. */
 export function MedicineSearch() {
   const navigate = useNavigate();
   const meds = useProjectStore((s) => s.data?.medicines ?? []);
@@ -21,14 +17,15 @@ export function MedicineSearch() {
   const [by, setBy] = useState<SearchBy>(defaultBy);
   const [open, setOpen] = useState(false);
   const blurTimer = useRef<number | null>(null);
+  const deferredQuery = useDeferredValue(q);
 
   const results = useMemo(() => {
-    const t = q.trim().toLowerCase();
+    const t = deferredQuery.trim().toLowerCase();
     if (!t) return [];
     const field = (m: (typeof meds)[number]) =>
       by === "generic" ? m.genericName : by === "company" ? m.company : m.name;
     return meds.filter((m) => (field(m) ?? "").toLowerCase().includes(t)).slice(0, 8);
-  }, [q, meds, by]);
+  }, [deferredQuery, meds, by]);
 
   function goToMedicines(term: string) {
     sessionStorage.setItem("medicore.medsearch", term);
@@ -53,7 +50,6 @@ export function MedicineSearch() {
           <SelectItem value="company">Company</SelectItem>
         </SelectContent>
       </Select>
-
       <div className="relative w-full">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <SearchInput
@@ -69,19 +65,13 @@ export function MedicineSearch() {
             if (e.key === "Escape") setOpen(false);
           }}
         />
-
         {open && results.length > 0 && (
           <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-md border bg-popover shadow-lg">
             {results.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                onMouseDown={() => {
-                  if (blurTimer.current) window.clearTimeout(blurTimer.current);
-                  goToMedicines(m.name);
-                }}
-              >
+              <button key={m.id} type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent" onMouseDown={() => {
+                if (blurTimer.current) window.clearTimeout(blurTimer.current);
+                goToMedicines(m.name);
+              }}>
                 <span className="truncate">{m.name}</span>
                 <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <span>Stock {m.stockQuantity}</span>
