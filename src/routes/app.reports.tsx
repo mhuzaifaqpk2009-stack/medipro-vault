@@ -8,7 +8,6 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SalesReport } from "@/components/reports/SalesReport";
 import { StaffSalesReport } from "@/components/reports/StaffSalesReport";
-import { isMultiMode } from "@/lib/install";
 
 export const Route = createFileRoute("/app/reports")({
   component: () => <PermissionGate perm="reports"><ReportsPage /></PermissionGate>,
@@ -57,10 +56,10 @@ function ReportsPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>
-          {isMultiMode() && <TabsTrigger value="staff">Staff Sales</TabsTrigger>}
+          <TabsTrigger value="staff">Staff Sales</TabsTrigger>
         </TabsList>
         <TabsContent value="sales"><SalesReport /></TabsContent>
-        {isMultiMode() && <TabsContent value="staff"><StaffSalesReport /></TabsContent>}
+        <TabsContent value="staff"><StaffSalesReport /></TabsContent>
         <TabsContent value="overview">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card k="Today's sales" v={money(stats.todaySales, sym)} />

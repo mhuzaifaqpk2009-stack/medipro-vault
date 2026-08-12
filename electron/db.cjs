@@ -40,6 +40,16 @@ function open(userDataDir) {
 
 const available = () => db !== null;
 
+/** Safely adds a column to an existing table if it doesn't already have it —
+ * for schema changes made after a database was already created (CREATE
+ * TABLE IF NOT EXISTS alone doesn't retroactively add new columns). */
+function addColumnIfMissing(table, column, type) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!existing.includes(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 function migrate() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -70,11 +80,16 @@ function migrate() {
       purchasePrice REAL NOT NULL DEFAULT 0, salePrice REAL NOT NULL DEFAULT 0,
       mrp REAL NOT NULL DEFAULT 0, stockQuantity REAL NOT NULL DEFAULT 0,
       minimumStock REAL NOT NULL DEFAULT 0, expiryDate TEXT, manufactureDate TEXT,
-      rackNumber TEXT, supplierId TEXT, description TEXT
+      rackNumber TEXT, supplierId TEXT, description TEXT, pinOrder TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_medicines_name ON medicines(name);
     CREATE INDEX IF NOT EXISTS idx_medicines_barcode ON medicines(barcode);
+  `);
 
+  // Column migration for databases created before pinOrder existed —
+  // CREATE TABLE IF NOT EXISTS alone won't add it to an already-existing table.
+  addColumnIfMissing("medicines", "pinOrder", "TEXT");
+  db.exec(`
     CREATE TABLE IF NOT EXISTS purchases (
       id TEXT PRIMARY KEY, supplierId TEXT, invoiceNumber TEXT,
       purchaseDate TEXT, receivedDate TEXT,
@@ -268,6 +283,12 @@ const auditLog = {
       ? db.prepare(
           "SELECT * FROM audit_log WHERE entityType = ? AND entityId = ? ORDER BY timestamp DESC",
         ).all(entityType, entityId)
+      : [],
+  since: (isoTimestamp) =>
+    available()
+      ? db.prepare(
+          "SELECT * FROM audit_log WHERE timestamp > ? ORDER BY timestamp ASC",
+        ).all(isoTimestamp)
       : [],
 };
 

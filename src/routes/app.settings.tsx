@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Settings as SettingsIcon, Save, Plus, Trash2, Pencil,
   Users as UsersIcon, ShieldCheck, AlertTriangle, RotateCcw,
-  HardDriveDownload, HardDriveUpload, FolderOpen, Keyboard,
+  HardDriveDownload, HardDriveUpload, FolderOpen, Keyboard, Bell,
 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -36,7 +36,7 @@ import { restoreFromBytes } from "@/store/project-store";
 import { WrongPasswordError } from "@/lib/project-codec";
 import { askPassword } from "@/components/PasswordPromptDialog";
 import {
-  readInstall, createUser, upsertUser, removeUser, hashPassword,
+  readInstall, createUser, upsertUser, removeUser, hashPassword, isMultiMode,
 } from "@/lib/install";
 import {
   defaultPermissions, permissionsForTemplate, ROLE_TEMPLATE_LABELS,
@@ -225,6 +225,7 @@ function SettingsPage() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="general">Pharmacy & billing</TabsTrigger>
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
+          <TabsTrigger value="network">Computer mode</TabsTrigger>
           <TabsTrigger value="data">Backup & data</TabsTrigger>
           <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
           <TabsTrigger value="danger">Danger zone</TabsTrigger>
@@ -321,7 +322,20 @@ function SettingsPage() {
 
         </TabsContent>
         <TabsContent value="workspace">
-          <DeploymentSettings />
+      <section className="surface-card mt-4 p-6">
+        <h2 className="font-display text-base font-semibold">Search</h2>
+        <div className="mt-4 max-w-xs">
+          <Label className="mb-1.5 block text-xs font-medium text-muted-foreground">Default search by (top search bar)</Label>
+          <Select value={s.defaultSearchBy ?? "name"} onValueChange={(v) => set("defaultSearchBy", v as typeof s.defaultSearchBy)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Medicine name</SelectItem>
+              <SelectItem value="generic">Generic name</SelectItem>
+              <SelectItem value="company">Company name</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
       <section className="surface-card mt-4 p-6">
         <h2 className="font-display text-base font-semibold">Pinned bottom panel</h2>
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -378,6 +392,50 @@ function SettingsPage() {
         </div>
       </section>
 
+        </TabsContent>
+        <TabsContent value="network">
+          <DeploymentSettings />
+          {isMultiMode() && (
+            <section className="surface-card mt-4 p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <Bell className="h-4 w-4 text-primary" />
+                <h2 className="font-display text-base font-semibold">Admin notifications</h2>
+              </div>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Multi computer mode only. Choose which events notify you while you're signed in as admin.
+              </p>
+              <div className="grid gap-4">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When a user deletes a medicine</span>
+                  <Switch checked={s.notifyOnDeleteMedicine === true} onCheckedChange={(v) => set("notifyOnDeleteMedicine", v)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When a user adds a medicine</span>
+                  <Switch checked={s.notifyOnAddMedicine === true} onCheckedChange={(v) => set("notifyOnAddMedicine", v)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When a user adds a customer</span>
+                  <Switch checked={s.notifyOnAddCustomer === true} onCheckedChange={(v) => set("notifyOnAddCustomer", v)} />
+                </label>
+                <div>
+                  <label className="flex items-center justify-between gap-3">
+                    <span className="text-sm">When a user makes a sale larger than a set amount</span>
+                    <Switch checked={s.notifyOnLargeSale === true} onCheckedChange={(v) => set("notifyOnLargeSale", v)} />
+                  </label>
+                  {s.notifyOnLargeSale && (
+                    <div className="mt-2 max-w-xs">
+                      <Input
+                        type="number"
+                        placeholder="Threshold amount"
+                        value={s.largeSaleThreshold || ""}
+                        onChange={(e) => set("largeSaleThreshold", Number(e.target.value) || 0)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
         </TabsContent>
         <TabsContent value="data">
       <section className="surface-card mt-4 p-6">

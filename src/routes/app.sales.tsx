@@ -19,6 +19,7 @@ import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
 import { cartTotals } from "@/lib/sale-math";
 import type { PaymentMethod, Sale } from "@/domain/schema";
 import { PermissionGate } from "@/components/PermissionGate";
+import { logSaleEvent } from "@/lib/audit-log";
 
 export const Route = createFileRoute("/app/sales")({
   component: () => <PermissionGate perm="sales"><SalesPage /></PermissionGate>,
@@ -147,6 +148,7 @@ function SalesPage() {
       d.sales.push(newSale);
       d.settings.invoiceCounter = Number(invoiceNumber) + 1;
     }, { history: false }); // a completed sale can never be undone with Ctrl+Z
+    void logSaleEvent(newSale.id, total, user?.username, user?.id);
     toast.success(`Sale complete · ${invoiceNumber}`);
     if (printBill) {
       const latest = useProjectStore.getState().data!;

@@ -93,3 +93,12 @@ export async function serverGetAuditLog(entityType: string, entityId: string) {
     { method: "GET" },
   );
 }
+
+/** Item 9: all audit events since a timestamp, across all entity types —
+ * feeds admin notification polling. */
+export async function serverGetRecentEvents(sinceIso: string) {
+  return req<{ ok: true; entries: unknown[] }>(
+    `/audit/recent?since=${encodeURIComponent(sinceIso)}`,
+    { method: "GET" },
+  );
+}

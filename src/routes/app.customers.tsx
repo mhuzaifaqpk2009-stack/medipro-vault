@@ -12,6 +12,9 @@ import { uid } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
 import { useQuickAction } from "@/lib/quick-actions";
 import type { Customer } from "@/domain/schema";
+import { currentUser } from "@/store/session-store";
+import { canAddCustomer } from "@/lib/granular-permissions";
+import { logCustomerAddEvent } from "@/lib/audit-log";
 
 export const Route = createFileRoute("/app/customers")({ component: CustomersPage });
 
@@ -23,7 +26,8 @@ function CustomersPage() {
   const mutate = useProjectStore((s) => s.mutate);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [q, setQ] = useState("");
-  useQuickAction("new-customer", () => setEditing(empty()));
+  const canAdd = canAddCustomer(currentUser());
+  useQuickAction("new-customer", () => { if (canAdd) setEditing(empty()); });
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -40,12 +44,18 @@ function CustomersPage() {
 
   function save(c: Customer) {
     if (!c.name.trim()) { toast.error("Name required"); return; }
+    const isNew = !c.id;
+    const finalId = c.id || uid("cus_");
     mutate((d) => {
       if (c.id) {
         const i = d.customers.findIndex((x) => x.id === c.id);
         if (i >= 0) d.customers[i] = c;
-      } else d.customers.push({ ...c, id: uid("cus_") });
+      } else d.customers.push({ ...c, id: finalId });
     });
+    if (isNew) {
+      const u = currentUser();
+      void logCustomerAddEvent(finalId, c.name, u?.username, u?.id);
+    }
     setEditing(null);
     toast.success("Saved");
   }
@@ -64,7 +74,9 @@ function CustomersPage() {
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Search name, phone, email…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-64 pl-8" />
           </div>
-          <Button {...pinContext({ id: "action:new-customer", label: "New customer", kind: "action", to: "/app/customers" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add customer</Button>
+          {canAdd && (
+            <Button {...pinContext({ id: "action:new-customer", label: "New customer", kind: "action", to: "/app/customers" })} onClick={() => setEditing(empty())}><Plus className="mr-1.5 h-4 w-4" />Add customer</Button>
+          )}
         </div>
       </header>
 

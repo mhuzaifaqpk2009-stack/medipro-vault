@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   auditLog: {
     add: (entry) => ipcRenderer.invoke("db:auditLog:add", entry),
     forEntity: (entityType, entityId) => ipcRenderer.invoke("db:auditLog:forEntity", entityType, entityId),
+    since: (isoTimestamp) => ipcRenderer.invoke("db:auditLog:since", isoTimestamp),
   },
 });
 

@@ -222,6 +222,9 @@ ipcMain.handle("db:auditLog:add", (_e, entry) => (ensureDb() ? sqldb.auditLog.ad
 ipcMain.handle("db:auditLog:forEntity", (_e, entityType, entityId) =>
   ensureDb() ? sqldb.auditLog.forEntity(entityType, entityId) : [],
 );
+ipcMain.handle("db:auditLog:since", (_e, isoTimestamp) =>
+  ensureDb() ? sqldb.auditLog.since(isoTimestamp) : [],
+);
 
 /* -------- LAN server (Multi computer mode — Server side only) --------
  * Exposes a tiny local-network HTTP API so Client computers can log in and
@@ -363,6 +366,13 @@ function startLanServer(port) {
           const entityType = url.searchParams.get("entityType") || "";
           const entityId = url.searchParams.get("entityId") || "";
           const entries = sqldb.auditLog.forEntity(entityType, entityId);
+          return sendJson(res, 200, { ok: true, entries });
+        }
+
+        if (url.pathname === "/audit/recent" && req.method === "GET") {
+          if (!ensureDb()) return sendJson(res, 503, { error: "Server database unavailable" });
+          const since = url.searchParams.get("since") || "1970-01-01T00:00:00.000Z";
+          const entries = sqldb.auditLog.since(since);
           return sendJson(res, 200, { ok: true, entries });
         }
 

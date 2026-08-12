@@ -5,7 +5,7 @@
  */
 import {
   LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes,
-  BarChart3, Settings, Receipt, Calculator,
+  BarChart3, Settings, Receipt, Calculator, Keyboard,
 } from "lucide-react";
 import type { UserPermissions, StoredUser } from "@/lib/users";
 import type { PharmacySettings } from "@/domain/schema";
@@ -32,6 +32,7 @@ export const NAV: NavItem[] = [
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
   { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
+  { to: "/app/shortcuts", label: "Shortcuts", icon: Keyboard, group: "Insights" },
   { to: "/app/reports", label: "Reports", icon: BarChart3, perm: "reports", group: "Insights" },
   { to: "/app/settings", label: "Settings", icon: Settings, adminOnly: true, group: "Insights" },
 ];

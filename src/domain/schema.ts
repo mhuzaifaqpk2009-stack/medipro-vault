@@ -14,6 +14,14 @@ export interface PharmacySettings {
   maxDiscount?: number;
   /** Multi-computer only: block a second simultaneous login of the same account. */
   singleSessionOnly?: boolean;
+  /** Default field the global medicine search filters by. */
+  defaultSearchBy?: "name" | "generic" | "company";
+  /** Admin notifications — Multi computer mode only. */
+  notifyOnDeleteMedicine?: boolean;
+  notifyOnAddMedicine?: boolean;
+  notifyOnAddCustomer?: boolean;
+  notifyOnLargeSale?: boolean;
+  largeSaleThreshold?: number;
   /** Next invoice number to hand out (never reset by clearing bills). */
   invoiceCounter?: number;
 
@@ -132,6 +140,8 @@ export interface Medicine {
   rackNumber?: string;
   supplierId?: string;
   description?: string;
+  /** Manual pin for sorting ("Make first" / "Make last" in the Medicines list). */
+  pinOrder?: "first" | "last";
 }
 
 export interface PurchaseItem {

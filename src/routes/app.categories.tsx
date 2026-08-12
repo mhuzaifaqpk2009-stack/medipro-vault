@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { useProjectStore } from "@/store/project-store";
 import { uid } from "@/lib/format";
 import { PermissionGate } from "@/components/PermissionGate";
+import { currentUser } from "@/store/session-store";
+import { canAddCategory } from "@/lib/granular-permissions";
 
 export const Route = createFileRoute("/app/categories")({
   component: () => <PermissionGate perm="categories"><CategoriesPage /></PermissionGate>,
@@ -18,6 +20,7 @@ function CategoriesPage() {
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const canAdd = canAddCategory(currentUser());
 
   function add() {
     const trimmed = name.trim();
@@ -47,10 +50,12 @@ function CategoriesPage() {
       </header>
 
       <div className="surface-card p-4">
-        <div className="mb-4 flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-          <Button onClick={add}><Plus className="mr-1 h-4 w-4" />Add</Button>
-        </div>
+        {canAdd && (
+          <div className="mb-4 flex gap-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+            <Button onClick={add}><Plus className="mr-1 h-4 w-4" />Add</Button>
+          </div>
+        )}
         {list.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">No categories yet.</p>
         ) : (

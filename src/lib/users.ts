@@ -21,6 +21,19 @@ export interface UserPermissions {
   forceSale: boolean;
   /** See and use the bottom pinned panel. */
   pinPanel?: boolean;
+  /**
+   * Granular sub-permissions, Multi computer mode only (Single computer
+   * mode's plain medicines/customers/categories flags above are unchanged
+   * and keep meaning "full access" there, exactly as before). Undefined
+   * means "no" — a Seller/Custom user with `medicines: true` but no
+   * `medicinesAdd/Edit/Delete` can view and search medicines but not
+   * change anything, per the Multi computer mode permission model.
+   */
+  medicinesAdd?: boolean;
+  medicinesEdit?: boolean;
+  medicinesDelete?: boolean;
+  customersAdd?: boolean;
+  categoriesAdd?: boolean;
 }
 
 
@@ -93,6 +106,8 @@ export function permissionsForTemplate(template: RoleTemplate): UserPermissions 
       purchases: true, reports: true, suppliers: true, categories: true,
       customers: true, applyDiscount: true, changeTax: true, forceSale: true,
       pinPanel: true,
+      medicinesAdd: true, medicinesEdit: true, medicinesDelete: true,
+      customersAdd: true, categoriesAdd: true,
     };
   }
   if (template === "seller") {
@@ -101,6 +116,8 @@ export function permissionsForTemplate(template: RoleTemplate): UserPermissions 
       purchases: false, reports: false, suppliers: false, categories: false,
       customers: false, applyDiscount: false, changeTax: false, forceSale: false,
       pinPanel: false,
+      medicinesAdd: false, medicinesEdit: false, medicinesDelete: false,
+      customersAdd: false, categoriesAdd: false,
     };
   }
   return defaultPermissions("user");
@@ -113,6 +130,8 @@ export function defaultPermissions(role: UserRole): UserPermissions {
       purchases: true, reports: true, suppliers: true, categories: true,
       customers: true, applyDiscount: true, changeTax: true, forceSale: true,
       pinPanel: true,
+      medicinesAdd: true, medicinesEdit: true, medicinesDelete: true,
+      customersAdd: true, categoriesAdd: true,
     };
   }
   return {
@@ -120,6 +139,8 @@ export function defaultPermissions(role: UserRole): UserPermissions {
     purchases: false, reports: false, suppliers: false, categories: false,
     customers: false, applyDiscount: false, changeTax: false, forceSale: false,
     pinPanel: false,
+    medicinesAdd: false, medicinesEdit: false, medicinesDelete: false,
+    customersAdd: false, categoriesAdd: false,
   };
 }
 

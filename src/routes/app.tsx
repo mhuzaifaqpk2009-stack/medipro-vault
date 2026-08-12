@@ -9,6 +9,7 @@ import { PinBar } from "@/components/PinBar";
 import { ResizeHandle } from "@/components/ResizeHandle";
 import { ItemMenuHost } from "@/lib/pins";
 import { useAutoSave } from "@/hooks/use-autosave";
+import { useAdminNotifications } from "@/hooks/use-admin-notifications";
 import { useProjectStore, startClientLiveSync } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isClientMode } from "@/lib/install";
@@ -62,6 +63,7 @@ export const Route = createFileRoute("/app")({
 
 function AppLayout() {
   useAutoSave();
+  useAdminNotifications();
 
   // Part 5 live sync: a Client polls the Server for changes made anywhere
   // else on the network. Single computer and Server mode never start this —

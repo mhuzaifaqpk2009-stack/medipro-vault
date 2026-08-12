@@ -182,19 +182,19 @@ export function TrendChart({
           {canLeft && (
             <button
               onClick={() => scrollBy(-1)}
-              className="absolute left-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border bg-background/90 text-muted-foreground shadow-md backdrop-blur hover:bg-muted"
+              className="absolute left-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-muted/80 text-muted-foreground shadow-sm ring-1 ring-border transition hover:bg-muted hover:text-foreground"
               style={{ marginTop: -12 }}
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3.5 w-3.5" />
             </button>
           )}
           {canRight && (
             <button
               onClick={() => scrollBy(1)}
-              className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border bg-background/90 text-muted-foreground shadow-md backdrop-blur hover:bg-muted"
+              className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-muted/80 text-muted-foreground shadow-sm ring-1 ring-border transition hover:bg-muted hover:text-foreground"
               style={{ marginTop: -12 }}
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
