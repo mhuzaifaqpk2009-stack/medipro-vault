@@ -1,15 +1,18 @@
 /**
  * Client-side access to the pharmacy Server (multi-computer mode).
  *
- * In Server mode the Electron main process runs a small HTTP API (default
- * port 4000). Clients talk to it over the LAN using these helpers, keeping the
- * same shapes the rest of the app already uses.
+ * Server sessions are held only in memory on this client. Sensitive requests
+ * carry the session token in a dedicated header; project writes also carry
+ * the last server revision to prevent stale whole-snapshot overwrites.
  */
 import { readInstall } from "@/lib/install";
 import type { StoredUser } from "@/lib/users";
 import type { ProjectData } from "@/domain/schema";
 
 export const DEFAULT_SERVER_PORT = 4000;
+
+let sessionId: string | null = null;
+let knownRevision: number | null = null;
 
 export function serverBaseUrl(host?: string, port?: number): string | null {
   const rec = readInstall();
@@ -26,12 +29,16 @@ async function req<T>(path: string, init?: RequestInit, base?: string): Promise<
   const url = (base ?? serverBaseUrl()) + path;
   const ctl = new AbortController();
   const timer = window.setTimeout(() => ctl.abort(), 6000);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  if (sessionId) headers["x-hpms-session"] = sessionId;
+  if (path === "/project" && init?.method === "PUT" && knownRevision !== null) {
+    headers["x-hpms-revision"] = String(knownRevision);
+  }
   try {
-    const res = await fetch(url, {
-      ...init,
-      signal: ctl.signal,
-      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    });
+    const res = await fetch(url, { ...init, signal: ctl.signal, headers });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((body as any)?.error || `Server error ${res.status}`);
     return body as T;
@@ -52,33 +59,47 @@ export async function pingServer(host: string, port = DEFAULT_SERVER_PORT) {
 }
 
 export async function serverLogin(username: string, password: string) {
-  return req<{ ok: true; user: StoredUser; sessionId: string }>("/login", {
+  const result = await req<{ ok: true; user: StoredUser; sessionId: string }>("/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+  sessionId = result.sessionId;
+  knownRevision = null;
+  return result;
 }
 
-export async function serverLogout(sessionId: string) {
+export async function serverLogout(_sessionId?: string) {
   try {
     await req("/logout", { method: "POST", body: JSON.stringify({ sessionId }) });
-  } catch { /* signing out locally must always succeed */ }
+  } catch {
+    /* signing out locally must always succeed */
+  } finally {
+    sessionId = null;
+    knownRevision = null;
+  }
 }
 
 /** Full snapshot pull — used for the client's initial load and polling sync. */
 export async function serverPullProject() {
-  return req<{ ok: true; data: ProjectData; revision: number }>("/project", { method: "GET" });
+  const result = await req<{ ok: true; data: ProjectData; revision: number }>("/project", { method: "GET");
+  knownRevision = result.revision;
+  return result;
 }
 
 /** Push the whole project after a local mutation on a client. */
 export async function serverPushProject(data: ProjectData) {
-  return req<{ ok: true; revision: number }>("/project", {
+  const result = await req<{ ok: true; revision: number }>("/project", {
     method: "PUT",
     body: JSON.stringify({ data }),
   });
+  knownRevision = result.revision;
+  return result;
 }
 
 export async function serverRevision() {
-  return req<{ ok: true; revision: number }>("/revision", { method: "GET" });
+  const result = await req<{ ok: true; revision: number }>("/revision", { method: "GET" });
+  knownRevision = result.revision;
+  return result;
 }
 
 /** Part 6: audit log — a Client logs a medicine add/edit event directly to
