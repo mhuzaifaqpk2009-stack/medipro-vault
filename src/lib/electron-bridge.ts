@@ -12,6 +12,9 @@ export const inElectron = () => bridge() !== null;
 export function secureSecret(value: string): string | null { try { return bridge()?.secrets?.encrypt(value) ?? null; } catch { return null; } }
 export function decryptSecret(value: string): string | null { try { return bridge()?.secrets?.decrypt(value) ?? null; } catch { return null; } }
 export function secretStorageAvailable(): boolean { try { return bridge()?.secrets?.available() === true; } catch { return false; } }
+export function storeSecret(key: string, value: string) { try { const encrypted = secureSecret(value); if (encrypted) localStorage.setItem(`hpms.secret.${key}`, encrypted); } catch {} }
+export function readSecret(key: string): string | null { try { const encrypted = localStorage.getItem(`hpms.secret.${key}`); return encrypted ? decryptSecret(encrypted) : null; } catch { return null; } }
+export function clearSecret(key: string) { try { localStorage.removeItem(`hpms.secret.${key}`); } catch {} }
 export async function reportDirty(v: boolean) { try { await bridge()?.app.setDirty(v); } catch {} }
 export async function writeRecovery(snapshot: RecoverySnapshot) { try { await bridge()?.recovery.write(snapshot.id, JSON.stringify(snapshot)); } catch {} }
 export async function clearRecovery(id: string) { try { await bridge()?.recovery.clear(id); } catch {} }
