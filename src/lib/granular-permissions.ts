@@ -1,53 +1,31 @@
-/**
- * Granular action-level permission checks (items 4 & 5): whether a user can
- * add/edit/delete a medicine, add a customer, or add a category.
- *
- * Single computer mode is completely unaffected by these — it only ever
- * checks the plain `medicines`/`customers`/`categories` page-access flags,
- * exactly as it always has. The granular sub-permissions only take effect
- * in Multi computer mode, where "page access" and "what you can do on that
- * page" are separate, admin-configurable things (Seller/Custom templates).
- */
-import { isMultiMode } from "./install";
+/** Action-level permission checks used by both Single and Multi computer modes. */
 import type { StoredUser } from "./users";
 
-function pageAccess(u: StoredUser | null, page: "medicines" | "customers" | "categories"): boolean {
-  if (!u) return true; // no session context (e.g. very early boot) — don't block
-  if (u.role === "admin") return true;
-  return !!u.permissions[page];
-}
+export type CrudEntity = "medicines" | "customers" | "purchases" | "suppliers" | "categories";
+export type CrudAction = "Add" | "Edit" | "Delete";
 
-export function canAddMedicine(u: StoredUser | null): boolean {
-  if (!pageAccess(u, "medicines")) return false;
+function allowed(u: StoredUser | null, key: string, page: keyof StoredUser["permissions"]): boolean {
   if (!u || u.role === "admin") return true;
-  if (!isMultiMode()) return true; // single mode: page access alone has always meant full CRUD
-  return !!u.permissions.medicinesAdd;
+  if (!u.permissions[page]) return false;
+  return u.permissions[key as keyof StoredUser["permissions"]] === true;
 }
-
-export function canEditMedicine(u: StoredUser | null): boolean {
-  if (!pageAccess(u, "medicines")) return false;
-  if (!u || u.role === "admin") return true;
-  if (!isMultiMode()) return true;
-  return !!u.permissions.medicinesEdit;
-}
-
-export function canDeleteMedicine(u: StoredUser | null): boolean {
-  if (!pageAccess(u, "medicines")) return false;
-  if (!u || u.role === "admin") return true;
-  if (!isMultiMode()) return true;
-  return !!u.permissions.medicinesDelete;
-}
-
-export function canAddCustomer(u: StoredUser | null): boolean {
-  if (!pageAccess(u, "customers")) return false;
-  if (!u || u.role === "admin") return true;
-  if (!isMultiMode()) return true;
-  return !!u.permissions.customersAdd;
-}
-
-export function canAddCategory(u: StoredUser | null): boolean {
-  if (!pageAccess(u, "categories")) return false;
-  if (!u || u.role === "admin") return true;
-  if (!isMultiMode()) return true;
-  return !!u.permissions.categoriesAdd;
-}
+export function canAddMedicine(u: StoredUser | null) { return allowed(u, "medicinesAdd", "medicines"); }
+export function canEditMedicine(u: StoredUser | null) { return allowed(u, "medicinesEdit", "medicines"); }
+export function canDeleteMedicine(u: StoredUser | null) { return allowed(u, "medicinesDelete", "medicines"); }
+export function canAddCustomer(u: StoredUser | null) { return allowed(u, "customersAdd", "customers"); }
+export function canEditCustomer(u: StoredUser | null) { return allowed(u, "customersEdit", "customers"); }
+export function canDeleteCustomer(u: StoredUser | null) { return allowed(u, "customersDelete", "customers"); }
+export function canAddPurchase(u: StoredUser | null) { return allowed(u, "purchasesAdd", "purchases"); }
+export function canEditPurchase(u: StoredUser | null) { return allowed(u, "purchasesEdit", "purchases"); }
+export function canDeletePurchase(u: StoredUser | null) { return allowed(u, "purchasesDelete", "purchases"); }
+export function canAddSupplier(u: StoredUser | null) { return allowed(u, "suppliersAdd", "suppliers"); }
+export function canEditSupplier(u: StoredUser | null) { return allowed(u, "suppliersEdit", "suppliers"); }
+export function canDeleteSupplier(u: StoredUser | null) { return allowed(u, "suppliersDelete", "suppliers"); }
+export function canAddCategory(u: StoredUser | null) { return allowed(u, "categoriesAdd", "categories"); }
+export function canEditCategory(u: StoredUser | null) { return allowed(u, "categoriesEdit", "categories"); }
+export function canDeleteCategory(u: StoredUser | null) { return allowed(u, "categoriesDelete", "categories"); }
+export function canExportReports(u: StoredUser | null) { return !u || u.role === "admin" || (u.permissions.reports && u.permissions.reportsExport === true); }
+export function canPrintReports(u: StoredUser | null) { return !u || u.role === "admin" || (u.permissions.reports && u.permissions.reportsPrint === true); }
+export function canApplyDiscount(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.applyDiscount === true; }
+export function canForceSale(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.forceSale === true; }
+export function canChangeCheckoutPrice(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.changeCheckoutPrice === true; }
