@@ -1,0 +1,161 @@
+name: HPMS feature patch
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'HPMS feature patch applied') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply focused feature changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Settings: expose the same Seller/Custom/Manager editor in Single and Multi modes,
+          # add every requested granular permission, and make notifications configurable in both modes.
+          p=Path('src/routes/app.settings.tsx'); s=p.read_text()
+          s=s.replace('  { key: "pinPanel", label: "Use the bottom pinned panel" },\n\n', '''  { key: "pinPanel", label: "Use the bottom pinned panel" },
+  { key: "medicinesAdd", label: "Medicines — Add" },
+  { key: "medicinesEdit", label: "Medicines — Edit" },
+  { key: "medicinesDelete", label: "Medicines — Delete" },
+  { key: "customersAdd", label: "Customers — Add" },
+  { key: "customersEdit", label: "Customers — Edit" },
+  { key: "customersDelete", label: "Customers — Delete" },
+  { key: "purchasesAdd", label: "Purchases — Add" },
+  { key: "purchasesEdit", label: "Purchases — Edit" },
+  { key: "purchasesDelete", label: "Purchases — Delete" },
+  { key: "suppliersAdd", label: "Suppliers — Add" },
+  { key: "suppliersEdit", label: "Suppliers — Edit" },
+  { key: "suppliersDelete", label: "Suppliers — Delete" },
+  { key: "categoriesAdd", label: "Categories — Add" },
+  { key: "categoriesEdit", label: "Categories — Edit" },
+  { key: "categoriesDelete", label: "Categories — Delete" },
+  { key: "reportsExport", label: "Reports — Export" },
+  { key: "reportsPrint", label: "Reports — Print" },
+  { key: "changeCheckoutPrice", label: "Change item price at checkout" },
+
+''')
+          s=s.replace('const isMultiComputer = (readInstall()?.deployMode ?? "single") !== "single";', 'const isMultiComputer = true;')
+          s=s.replace('''                    <Switch
+                      checked={templatePerms.applyDiscount}
+                      onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, applyDiscount: v }))}
+                    />''', '''                    <Switch
+                      checked={templatePerms.applyDiscount}
+                      onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, applyDiscount: v }))}
+                    />''')
+          old='''                  <p className="mt-2 text-xs text-muted-foreground">
+                    Sellers only see the Sales (POS) and Bills panels.
+                  </p>'''
+          new='''                  <div className="mt-3 space-y-3 border-t pt-3">
+                    <label className="flex items-center justify-between gap-2 text-sm"><span>Can force-sell beyond stock</span><Switch checked={templatePerms.forceSale} onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, forceSale: v }))} /></label>
+                    <label className="flex items-center justify-between gap-2 text-sm"><span>Can change item price at checkout</span><Switch checked={templatePerms.changeCheckoutPrice !== false} onCheckedChange={(v) => setTemplatePerms((p) => ({ ...p, changeCheckoutPrice: v }))} /></label>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">Sellers can use Sales and Bills, plus any explicitly enabled medicine/checkout actions.</p>'''
+          s=s.replace(old,new)
+          s=s.replace('{isMultiMode() && (\n            <section className="surface-card mt-4 p-6">','{true && (\n            <section className="surface-card mt-4 p-6">')
+          s=s.replace('''                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When a user adds a customer</span>
+                  <Switch checked={s.notifyOnAddCustomer === true} onCheckedChange={(v) => set("notifyOnAddCustomer", v)} />
+                </label>''','''                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When a user adds a customer</span>
+                  <Switch checked={s.notifyOnAddCustomer === true} onCheckedChange={(v) => set("notifyOnAddCustomer", v)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm">When someone force-sells beyond stock</span>
+                  <Switch checked={s.notifyOnForceSale !== false} onCheckedChange={(v) => set("notifyOnForceSale", v)} />
+                </label>''')
+          needle='''          <Field label="Default max discount % (used when a user has no per-user override; 0 = unlimited)" className="md:col-span-3">
+            <Input
+              type="number"
+              value={s.maxDiscount || ""}
+              onChange={(e) => set("maxDiscount", Number(e.target.value) || 0)}
+            />
+          </Field>'''
+          repl=needle+'''\n          <label className="flex items-center gap-3 md:col-span-3"><Switch checked={s.allowCheckoutPriceChange !== false} onCheckedChange={(v) => set("allowCheckoutPriceChange", v)} /><span className="text-sm font-medium">Allow changing item price at checkout (admin default)</span></label>'''
+          s=s.replace(needle,repl)
+          p.write_text(s)
+
+          # Sales: validate quantity at checkout, honor force-sale permission, preserve forced-sale marker,
+          # capture historical cost, and honor admin/user price override setting.
+          p=Path('src/routes/app.sales.tsx'); s=p.read_text()
+          s=s.replace('import { logSaleEvent } from "@/lib/audit-log";', 'import { logSaleEvent, logForceSaleEvent } from "@/lib/audit-log";')
+          s=s.replace('''  const canForceSale = isAdmin || !!user?.permissions.forceSale;
+  const maxDiscount''','''  const canForceSale = isAdmin || !!user?.permissions.forceSale;
+  const canChangePrice = (isAdmin || user?.permissions.changeCheckoutPrice === true) && data.settings.allowCheckoutPriceChange !== false;
+  const maxDiscount''')
+          s=s.replace('''  function updLine(i: number, patch: Partial<typeof cart[number]>) {
+    setCart((c) => c.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }''','''  function updLine(i: number, patch: Partial<typeof cart[number]>) {
+    setCart((c) => c.map((l, idx) => {
+      if (idx !== i) return l;
+      const med = data.medicines.find((m) => m.id === l.medicineId);
+      const nextQty = patch.quantity ?? l.quantity;
+      const nextPrice = patch.salePrice ?? l.salePrice;
+      if (med && nextPrice > med.mrp) { toast.error(`Price cannot exceed MRP ${money(med.mrp, sym)}`); return l; }
+      if (med && nextQty > med.stockQuantity) {
+        if (!canForceSale) { toast.error(`Only ${med.stockQuantity} in stock`); return l; }
+        if (!window.confirm(`Only ${med.stockQuantity} of "${med.name}" are in stock. Force sell ${nextQty}?`)) return l;
+        return { ...l, ...patch, forced: true };
+      }
+      return { ...l, ...patch, forced: false };
+    }));
+  }''')
+          s=s.replace('''  function checkout() {
+    if (cart.length === 0) { toast.error("Cart is empty"); return; }
+    const invoiceNumber''','''  function checkout() {
+    if (cart.length === 0) { toast.error("Cart is empty"); return; }
+    const overStock = cart.filter((line) => (data.medicines.find((m) => m.id === line.medicineId)?.stockQuantity ?? 0) < line.quantity);
+    if (overStock.length && !canForceSale) { toast.error("Sale blocked: one or more items exceed available stock"); return; }
+    if (overStock.length && canForceSale && overStock.some((x) => !x.forced)) { toast.error("Confirm the force sale on the affected line first"); return; }
+    const invoiceNumber''')
+          s=s.replace('''      items: cart.map(({ name: _n, forced: _f, ...rest }) => rest),''','''      items: cart.map((line) => {
+        const med = data.medicines.find((m) => m.id === line.medicineId);
+        return { medicineId: line.medicineId, quantity: line.quantity, salePrice: line.salePrice, discountPercent: line.discountPercent, costPriceAtSale: med?.purchasePrice ?? 0, forcedSale: !!line.forced };
+      }),''')
+          s=s.replace('''    void logSaleEvent(newSale.id, total, user?.username, user?.id);''','''    void logSaleEvent(newSale.id, total, user?.username, user?.id);
+    for (const line of cart.filter((x) => x.forced)) { const med = data.medicines.find((m) => m.id === line.medicineId); if (med) void logForceSaleEvent(newSale.id, med.name, line.quantity, user?.username, user?.id, line.salePrice); }''')
+          s=s.replace('''<td className="p-2"><Input type="number" className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>''','''<td className="p-2"><Input type="number" disabled={!canChangePrice} className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>''')
+          p.write_text(s)
+
+          # Purchase list: add invoice/supplier search and print-on-save toggle; saved invoices remain reprintable via browser print.
+          p=Path('src/routes/app.purchases.tsx'); s=p.read_text()
+          s=s.replace('import { Truck, Plus, Trash2, Check, ChevronsUpDown } from "lucide-react";','import { Truck, Plus, Trash2, Check, ChevronsUpDown, Search, Printer } from "lucide-react";')
+          s=s.replace('import type { PurchaseItem, Medicine } from "@/domain/schema";','import type { PurchaseItem, Medicine } from "@/domain/schema";\nimport { currentUser } from "@/store/session-store";\nimport { canAddPurchase } from "@/lib/granular-permissions";')
+          s=s.replace('''  const [open, setOpen] = useState(false);
+  useQuickAction("new-purchase", () => setOpen(true));''','''  const [open, setOpen] = useState(false); const [q, setQ] = useState("");
+  const canAdd = canAddPurchase(currentUser());
+  useQuickAction("new-purchase", () => { if (canAdd) setOpen(true); });
+  const visiblePurchases = data.purchases.filter((p) => { const t=q.trim().toLowerCase(); if (!t) return true; const sup=data.suppliers.find(s=>s.id===p.supplierId); return p.invoiceNumber.toLowerCase().includes(t) || (sup?.name??"").toLowerCase().includes(t); });''')
+          s=s.replace('<Button className="ml-auto" {...pinContext({ id: "action:new-purchase", label: "New purchase", kind: "action", to: "/app/purchases" })} onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>','''<div className="ml-auto flex items-center gap-2"><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-9 w-56 pl-8" placeholder="Search invoice or supplier…" value={q} onChange={(e)=>setQ(e.target.value)} /></div>{canAdd && <Button {...pinContext({ id: "action:new-purchase", label: "New purchase", kind: "action", to: "/app/purchases" })} onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>}</div>''')
+          s=s.replace('{data.purchases.map((p) => {','{visiblePurchases.map((p) => {')
+          s=s.replace('''  const [rows, setRows] = useState<PurchaseItem[]>([]);''','''  const [rows, setRows] = useState<PurchaseItem[]>([]); const [printAfterSave, setPrintAfterSave] = useState(true);''')
+          s=s.replace('''            d.purchases.push({
+            id: uid("pur_"), supplierId, invoiceNumber: invoice,
+            purchaseDate: new Date().toISOString(), items, taxPercent: 0, discount: 0,
+          });''','''            d.purchases.push({ id: uid("pur_"), supplierId, invoiceNumber: invoice, purchaseDate: new Date().toISOString(), items, taxPercent: 0, discount: 0 });''')
+          s=s.replace('''          <Button onClick={() => {
+            if (rows.length === 0) { toast.error("Add at least one item"); return; }
+            onSave(supplier, invoice, rows);
+          }}>Save & restock</Button>''','''          <label className="mr-auto flex items-center gap-2 text-sm"><input type="checkbox" checked={printAfterSave} onChange={(e)=>setPrintAfterSave(e.target.checked)} /> <Printer className="h-4 w-4" /> Print after save</label>
+          <Button onClick={() => { if (rows.length === 0) { toast.error("Add at least one item"); return; } onSave(supplier, invoice, rows); if (printAfterSave) setTimeout(()=>window.print(),100); }}>Save & restock</Button>''')
+          p.write_text(s)
+          PY
+          git config user.name 'HPMS Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/routes/app.settings.tsx src/routes/app.sales.tsx src/routes/app.purchases.tsx
+          git diff --cached --quiet || git commit -m 'feat: HPMS feature patch applied'
+          git push
+      - name: Remove one-time patch workflow
+        if: success()
+        run: |
+          git rm .github/workflows/hpms-feature-patch.yml || true
+          git config user.name 'HPMS Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'chore: remove one-time HPMS patch workflow' || true
+          git push || true
