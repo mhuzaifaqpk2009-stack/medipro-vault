@@ -24,7 +24,7 @@ export const ALL_COUNTERS: { id: CounterId; label: string }[] = [
 
 export type RoleTemplate = "seller" | "custom" | "manager";
 export const ROLE_TEMPLATE_LABELS: Record<RoleTemplate, string> = {
-  seller: "Seller — Sales + Bills + medicine access",
+  seller: "Seller — POS + Bills + Medicines",
   custom: "Custom — pick exact permissions",
   manager: "Manager — every panel except Settings",
 };
@@ -34,7 +34,23 @@ export interface StoredUser {
   dashboardVisibility?: Partial<Record<CounterId, boolean>>; maxDiscount?: number; roleTemplate?: RoleTemplate;
 }
 
-const fullCrud = { medicinesAdd: true, medicinesEdit: true, medicinesDelete: true, customersAdd: true, customersEdit: true, customersDelete: true, purchasesAdd: true, purchasesEdit: true, purchasesDelete: true, suppliersAdd: true, suppliersEdit: true, suppliersDelete: true, categoriesAdd: true, categoriesEdit: true, categoriesDelete: true, reportsExport: true, reportsPrint: true };
+const fullCrud = {
+  medicinesAdd: true, medicinesEdit: true, medicinesDelete: true,
+  customersAdd: true, customersEdit: true, customersDelete: true,
+  purchasesAdd: true, purchasesEdit: true, purchasesDelete: true,
+  suppliersAdd: true, suppliersEdit: true, suppliersDelete: true,
+  categoriesAdd: true, categoriesEdit: true, categoriesDelete: true,
+  reportsExport: true, reportsPrint: true,
+};
+
+const noCrud = {
+  medicinesAdd: false, medicinesEdit: false, medicinesDelete: false,
+  customersAdd: false, customersEdit: false, customersDelete: false,
+  purchasesAdd: false, purchasesEdit: false, purchasesDelete: false,
+  suppliersAdd: false, suppliersEdit: false, suppliersDelete: false,
+  categoriesAdd: false, categoriesEdit: false, categoriesDelete: false,
+  reportsExport: false, reportsPrint: false,
+};
 
 export function permissionsForTemplate(template: RoleTemplate): UserPermissions {
   if (template === "manager") return {
@@ -43,17 +59,14 @@ export function permissionsForTemplate(template: RoleTemplate): UserPermissions 
   };
   if (template === "seller") return {
     sales: true, bills: true, medicines: true, inventory: false, purchases: false, reports: false, suppliers: false, categories: false, customers: false,
-    applyDiscount: true, changeTax: false, forceSale: false, changeCheckoutPrice: true, pinPanel: false,
-    medicinesAdd: false, medicinesEdit: false, medicinesDelete: false, customersAdd: false, customersEdit: false, customersDelete: false,
-    purchasesAdd: false, purchasesEdit: false, purchasesDelete: false, suppliersAdd: false, suppliersEdit: false, suppliersDelete: false,
-    categoriesAdd: false, categoriesEdit: false, categoriesDelete: false, reportsExport: false, reportsPrint: false,
+    applyDiscount: true, changeTax: false, forceSale: false, changeCheckoutPrice: true, pinPanel: false, ...noCrud,
   };
   return defaultPermissions("user");
 }
 
 export function defaultPermissions(role: UserRole): UserPermissions {
   if (role === "admin") return { sales: true, bills: true, medicines: true, inventory: true, purchases: true, reports: true, suppliers: true, categories: true, customers: true, applyDiscount: true, changeTax: true, forceSale: true, changeCheckoutPrice: true, pinPanel: true, ...fullCrud };
-  return { sales: true, bills: true, medicines: false, inventory: false, purchases: false, reports: false, suppliers: false, categories: false, customers: false, applyDiscount: false, changeTax: false, forceSale: false, changeCheckoutPrice: false, pinPanel: false, medicinesAdd: false, medicinesEdit: false, medicinesDelete: false, customersAdd: false, customersEdit: false, customersDelete: false, purchasesAdd: false, purchasesEdit: false, purchasesDelete: false, suppliersAdd: false, suppliersEdit: false, suppliersDelete: false, categoriesAdd: false, categoriesEdit: false, categoriesDelete: false, reportsExport: false, reportsPrint: false };
+  return { sales: true, bills: true, medicines: false, inventory: false, purchases: false, reports: false, suppliers: false, categories: false, customers: false, applyDiscount: false, changeTax: false, forceSale: false, changeCheckoutPrice: false, pinPanel: false, ...noCrud };
 }
 
 export function isCounterVisible(u: StoredUser | null, id: CounterId): boolean {
