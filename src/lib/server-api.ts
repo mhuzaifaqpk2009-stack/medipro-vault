@@ -10,7 +10,6 @@ import type { StoredUser } from "@/lib/users";
 import type { ProjectData } from "@/domain/schema";
 
 export const DEFAULT_SERVER_PORT = 4000;
-
 let sessionId: string | null = null;
 let knownRevision: number | null = null;
 
@@ -52,7 +51,6 @@ async function req<T>(path: string, init?: RequestInit, base?: string): Promise<
   }
 }
 
-/** Connection test used by the client setup screen. */
 export async function pingServer(host: string, port = DEFAULT_SERVER_PORT) {
   const base = `http://${host.trim()}:${port}`;
   return req<{ ok: true; pharmacyName?: string }>("/health", { method: "GET" }, base);
@@ -79,14 +77,12 @@ export async function serverLogout(_sessionId?: string) {
   }
 }
 
-/** Full snapshot pull — used for the client's initial load and polling sync. */
 export async function serverPullProject() {
-  const result = await req<{ ok: true; data: ProjectData; revision: number }>("/project", { method: "GET");
+  const result = await req<{ ok: true; data: ProjectData; revision: number }>("/project", { method: "GET" });
   knownRevision = result.revision;
   return result;
 }
 
-/** Push the whole project after a local mutation on a client. */
 export async function serverPushProject(data: ProjectData) {
   const result = await req<{ ok: true; revision: number }>("/project", {
     method: "PUT",
@@ -102,8 +98,6 @@ export async function serverRevision() {
   return result;
 }
 
-/** Part 6: audit log — a Client logs a medicine add/edit event directly to
- * the Server in real time, separate from the coarser whole-project sync. */
 export async function serverLogAudit(entry: unknown) {
   return req<{ ok: true }>("/audit", { method: "POST", body: JSON.stringify(entry) });
 }
@@ -115,8 +109,6 @@ export async function serverGetAuditLog(entityType: string, entityId: string) {
   );
 }
 
-/** Item 9: all audit events since a timestamp, across all entity types —
- * feeds admin notification polling. */
 export async function serverGetRecentEvents(sinceIso: string) {
   return req<{ ok: true; entries: unknown[] }>(
     `/audit/recent?since=${encodeURIComponent(sinceIso)}`,
