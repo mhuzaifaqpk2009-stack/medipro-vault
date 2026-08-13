@@ -11,8 +11,6 @@ function compact(n: number, sym: string) {
   return `${sym}${Math.round(n)}`;
 }
 
-// Straight-segment path (no smoothing/overshoot) — matches a classic line-chart look
-// and avoids the dip-below-zero artifact that curve smoothing caused near flat runs.
 function linePath(points: { x: number; y: number }[]) {
   if (points.length === 0) return "";
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
@@ -20,11 +18,6 @@ function linePath(points: { x: number; y: number }[]) {
 
 const MIN_PX_PER_BUCKET = 46;
 
-/**
- * Axis-based trend chart. The y-axis stays fixed on the left; the plot area
- * (bars/line + x-axis labels) lives in a single scrollable container so they
- * always move together, with slide buttons that appear when content overflows.
- */
 export function TrendChart({
   buckets, max, sym, type, height = 240,
 }: {
@@ -35,9 +28,7 @@ export function TrendChart({
   height?: number;
 }) {
   const ticks = [0, 0.25, 0.5, 0.75, 1];
-  // Headroom at the top so the highest bar/point never touches the edge above it
-  // (this is what was colliding with the dialog title in the expanded view).
-  const TOP_PAD = 8; // %
+  const TOP_PAD = 8;
   const scale = (v: number) => (v / max) * (100 - TOP_PAD);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -68,7 +59,6 @@ export function TrendChart({
   return (
     <div className="pt-1">
       <div className="flex">
-        {/* Fixed y-axis */}
         <div className="relative w-14 shrink-0" style={{ height }}>
           {ticks.map((t) => (
             <span
@@ -81,7 +71,6 @@ export function TrendChart({
           ))}
         </div>
 
-        {/* Scrollable plot + x-axis labels, always in sync since they're one container */}
         <div className="relative min-w-0 flex-1">
           <div
             ref={scrollRef}
@@ -100,19 +89,25 @@ export function TrendChart({
 
                 {type === "bar" ? (
                   <div className="absolute inset-0 flex items-end gap-1.5 px-2 pt-2">
-                    {buckets.map((d, i) => (
-                      <div key={i} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-                        <motion.div
-                          initial={{ height: 0 }}
-                          animate={{ height: `${Math.max(1.5, scale(d.value))}%` }}
-                          transition={{ duration: 0.4, delay: i * 0.015 }}
-                          className="w-full rounded-t-md bg-gradient-to-t from-primary to-primary-glow shadow-[0_0_0_1px_var(--primary)_inset]"
-                        />
-                        <span className="pointer-events-none absolute bottom-full mb-1.5 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 shadow-lg transition group-hover:opacity-100">
-                          {d.label} · {compact(d.value, sym)}
-                        </span>
-                      </div>
-                    ))}
+                    {buckets.map((d, i) => {
+                      const barHeight = Math.max(1.5, scale(d.value));
+                      return (
+                        <div key={i} className="group relative flex h-full flex-1 flex-col items-center justify-end">
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${barHeight}%` }}
+                            transition={{ duration: 0.4, delay: i * 0.015 }}
+                            className="w-full rounded-t-md bg-gradient-to-t from-primary to-primary-glow shadow-[0_0_0_1px_var(--primary)_inset]"
+                          />
+                          <span
+                            className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 shadow-lg transition group-hover:opacity-100"
+                            style={{ bottom: `calc(${barHeight}% + 6px)` }}
+                          >
+                            {d.label} · {compact(d.value, sym)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <>
@@ -135,22 +130,12 @@ export function TrendChart({
                         return (
                           <>
                             {areaPath && <path d={areaPath} fill="url(#trendFill)" stroke="none" />}
-                            <path
-                              d={path}
-                              fill="none"
-                              stroke="var(--primary)"
-                              strokeWidth="1.4"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              vectorEffect="non-scaling-stroke"
-                            />
+                            <path d={path} fill="none" stroke="var(--primary)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                           </>
                         );
                       })()}
                     </svg>
 
-                    {/* Dots as an HTML overlay (not inside the stretched SVG viewBox) so they
-                        stay perfectly circular instead of warping into ovals. */}
                     <div className="pointer-events-none absolute inset-0">
                       {buckets.map((d, i) => {
                         const x = buckets.length === 1 ? 50 : (i / (buckets.length - 1)) * 100;
