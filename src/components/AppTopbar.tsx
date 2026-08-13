@@ -10,13 +10,69 @@ import { MedicineSearch } from "@/components/MedicineSearch";
 import { ResizeHandle } from "@/components/ResizeHandle";
 import { pinContext } from "@/lib/pins";
 import { runBackupNow } from "@/lib/backup";
+import { getRecentEvents } from "@/lib/audit-log";
 import { useProjectStore } from "@/store/project-store";
+import { useNotificationStore } from "@/store/notification-store";
 import { confirmUnsaved } from "@/hooks/use-unsaved-guard";
 import { useSession } from "@/store/session-store";
 import { NotificationBell } from "@/components/NotificationBell";
+
+const NOTIFICATION_CURSOR_KEY = "medicore.admin-notification-audit-cursor";
+
+function readNotificationCursor(): string | null {
+  try { return localStorage.getItem(NOTIFICATION_CURSOR_KEY); } catch { return null; }
+}
+function writeNotificationCursor(iso: string) {
+  try { localStorage.setItem(NOTIFICATION_CURSOR_KEY, iso); } catch {}
+}
+
 export function AppTopbar() {
   const navigate = useNavigate(); const data = useProjectStore((s) => s.data); const dirty = useProjectStore((s) => s.dirty); const save = useProjectStore((s) => s.save); const mutate = useProjectStore((s) => s.mutate); const user = useSession((s) => s.user); const isAdmin = user?.role === "admin"; const [isDark, setIsDark] = useState(false);
   useEffect(() => { setIsDark(document.documentElement.classList.contains("dark")); }, []);
+
+  // Single-computer audit entries are stored by Electron, not pushed into the
+  // Zustand notification store automatically. Poll the audit trail while an
+  // admin is logged in so events created by another user during the admin's
+  // logout are surfaced as soon as the admin returns. The cursor is persisted
+  // separately from the notification list, so clearing notifications does not
+  // cause the same audit events to reappear.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      if (cancelled) return;
+      const now = new Date().toISOString();
+      const stored = readNotificationCursor();
+      const since = stored ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      try {
+        const events = await getRecentEvents(since);
+        if (!cancelled) {
+          const add = useNotificationStore.getState().add;
+          for (const event of events) {
+            if (event.action !== "force-sale" && !(event.entityType === "medicine" && event.action === "add")) continue;
+            add({
+              id: `audit:${event.id}`,
+              type: event.action === "force-sale" ? "forceSale" : "medicineAdd",
+              username: event.username ?? "User",
+              timestamp: event.timestamp,
+              entityId: event.entityId,
+              medicineName: event.medicineName,
+              quantity: event.quantity,
+              price: event.price,
+            });
+          }
+          writeNotificationCursor(now);
+        }
+      } catch (e) {
+        console.error("[notifications] audit sync failed", e);
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 2000);
+    };
+    void poll();
+    return () => { cancelled = true; if (timer !== null) window.clearTimeout(timer); };
+  }, [isAdmin]);
+
   useEffect(() => { const onKey = async (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s") return; e.preventDefault(); const ok = await save(); if (ok) toast.success("Saved"); else toast.error("Save failed"); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [save]);
   const timerRef = useRef<number | null>(null); useEffect(() => { if (isAdmin || !dirty) return; if (timerRef.current) window.clearTimeout(timerRef.current); timerRef.current = window.setTimeout(() => { void useProjectStore.getState().save(); }, 800); return () => { if (timerRef.current) window.clearTimeout(timerRef.current); }; }, [dirty, isAdmin]);
   async function goHome() { const choice = await confirmUnsaved(); if (choice === "cancel") return; useSession.getState().clear(); navigate({ to: "/" }); }
