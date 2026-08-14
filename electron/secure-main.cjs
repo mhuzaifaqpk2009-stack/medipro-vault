@@ -26,7 +26,6 @@ function privateHost() {
   candidates.sort((a, b) => a.ethernet - b.ethernet || Number(a.linkLocal) - Number(b.linkLocal));
   return candidates[0]?.address || "127.0.0.1";
 }
-
 function isPrivateClient(address) {
   const raw = String(address || "").replace(/^::ffff:/, "");
   if (raw === "127.0.0.1" || raw === "::1") return true;
@@ -34,7 +33,6 @@ function isPrivateClient(address) {
   if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
   return p[0] === 10 || p[0] === 192 && p[1] === 168 || p[0] === 172 && p[1] >= 16 && p[1] <= 31 || p[0] === 169 && p[1] === 254;
 }
-
 function tokenFrom(req) { const value = req.headers["x-hpms-session"]; return typeof value === "string" ? value : ""; }
 function validSession(token) {
   const s = sessions.get(token);
@@ -122,7 +120,6 @@ http.createServer = function secureCreateServer(...args) {
       res.writeHead(204); res.end(); return;
     }
     if (!isPrivateClient(req.socket.remoteAddress)) return jsonError(res, 403, "LAN access only");
-
     const originalEnd = res.end.bind(res);
     const originalWrite = res.write.bind(res);
     const chunks = [];
@@ -135,7 +132,6 @@ http.createServer = function secureCreateServer(...args) {
       } catch {}
       return originalEnd(chunk, ...rest);
     };
-
     if (pathname === "/health" || pathname === "/login") return originalListener(req, res);
     const token = tokenFrom(req);
     if (!validSession(token)) return jsonError(res, 401, "Authentication required");
@@ -152,7 +148,6 @@ http.createServer = function secureCreateServer(...args) {
     }
     return originalListener(req, res);
   };
-
   const server = originalCreateServer.apply(http, args);
   const originalListen = server.listen.bind(server);
   server.listen = function secureListen(...listenArgs) {
@@ -166,4 +161,5 @@ http.createServer = function secureCreateServer(...args) {
   return server;
 };
 
+require("./medicine-search.cjs");
 require("./main.cjs");
