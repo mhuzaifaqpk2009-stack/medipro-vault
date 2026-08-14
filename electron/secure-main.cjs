@@ -35,11 +35,7 @@ function isPrivateClient(address) {
   return p[0] === 10 || p[0] === 192 && p[1] === 168 || p[0] === 172 && p[1] >= 16 && p[1] <= 31 || p[0] === 169 && p[1] === 254;
 }
 
-function tokenFrom(req) {
-  const value = req.headers["x-hpms-session"];
-  return typeof value === "string" ? value : "";
-}
-
+function tokenFrom(req) { const value = req.headers["x-hpms-session"]; return typeof value === "string" ? value : ""; }
 function validSession(token) {
   const s = sessions.get(token);
   if (!s) return false;
@@ -47,13 +43,11 @@ function validSession(token) {
   s.expiresAt = Date.now() + SESSION_TTL_MS;
   return true;
 }
-
 function jsonError(res, status, error, extra = {}) {
   const body = JSON.stringify({ error, ...extra });
   res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
   res.end(body);
 }
-
 function corsOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return null;
@@ -82,8 +76,7 @@ ipcMain.handle("server:discover", async () => {
     if (entry.family !== "IPv4" || entry.internal || !entry.netmask) continue;
     const ip = entry.address.split(".").map(Number);
     const mask = entry.netmask.split(".").map(Number);
-    const bc = ip.map((n, i) => (n & mask[i]) | (255 ^ mask[i])).join(".");
-    broadcasts.add(bc);
+    broadcasts.add(ip.map((n, i) => (n & mask[i]) | (255 ^ mask[i])).join("."));
   }
   try {
     await new Promise((resolve, reject) => {
@@ -101,11 +94,8 @@ ipcMain.handle("server:discover", async () => {
       });
       socket.once("close", () => clearTimeout(timer));
     });
-  } catch (err) {
-    console.error("[server] discovery failed:", err);
-  } finally {
-    try { socket.close(); } catch {}
-  }
+  } catch (err) { console.error("[server] discovery failed:", err); }
+  finally { try { socket.close(); } catch {} }
   return [...found.values()];
 });
 
@@ -116,10 +106,17 @@ http.createServer = function secureCreateServer(...args) {
   args[0] = (req, res) => {
     const pathname = (() => { try { return new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname; } catch { return ""; } })();
     const origin = corsOrigin(req);
-    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "content-type, x-hpms-session, x-hpms-revision");
+    const originalSetHeader = res.setHeader.bind(res);
+    res.setHeader = (name, value) => {
+      const key = String(name).toLowerCase();
+      if (key === "access-control-allow-origin" && origin) return originalSetHeader(name, origin);
+      if (key === "access-control-allow-headers") return originalSetHeader(name, "content-type, x-hpms-session, x-hpms-revision");
+      return originalSetHeader(name, value);
+    };
+    if (origin) originalSetHeader("Access-Control-Allow-Origin", origin);
+    originalSetHeader("Vary", "Origin");
+    originalSetHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+    originalSetHeader("Access-Control-Allow-Headers", "content-type, x-hpms-session, x-hpms-revision");
     if (req.method === "OPTIONS") {
       if (!origin && req.headers.origin) return jsonError(res, 403, "Origin not allowed");
       res.writeHead(204); res.end(); return;
@@ -142,20 +139,16 @@ http.createServer = function secureCreateServer(...args) {
     if (pathname === "/health" || pathname === "/login") return originalListener(req, res);
     const token = tokenFrom(req);
     if (!validSession(token)) return jsonError(res, 401, "Authentication required");
-
     if (pathname === "/logout" && req.method === "POST") {
       const result = originalListener(req, res);
       sessions.delete(token);
       return result;
     }
-
     if (pathname === "/project" && req.method === "PUT") {
       sqldb.open(app.getPath("userData"));
       const expected = Number(req.headers["x-hpms-revision"]);
       const current = sqldb.getRevision();
-      if (!Number.isInteger(expected) || expected !== current) {
-        return jsonError(res, 409, "Project changed on the server; pull the latest data before saving.", { revision: current });
-      }
+      if (!Number.isInteger(expected) || expected !== current) return jsonError(res, 409, "Project changed on the server; pull the latest data before saving.", { revision: current });
     }
     return originalListener(req, res);
   };
