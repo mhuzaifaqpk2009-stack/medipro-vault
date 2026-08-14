@@ -6,21 +6,40 @@ const path = require("node:path");
 
 function freshDb() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hpms-db-test-"));
-  const dbPath = path.join(dir, "medicore.db");
   delete require.cache[require.resolve("../electron/db.cjs")];
   const db = require("../electron/db.cjs");
   assert.equal(db.open(dir) !== null, true);
-  return { db, dir, dbPath };
+  return { db, dir };
+}
+
+function closeDb(db) {
+  try {
+    if (typeof db.close === "function") db.close();
+  } finally {
+    delete require.cache[require.resolve("../electron/db.cjs")];
+  }
+}
+
+function cleanup(dir) {
+  for (let i = 0; i < 8; i++) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); return; }
+    catch (err) {
+      if (!err || !["EBUSY", "EPERM", "ENOTEMPTY"].includes(err.code) || i === 7) throw err;
+      const waitUntil = Date.now() + 50 * (i + 1);
+      while (Date.now() < waitUntil) {}
+    }
+  }
 }
 
 test("SQLite enables foreign keys and cascades sale/purchase items", () => {
   const { db, dir } = freshDb();
+  let raw;
   try {
     db.categories.save({ id: "cat-1", name: "Pain", description: "" });
     db.medicines.save({ id: "med-1", name: "Test Medicine", genericName: "Test", company: "ACME", purchasePrice: 10, salePrice: 15, mrp: 20, stockQuantity: 5, minimumStock: 1 });
     db.purchases.save({ id: "pur-1", supplierId: null, invoiceNumber: "INV-1", purchaseDate: "2026-01-01T00:00:00.000Z", items: [{ medicineId: "med-1", quantity: 5, purchasePrice: 10 }] });
     db.sales.save({ id: "sale-1", invoiceNumber: "S-1", date: "2026-02-01T00:00:00.000Z", items: [{ medicineId: "med-1", quantity: 1, salePrice: 15, discountPercent: 0, costPriceAtSale: 10 }] });
-    const raw = require("better-sqlite3")(dbPath);
+    raw = require("better-sqlite3")(path.join(dir, "medicore.db"));
     assert.equal(raw.pragma("foreign_keys", { simple: true }), 1);
     assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM sale_items").get().n, 1);
     assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM purchase_items").get().n, 1);
@@ -28,8 +47,11 @@ test("SQLite enables foreign keys and cascades sale/purchase items", () => {
     raw.prepare("DELETE FROM purchases WHERE id = ?").run("pur-1");
     assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM sale_items").get().n, 0);
     assert.equal(raw.prepare("SELECT COUNT(*) AS n FROM purchase_items").get().n, 0);
-    raw.close();
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    if (raw) raw.close();
+    closeDb(db);
+    cleanup(dir);
+  }
 });
 
 test("historical sale cost is backfilled from the latest purchase before the sale", () => {
@@ -41,7 +63,7 @@ test("historical sale cost is backfilled from the latest purchase before the sal
     db.sales.save({ id: "sale-old", invoiceNumber: "SO", date: "2026-02-01T00:00:00.000Z", items: [{ medicineId: "med-2", quantity: 1, salePrice: 100, discountPercent: 0 }] });
     const sale = db.sales.get ? db.sales.get("sale-old") : db.sales.list().find((x) => x.id === "sale-old");
     assert.equal(sale.items[0].costPriceAtSale, 20);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { closeDb(db); cleanup(dir); }
 });
 
 test("server project revision rejects stale writes atomically", () => {
@@ -59,7 +81,7 @@ test("server project revision rejects stale writes atomically", () => {
     assert.equal(rejected.ok, false);
     assert.equal(rejected.reason, "conflict");
     assert.equal(db.loadProject().meta.name, "Newer");
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { closeDb(db); cleanup(dir); }
 });
 
 test("medicine search is SQL-side and paginated", () => {
@@ -70,5 +92,5 @@ test("medicine search is SQL-side and paginated", () => {
     assert.equal(page.rows.length, 25);
     assert.equal(page.total, 125);
     assert.match(page.rows[0].genericName, /GenericA/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { closeDb(db); cleanup(dir); }
 });
