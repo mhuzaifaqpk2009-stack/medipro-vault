@@ -2,12 +2,13 @@
 const http = require("node:http");
 const os = require("node:os");
 const dgram = require("node:dgram");
-const { ipcMain } = require("electron");
+const { app, ipcMain } = require("electron");
+const sqldb = require("./db.cjs");
+
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const DISCOVERY_PORT = 41234;
 const DISCOVERY_REQUEST = "HPMS_DISCOVER_V1";
 const sessions = new Map();
-let revision = 0;
 let discoveryServerPort = null;
 
 function privateHost() {
@@ -26,7 +27,19 @@ function privateHost() {
   return candidates[0]?.address || "127.0.0.1";
 }
 
-function tokenFrom(req) { const value = req.headers["x-hpms-session"]; return typeof value === "string" ? value : ""; }
+function isPrivateClient(address) {
+  const raw = String(address || "").replace(/^::ffff:/, "");
+  if (raw === "127.0.0.1" || raw === "::1") return true;
+  const p = raw.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  return p[0] === 10 || p[0] === 192 && p[1] === 168 || p[0] === 172 && p[1] >= 16 && p[1] <= 31 || p[0] === 169 && p[1] === 254;
+}
+
+function tokenFrom(req) {
+  const value = req.headers["x-hpms-session"];
+  return typeof value === "string" ? value : "";
+}
+
 function validSession(token) {
   const s = sessions.get(token);
   if (!s) return false;
@@ -34,12 +47,24 @@ function validSession(token) {
   s.expiresAt = Date.now() + SESSION_TTL_MS;
   return true;
 }
-function jsonError(res, status, error) { const body = JSON.stringify({ error }); res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) }); res.end(body); }
+
+function jsonError(res, status, error, extra = {}) {
+  const body = JSON.stringify({ error, ...extra });
+  res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+  res.end(body);
+}
+
+function corsOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return null;
+  if (origin === "null" || origin === "http://localhost:8080" || origin === "http://127.0.0.1:8080") return origin;
+  return null;
+}
 
 const discoverySocket = dgram.createSocket("udp4");
 discoverySocket.on("error", (err) => console.error("[server] discovery socket error:", err));
 discoverySocket.on("message", (message, rinfo) => {
-  if (message.toString("utf8") !== DISCOVERY_REQUEST || !discoveryServerPort) return;
+  if (message.toString("utf8") !== DISCOVERY_REQUEST || !discoveryServerPort || !isPrivateClient(rinfo.address)) return;
   const response = Buffer.from(JSON.stringify({ type: "HPMS_SERVER_V1", port: discoveryServerPort }));
   discoverySocket.send(response, 0, response.length, rinfo.port, rinfo.address);
 });
@@ -67,7 +92,7 @@ ipcMain.handle("server:discover", async () => {
       socket.on("message", (buf, rinfo) => {
         try {
           const data = JSON.parse(buf.toString("utf8"));
-          if (data?.type === "HPMS_SERVER_V1" && Number.isInteger(data.port)) found.set(`${rinfo.address}:${data.port}`, { host: rinfo.address, port: data.port });
+          if (data?.type === "HPMS_SERVER_V1" && Number.isInteger(data.port) && isPrivateClient(rinfo.address)) found.set(`${rinfo.address}:${data.port}`, { host: rinfo.address, port: data.port });
         } catch {}
       });
       socket.bind(0, () => {
@@ -90,32 +115,51 @@ http.createServer = function secureCreateServer(...args) {
   if (!originalListener) return originalCreateServer.apply(http, args);
   args[0] = (req, res) => {
     const pathname = (() => { try { return new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname; } catch { return ""; } })();
-    const originalEnd = res.end.bind(res); const originalWrite = res.write.bind(res); const chunks = [];
+    const origin = corsOrigin(req);
+    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "content-type, x-hpms-session, x-hpms-revision");
+    if (req.method === "OPTIONS") {
+      if (!origin && req.headers.origin) return jsonError(res, 403, "Origin not allowed");
+      res.writeHead(204); res.end(); return;
+    }
+    if (!isPrivateClient(req.socket.remoteAddress)) return jsonError(res, 403, "LAN access only");
+
+    const originalEnd = res.end.bind(res);
+    const originalWrite = res.write.bind(res);
+    const chunks = [];
     res.write = function captureWrite(chunk, ...rest) { if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))); return originalWrite(chunk, ...rest); };
     res.end = function captureEnd(chunk, ...rest) {
       if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
       try {
         const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         if (parsed?.sessionId && pathname === "/login") sessions.set(parsed.sessionId, { expiresAt: Date.now() + SESSION_TTL_MS });
-        if (typeof parsed?.revision === "number") revision = parsed.revision;
-        if (pathname === "/logout" && req.method === "POST") sessions.delete(tokenFrom(req));
       } catch {}
       return originalEnd(chunk, ...rest);
     };
+
     if (pathname === "/health" || pathname === "/login") return originalListener(req, res);
-    if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "content-type, x-hpms-session, x-hpms-revision");
-      res.writeHead(204); res.end(); return;
+    const token = tokenFrom(req);
+    if (!validSession(token)) return jsonError(res, 401, "Authentication required");
+
+    if (pathname === "/logout" && req.method === "POST") {
+      const result = originalListener(req, res);
+      sessions.delete(token);
+      return result;
     }
-    if (!validSession(tokenFrom(req))) return jsonError(res, 401, "Authentication required");
+
     if (pathname === "/project" && req.method === "PUT") {
+      sqldb.open(app.getPath("userData"));
       const expected = Number(req.headers["x-hpms-revision"]);
-      if (!Number.isFinite(expected) || expected !== revision) return jsonError(res, 409, "Project changed on the server; pull the latest data before saving.");
+      const current = sqldb.getRevision();
+      if (!Number.isInteger(expected) || expected !== current) {
+        return jsonError(res, 409, "Project changed on the server; pull the latest data before saving.", { revision: current });
+      }
     }
     return originalListener(req, res);
   };
+
   const server = originalCreateServer.apply(http, args);
   const originalListen = server.listen.bind(server);
   server.listen = function secureListen(...listenArgs) {
@@ -128,4 +172,5 @@ http.createServer = function secureCreateServer(...args) {
   server.close = function secureClose(...closeArgs) { discoveryServerPort = null; return originalClose(...closeArgs); };
   return server;
 };
+
 require("./main.cjs");
