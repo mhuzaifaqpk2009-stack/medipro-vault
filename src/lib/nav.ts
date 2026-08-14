@@ -5,7 +5,7 @@
  */
 import {
   LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes,
-  BarChart3, Settings, Receipt, Calculator, Keyboard, Barcode,
+  BarChart3, Settings, Receipt, Calculator, Keyboard, Barcode, FileText,
 } from "lucide-react";
 import type { UserPermissions, StoredUser } from "@/lib/users";
 import type { PharmacySettings } from "@/domain/schema";
@@ -30,6 +30,7 @@ export const NAV: NavItem[] = [
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
   { to: "/app/operations", label: "Pharmacy Operations", icon: Barcode, perm: "reports", group: "Inventory" },
+  { to: "/app/prescriptions", label: "Prescriptions", icon: FileText, perm: "sales", group: "People" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
   { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
@@ -40,7 +41,6 @@ export const NAV: NavItem[] = [
 
 export const GROUPS = ["Main", "Inventory", "People", "Insights"];
 
-/** Order NAV by the saved tab order, appending anything new at the end. */
 export function orderNav(order?: string[]): NavItem[] {
   if (!order || order.length === 0) return NAV;
   const byPath = new Map(NAV.map((n) => [n.to, n]));
@@ -61,10 +61,6 @@ export function navLabel(item: NavItem, settings?: PharmacySettings) {
   return settings?.tabRenames?.[item.to] || item.label;
 }
 
-/**
- * The tabs a user can actually see, in the sidebar's visual order
- * (grouped by category, ordered inside each category).
- */
 export function visibleNavItems(settings?: PharmacySettings, user?: StoredUser | null): NavItem[] {
   const isAdmin = user?.role === "admin";
   const groupOf = (i: NavItem) => settings?.tabGroups?.[i.to] || i.group;
