@@ -5,7 +5,7 @@
  */
 import {
   LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes,
-  BarChart3, Settings, Receipt, Calculator, Keyboard,
+  BarChart3, Settings, Receipt, Calculator, Keyboard, ScanBarcode,
 } from "lucide-react";
 import type { UserPermissions, StoredUser } from "@/lib/users";
 import type { PharmacySettings } from "@/domain/schema";
@@ -29,6 +29,7 @@ export const NAV: NavItem[] = [
   { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory", group: "Inventory" },
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
+  { to: "/app/operations", label: "Pharmacy Operations", icon: ScanBarcode, perm: "reports", group: "Inventory" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
   { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
