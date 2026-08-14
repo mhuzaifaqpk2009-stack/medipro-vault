@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { usePointerEventsWatchdog } from "@/hooks/use-pointer-events-watchdog";
 
 function NotFoundComponent() {
   return (
@@ -46,6 +47,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootComponent() {
+  usePointerEventsWatchdog();
   return (
     <TooltipProvider delayDuration={300}>
       <Outlet />
