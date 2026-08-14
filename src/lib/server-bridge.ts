@@ -7,10 +7,18 @@
 import type { StoredUser } from "./users";
 import type { DeployMode } from "./install";
 
+export interface DiscoveredServer {
+  host: string;
+  port: number;
+  pharmacyName: string;
+  connection: string;
+}
+
 interface MedicoreServerAPI {
   configure: (opts: { deployMode: DeployMode; port: number; pharmacyName: string }) => Promise<boolean>;
   syncUsers: (users: StoredUser[]) => Promise<boolean>;
   status: () => Promise<{ running: boolean; port: number | null }>;
+  discover?: (timeoutMs?: number) => Promise<DiscoveredServer[]>;
   onRevisionBumped: (cb: (revision: number) => void) => () => void;
 }
 
@@ -19,9 +27,6 @@ function api(): MedicoreServerAPI | null {
   return (window as unknown as { medicoreServer?: MedicoreServerAPI }).medicoreServer ?? null;
 }
 
-/** Tells the main process to start (Server) or stop (Single/Client) the LAN
- * HTTP listener. Safe to call often — starting an already-running server is
- * a no-op on the main-process side. */
 export async function configureServer(deployMode: DeployMode, port: number, pharmacyName: string) {
   try {
     return (await api()?.configure({ deployMode, port, pharmacyName })) ?? false;
@@ -30,8 +35,6 @@ export async function configureServer(deployMode: DeployMode, port: number, phar
   }
 }
 
-/** Mirrors the Server's user list into the main process so /login can
- * authenticate Clients without touching renderer localStorage directly. */
 export async function syncServerUsers(users: StoredUser[]) {
   try {
     return (await api()?.syncUsers(users)) ?? false;
@@ -48,8 +51,14 @@ export async function serverRuntimeStatus() {
   }
 }
 
-/** Fires when a Client's push changed the data while this Server window is
- * open, so the Server's own screen can live-update too. */
+export async function discoverLanServers(timeoutMs = 2500): Promise<DiscoveredServer[]> {
+  try {
+    return (await api()?.discover?.(timeoutMs)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function onServerRevisionBumped(cb: (revision: number) => void): () => void {
   const a = api();
   if (!a) return () => {};
