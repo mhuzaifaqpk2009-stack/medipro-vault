@@ -11,21 +11,6 @@ const DISCOVERY_REQUEST = "HPMS_DISCOVER_V1";
 const sessions = new Map();
 let discoveryServerPort = null;
 
-function privateHost() {
-  const candidates = [];
-  for (const [name, entries] of Object.entries(os.networkInterfaces())) for (const entry of entries || []) {
-    if (entry.family !== "IPv4" || entry.internal) continue;
-    const p = entry.address.split(".").map(Number);
-    const isPrivate = p[0] === 10 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31);
-    const isLinkLocal = p[0] === 169 && p[1] === 254;
-    if (!isPrivate && !isLinkLocal) continue;
-    const lower = name.toLowerCase();
-    const ethernet = /ethernet|eth|en\d/.test(lower) ? 0 : /wi-?fi|wlan/.test(lower) ? 1 : 2;
-    candidates.push({ address: entry.address, ethernet, linkLocal: isLinkLocal });
-  }
-  candidates.sort((a, b) => a.ethernet - b.ethernet || Number(a.linkLocal) - Number(b.linkLocal));
-  return candidates[0]?.address || "127.0.0.1";
-}
 function isPrivateClient(address) {
   const raw = String(address || "").replace(/^::ffff:/, "");
   if (raw === "127.0.0.1" || raw === "::1") return true;
@@ -152,7 +137,7 @@ http.createServer = function secureCreateServer(...args) {
   const originalListen = server.listen.bind(server);
   server.listen = function secureListen(...listenArgs) {
     const port = typeof listenArgs[0] === "number" ? listenArgs[0] : null;
-    const result = (typeof listenArgs[0] === "number" && typeof listenArgs[1] === "function") ? originalListen(listenArgs[0], privateHost(), listenArgs[1]) : (typeof listenArgs[0] === "number" && listenArgs.length === 1) ? originalListen(listenArgs[0], privateHost()) : originalListen(...listenArgs);
+    const result = (typeof listenArgs[0] === "number" && typeof listenArgs[1] === "function") ? originalListen(listenArgs[0], "0.0.0.0", listenArgs[1]) : (typeof listenArgs[0] === "number" && listenArgs.length === 1) ? originalListen(listenArgs[0], "0.0.0.0") : originalListen(...listenArgs);
     if (port) discoveryServerPort = port;
     return result;
   };
