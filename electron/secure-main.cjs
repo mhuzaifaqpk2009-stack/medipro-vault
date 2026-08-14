@@ -1,17 +1,31 @@
-/* HPMS LAN security bootstrap. */
+/* HPMS LAN security + zero-config local-network discovery bootstrap. */
 const http = require("node:http");
 const os = require("node:os");
+const dgram = require("node:dgram");
+const { ipcMain } = require("electron");
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const DISCOVERY_PORT = 41234;
+const DISCOVERY_REQUEST = "HPMS_DISCOVER_V1";
 const sessions = new Map();
 let revision = 0;
+let discoveryServerPort = null;
+
 function privateHost() {
-  for (const entries of Object.values(os.networkInterfaces())) for (const entry of entries || []) {
+  const candidates = [];
+  for (const [name, entries] of Object.entries(os.networkInterfaces())) for (const entry of entries || []) {
     if (entry.family !== "IPv4" || entry.internal) continue;
     const p = entry.address.split(".").map(Number);
-    if (p[0] === 10 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31)) return entry.address;
+    const isPrivate = p[0] === 10 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31);
+    const isLinkLocal = p[0] === 169 && p[1] === 254;
+    if (!isPrivate && !isLinkLocal) continue;
+    const lower = name.toLowerCase();
+    const ethernet = /ethernet|eth|en\d/.test(lower) ? 0 : /wi-?fi|wlan/.test(lower) ? 1 : 2;
+    candidates.push({ address: entry.address, ethernet, linkLocal: isLinkLocal });
   }
-  return "127.0.0.1";
+  candidates.sort((a, b) => a.ethernet - b.ethernet || Number(a.linkLocal) - Number(b.linkLocal));
+  return candidates[0]?.address || "127.0.0.1";
 }
+
 function tokenFrom(req) { const value = req.headers["x-hpms-session"]; return typeof value === "string" ? value : ""; }
 function validSession(token) {
   const s = sessions.get(token);
@@ -21,6 +35,55 @@ function validSession(token) {
   return true;
 }
 function jsonError(res, status, error) { const body = JSON.stringify({ error }); res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(body) }); res.end(body); }
+
+const discoverySocket = dgram.createSocket("udp4");
+discoverySocket.on("error", (err) => console.error("[server] discovery socket error:", err));
+discoverySocket.on("message", (message, rinfo) => {
+  if (message.toString("utf8") !== DISCOVERY_REQUEST || !discoveryServerPort) return;
+  const response = Buffer.from(JSON.stringify({ type: "HPMS_SERVER_V1", port: discoveryServerPort }));
+  discoverySocket.send(response, 0, response.length, rinfo.port, rinfo.address);
+});
+discoverySocket.bind(DISCOVERY_PORT, "0.0.0.0", () => {
+  try { discoverySocket.setBroadcast(true); } catch {}
+  console.log(`[server] HPMS discovery listening on UDP :${DISCOVERY_PORT}`);
+});
+
+ipcMain.handle("server:discover", async () => {
+  const socket = dgram.createSocket("udp4");
+  const found = new Map();
+  const message = Buffer.from(DISCOVERY_REQUEST);
+  const broadcasts = new Set(["255.255.255.255"]);
+  for (const entries of Object.values(os.networkInterfaces())) for (const entry of entries || []) {
+    if (entry.family !== "IPv4" || entry.internal || !entry.netmask) continue;
+    const ip = entry.address.split(".").map(Number);
+    const mask = entry.netmask.split(".").map(Number);
+    const bc = ip.map((n, i) => (n & mask[i]) | (255 ^ mask[i])).join(".");
+    broadcasts.add(bc);
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, 1600);
+      socket.on("error", reject);
+      socket.on("message", (buf, rinfo) => {
+        try {
+          const data = JSON.parse(buf.toString("utf8"));
+          if (data?.type === "HPMS_SERVER_V1" && Number.isInteger(data.port)) found.set(`${rinfo.address}:${data.port}`, { host: rinfo.address, port: data.port });
+        } catch {}
+      });
+      socket.bind(0, () => {
+        try { socket.setBroadcast(true); } catch {}
+        for (const address of broadcasts) socket.send(message, 0, message.length, DISCOVERY_PORT, address);
+      });
+      socket.once("close", () => clearTimeout(timer));
+    });
+  } catch (err) {
+    console.error("[server] discovery failed:", err);
+  } finally {
+    try { socket.close(); } catch {}
+  }
+  return [...found.values()];
+});
+
 const originalCreateServer = http.createServer;
 http.createServer = function secureCreateServer(...args) {
   const originalListener = typeof args[0] === "function" ? args[0] : null;
@@ -56,10 +119,13 @@ http.createServer = function secureCreateServer(...args) {
   const server = originalCreateServer.apply(http, args);
   const originalListen = server.listen.bind(server);
   server.listen = function secureListen(...listenArgs) {
-    if (typeof listenArgs[0] === "number" && typeof listenArgs[1] === "function") return originalListen(listenArgs[0], privateHost(), listenArgs[1]);
-    if (typeof listenArgs[0] === "number" && listenArgs.length === 1) return originalListen(listenArgs[0], privateHost());
-    return originalListen(...listenArgs);
+    const port = typeof listenArgs[0] === "number" ? listenArgs[0] : null;
+    const result = (typeof listenArgs[0] === "number" && typeof listenArgs[1] === "function") ? originalListen(listenArgs[0], privateHost(), listenArgs[1]) : (typeof listenArgs[0] === "number" && listenArgs.length === 1) ? originalListen(listenArgs[0], privateHost()) : originalListen(...listenArgs);
+    if (port) discoveryServerPort = port;
+    return result;
   };
+  const originalClose = server.close.bind(server);
+  server.close = function secureClose(...closeArgs) { discoveryServerPort = null; return originalClose(...closeArgs); };
   return server;
 };
 require("./main.cjs");
