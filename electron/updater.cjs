@@ -151,7 +151,7 @@ async function cleanup(dir) {
 function launchInstallerAfterExit(installer, workDir) {
   const installerEscaped = installer.replace(/'/g, "''");
   const workDirEscaped = workDir.replace(/'/g, "''");
-  const ps = `$ErrorActionPreference='SilentlyContinue'; Start-Sleep -Seconds 2; Start-Process -FilePath '${installerEscaped}' -ArgumentList '/S'; Start-Sleep -Seconds 20; Remove-Item -LiteralPath '${workDirEscaped}' -Recurse -Force`;
+  const ps = `$ErrorActionPreference='SilentlyContinue'; Start-Sleep -Seconds 2; $p=Start-Process -FilePath '${installerEscaped}' -ArgumentList '/S' -PassThru; $p.WaitForExit(); Remove-Item -LiteralPath '${workDirEscaped}' -Recurse -Force`;
   spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps], { detached: true, stdio: "ignore", windowsHide: true }).unref();
 }
 
