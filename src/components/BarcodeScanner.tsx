@@ -16,14 +16,7 @@ type Props = {
 
 const EVENT_NAME = "medicore:barcode-scanned";
 
-export function BarcodeScanner({
-  open,
-  onClose,
-  onDetected,
-  title = "Scan barcode or QR code",
-  continuous = false,
-  background = false,
-}: Props) {
+export function BarcodeScanner({ open, onClose, onDetected, title = "Scan barcode or QR code", continuous = false, background = false }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zxingControlsRef = useRef<{ stop: () => void } | null>(null);
@@ -41,8 +34,6 @@ export function BarcodeScanner({
     if (background) {
       (window as any).__medicoreGlobalScannerActive = true;
     } else if ((window as any).__medicoreGlobalScannerActive) {
-      // The app already has one scanner service. Local scanner instances must
-      // not open another camera stream or another popup.
       return;
     }
 
@@ -71,9 +62,8 @@ export function BarcodeScanner({
         return;
       }
       if (event.key.length !== 1) return;
-      if (!state.lastAt || now - state.lastAt > 180) {
-        keyboardRef.current = { value: event.key, startedAt: now, lastAt: now };
-      } else {
+      if (!state.lastAt || now - state.lastAt > 180) keyboardRef.current = { value: event.key, startedAt: now, lastAt: now };
+      else {
         state.value += event.key;
         state.lastAt = now;
       }
@@ -82,55 +72,42 @@ export function BarcodeScanner({
 
     const emitCameraResult = (value: string, format?: string) => {
       const clean = value.trim();
-      if (!clean) return;
-      onDetectedRef.current({ value: clean, format });
+      if (clean) onDetectedRef.current({ value: clean, format });
     };
 
     const startZxing = async () => {
       try {
+        if (!videoRef.current || cancelled) return;
         const reader = new BrowserMultiFormatReader(undefined, {
           delayBetweenScanSuccess: continuous ? 700 : 250,
           delayBetweenScanAttempts: 150,
         });
-        if (!videoRef.current || cancelled) return;
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current,
-          (result) => {
-            if (!result || cancelled) return;
-            const formatValue = result.getBarcodeFormat();
-            emitCameraResult(result.getText(), formatValue === 11 ? "qr_code" : "zxing");
-            if (!continuous) {
-              controls.stop();
-              zxingControlsRef.current = null;
-            }
-          },
-        );
-        if (cancelled) {
-          controls.stop();
-          return;
+        const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+          if (!result || cancelled) return;
+          const formatValue = result.getBarcodeFormat();
+          emitCameraResult(result.getText(), formatValue === 11 ? "qr_code" : "zxing");
+          if (!continuous) {
+            controls.stop();
+            zxingControlsRef.current = null;
+          }
+        });
+        if (cancelled) controls.stop();
+        else {
+          zxingControlsRef.current = controls;
+          cameraStarted = true;
         }
-        zxingControlsRef.current = controls;
-        cameraStarted = true;
       } catch {
-        // Camera is optional. USB/Bluetooth keyboard scanners remain active.
+        // Camera is optional; hardware scanners still work.
       }
     };
 
     const startCamera = async () => {
       setError("");
       if (!videoRef.current) return;
-
-      // BarcodeDetector is fast where the platform supports it. On Windows
-      // Chromium builds it may be unavailable, so fall back to ZXing, which
-      // performs the decoding in JavaScript and supports webcam scanning.
       const Detector = (window as any).BarcodeDetector;
       if (Detector && navigator.mediaDevices?.getUserMedia) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } },
-            audio: false,
-          });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
           if (cancelled) {
             stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
             return;
@@ -138,12 +115,7 @@ export function BarcodeScanner({
           streamRef.current = stream;
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
-          const detector = new Detector({
-            formats: [
-              "qr_code", "ean_13", "ean_8", "code_128", "code_39", "code_93",
-              "codabar", "itf", "upc_a", "upc_e", "data_matrix",
-            ],
-          });
+          const detector = new Detector({ formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "code_93", "codabar", "itf", "upc_a", "upc_e", "data_matrix"] });
           const tick = async () => {
             if (cancelled || !videoRef.current) return;
             try {
@@ -171,11 +143,8 @@ export function BarcodeScanner({
           stop();
         }
       }
-
       await startZxing();
-      if (!cameraStarted && !background) {
-        setError("Camera scanning is unavailable. You can still use a USB/Bluetooth scanner or type the code manually.");
-      }
+      if (!cameraStarted && !background) setError("Camera scanning is unavailable. You can still use a USB/Bluetooth scanner or type the code manually.");
     };
 
     void startCamera();
@@ -187,15 +156,15 @@ export function BarcodeScanner({
     };
   }, [open, continuous, background]);
 
-  if (background) return null;
-  if ((typeof window !== "undefined") && (window as any).__medicoreGlobalScannerActive) return null;
+  if (background) {
+    return <video ref={videoRef} className="pointer-events-none fixed -left-[10000px] top-0 h-px w-px opacity-0" muted playsInline aria-hidden="true" />;
+  }
+  if (typeof window !== "undefined" && (window as any).__medicoreGlobalScannerActive) return null;
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
       <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />{title}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Camera className="h-5 w-5" />{title}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           {error ? <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">{error}</div> : <div className="overflow-hidden rounded-xl border bg-black"><video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline /></div>}
           <p className="text-center text-xs text-muted-foreground">Point the camera at a barcode or QR code. {continuous ? "Move the code away and scan again to increase quantity." : "The code is detected automatically."}</p>
