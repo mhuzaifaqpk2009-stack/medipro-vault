@@ -1,37 +1,29 @@
 import { useEffect } from "react";
 import { useProjectStore } from "@/store/project-store";
-import { isAdmin } from "@/store/session-store";
+import { useSession } from "@/store/session-store";
 import { getRecentEvents, type AuditEntry } from "@/lib/audit-log";
 import { useNotificationStore, type NotificationType } from "@/store/notification-store";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/lib/notification-types";
 
 const NOTIFICATION_CURSOR_KEY = "medicore.admin-notification-audit-cursor";
 
-function readCursor(): string | null {
-  try { return localStorage.getItem(NOTIFICATION_CURSOR_KEY); } catch { return null; }
-}
+function readCursor(): string | null { try { return localStorage.getItem(NOTIFICATION_CURSOR_KEY); } catch { return null; } }
+function writeCursor(iso: string) { try { localStorage.setItem(NOTIFICATION_CURSOR_KEY, iso); } catch {} }
 
-function writeCursor(iso: string) {
-  try { localStorage.setItem(NOTIFICATION_CURSOR_KEY, iso); } catch {}
-}
-
-/** Admin notification polling works in both Single and Multi computer modes.
- * The cursor is persisted across logout so events created while the admin is
- * away are delivered when the admin signs back in. Only this hook consumes the
- * audit stream, preventing duplicate notifications from multiple pollers. */
+/** Polls the shared audit stream for users allowed to view notifications.
+ * Admins never receive notifications for their own actions. A small polling
+ * interval keeps Single Computer notifications effectively immediate while
+ * remaining compatible with the existing Multi Computer server API. */
 export function useAdminNotifications() {
   const settings = useProjectStore((s) => s.data?.settings);
+  const user = useSession((s) => s.user);
   const addNotification = useNotificationStore((s) => s.add);
-  const active = isAdmin();
-  const notifyDelete = settings?.notifyOnDeleteMedicine ?? false;
-  const notifyAdd = settings?.notifyOnAddMedicine ?? false;
-  const notifyCustomer = settings?.notifyOnAddCustomer ?? false;
-  const notifySale = settings?.notifyOnLargeSale ?? false;
-  const notifyForce = settings?.notifyOnForceSale ?? true;
+  const active = !!user && (user.role === "admin" || user.permissions.viewNotifications === true);
+  const preferences = settings?.notificationPreferences ?? {};
   const threshold = settings?.largeSaleThreshold ?? 0;
 
   useEffect(() => {
-    if (!active) return;
-
+    if (!active || !user) return;
     let cancelled = false;
     let timer: number | null = null;
     let cursor = readCursor();
@@ -40,58 +32,58 @@ export function useAdminNotifications() {
     const tick = async () => {
       if (cancelled || !cursor) return;
       try {
-        // Include a tiny overlap at the timestamp boundary. The notification
-        // store deduplicates by audit event id, so this is safe and prevents
-        // same-millisecond audit events from being skipped.
         const parsed = Date.parse(cursor);
         const since = new Date(Math.max(0, parsed - 1)).toISOString();
         const events = (await getRecentEvents(since)) as AuditEntry[];
         if (cancelled) return;
-
         let newest = cursor;
         for (const e of events) {
           if (e.timestamp > newest) newest = e.timestamp;
-          const type = matchType(e, { notifyDelete, notifyAdd, notifyCustomer, notifySale, notifyForce, threshold });
-          if (type) {
-            addNotification({
-              id: `audit:${e.id}`,
-              type,
-              username: e.username || "Someone",
-              timestamp: e.timestamp,
-              entityId: e.entityId,
-              medicineName: e.medicineName,
-              quantity: e.quantity,
-              price: e.price,
-            });
-          }
+          // The admin should not be notified about their own work.
+          if (e.userId && e.userId === user.id) continue;
+          const type = matchType(e, threshold);
+          if (!type || !isEnabled(type, preferences, e)) continue;
+          addNotification({ id: `audit:${e.id}`, type, username: e.username || "Someone", timestamp: e.timestamp, entityId: e.entityId, medicineName: e.medicineName, quantity: e.quantity, price: e.price });
         }
-
-        // Advance only to an event actually observed. Never advance to the
-        // current wall clock, otherwise an event written during an in-flight
-        // poll can be skipped permanently.
-        if (events.length > 0) {
-          cursor = newest;
-          writeCursor(cursor);
-        }
-      } catch (e) {
-        console.error("[notifications] audit sync failed", e);
-      }
-      if (!cancelled) timer = window.setTimeout(tick, 2000);
+        if (events.length > 0) { cursor = newest; writeCursor(cursor); }
+      } catch (e) { console.error("[notifications] audit sync failed", e); }
+      if (!cancelled) timer = window.setTimeout(tick, 1000);
     };
-
     void tick();
-    return () => {
-      cancelled = true;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [active, notifyDelete, notifyAdd, notifyCustomer, notifySale, notifyForce, threshold, addNotification]);
+    return () => { cancelled = true; if (timer !== null) window.clearTimeout(timer); };
+  }, [active, user, preferences, threshold, addNotification]);
 }
 
-function matchType(e: AuditEntry, opts: { notifyDelete: boolean; notifyAdd: boolean; notifyCustomer: boolean; notifySale: boolean; notifyForce: boolean; threshold: number }): NotificationType | null {
-  if (e.entityType === "medicine" && e.action === "delete" && opts.notifyDelete) return "medicineDelete";
-  if (e.entityType === "medicine" && e.action === "add" && opts.notifyAdd) return "medicineAdd";
-  if (e.entityType === "customer" && e.action === "add" && opts.notifyCustomer) return "customerAdd";
-  if (e.entityType === "sale" && e.action === "force-sale" && opts.notifyForce) return "forceSale";
-  if (e.entityType === "sale" && e.action === "add" && opts.notifySale && (e.price ?? 0) > opts.threshold) return "sale";
+function isEnabled(type: NotificationType, preferences: Record<string, boolean>, e: AuditEntry) {
+  // Preserve the legacy switches as aliases so existing projects keep their behavior.
+  const legacy: Record<string, boolean | undefined> = {
+    medicineDelete: e.entityType === "medicine" ? undefined : undefined,
+    medicineAdd: e.entityType === "medicine" ? undefined : undefined,
+    customerAdd: e.entityType === "customer" ? undefined : undefined,
+    forceSale: e.action === "force-sale" ? undefined : undefined,
+  };
+  void legacy;
+  return preferences[type] ?? DEFAULT_NOTIFICATION_PREFERENCES[type];
+}
+
+function matchType(e: AuditEntry, threshold: number): NotificationType | null {
+  if (e.entityType === "medicine" && e.action === "delete") return "medicineDelete";
+  if (e.entityType === "medicine" && e.action === "add") return "medicineAdd";
+  if (e.entityType === "medicine" && e.action === "edit") return "medicineEdit";
+  if (e.entityType === "customer" && e.action === "add") return "customerAdd";
+  if (e.entityType === "customer" && e.action === "edit") return "customerEdit";
+  if (e.entityType === "customer" && e.action === "delete") return "customerDelete";
+  if (e.entityType === "sale" && e.action === "force-sale") return "forceSale";
+  if (e.entityType === "sale" && e.action === "add") return (e.price ?? 0) > threshold && threshold > 0 ? "largeSale" : "saleCompleted";
+  if (e.entityType === "sale" && e.action === "edit") return "saleEdited";
+  if (e.entityType === "purchase" && e.action === "add") return "purchaseAdd";
+  if (e.entityType === "purchase" && e.action === "edit") return "purchaseEdit";
+  if (e.entityType === "purchase" && e.action === "delete") return "purchaseDelete";
+  if (e.entityType === "supplier" && e.action === "add") return "supplierAdd";
+  if (e.entityType === "supplier" && e.action === "edit") return "supplierEdit";
+  if (e.entityType === "supplier" && e.action === "delete") return "supplierDelete";
+  if (e.entityType === "category" && e.action === "add") return "categoryAdd";
+  if (e.entityType === "category" && e.action === "edit") return "categoryEdit";
+  if (e.entityType === "category" && e.action === "delete") return "categoryDelete";
   return null;
 }
