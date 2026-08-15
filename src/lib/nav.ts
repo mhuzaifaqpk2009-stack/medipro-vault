@@ -12,7 +12,7 @@ export const NAV: NavItem[] = [
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
   { to: "/app/operations", label: "Pharmacy Operations", icon: Barcode, perm: "operations", group: "Inventory" },
-  { to: "/app/prescriptions", label: "Prescriptions", icon: FileText, perm: "sales", group: "People" },
+  { to: "/app/prescriptions", label: "Prescriptions", icon: FileText, perm: "prescriptions", group: "People" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
   { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
