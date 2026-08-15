@@ -6,14 +6,9 @@ import { useNotificationStore, type NotificationType } from "@/store/notificatio
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/lib/notification-types";
 
 const NOTIFICATION_CURSOR_KEY = "medicore.admin-notification-audit-cursor";
-
 function readCursor(): string | null { try { return localStorage.getItem(NOTIFICATION_CURSOR_KEY); } catch { return null; } }
 function writeCursor(iso: string) { try { localStorage.setItem(NOTIFICATION_CURSOR_KEY, iso); } catch {} }
 
-/** Polls the shared audit stream for users allowed to view notifications.
- * Admins never receive notifications for their own actions. A small polling
- * interval keeps Single Computer notifications effectively immediate while
- * remaining compatible with the existing Multi Computer server API. */
 export function useAdminNotifications() {
   const settings = useProjectStore((s) => s.data?.settings);
   const user = useSession((s) => s.user);
@@ -24,25 +19,21 @@ export function useAdminNotifications() {
 
   useEffect(() => {
     if (!active || !user) return;
-    let cancelled = false;
-    let timer: number | null = null;
+    let cancelled = false; let timer: number | null = null;
     let cursor = readCursor();
     if (!cursor) cursor = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
     const tick = async () => {
       if (cancelled || !cursor) return;
       try {
         const parsed = Date.parse(cursor);
-        const since = new Date(Math.max(0, parsed - 1)).toISOString();
-        const events = (await getRecentEvents(since)) as AuditEntry[];
+        const events = (await getRecentEvents(new Date(Math.max(0, parsed - 1)).toISOString())) as AuditEntry[];
         if (cancelled) return;
         let newest = cursor;
         for (const e of events) {
           if (e.timestamp > newest) newest = e.timestamp;
-          // The admin should not be notified about their own work.
           if (e.userId && e.userId === user.id) continue;
           const type = matchType(e, threshold);
-          if (!type || !isEnabled(type, preferences, e)) continue;
+          if (!type || !isEnabled(type, preferences, settings, e)) continue;
           addNotification({ id: `audit:${e.id}`, type, username: e.username || "Someone", timestamp: e.timestamp, entityId: e.entityId, medicineName: e.medicineName, quantity: e.quantity, price: e.price });
         }
         if (events.length > 0) { cursor = newest; writeCursor(cursor); }
@@ -51,18 +42,20 @@ export function useAdminNotifications() {
     };
     void tick();
     return () => { cancelled = true; if (timer !== null) window.clearTimeout(timer); };
-  }, [active, user, preferences, threshold, addNotification]);
+  }, [active, user, preferences, threshold, settings, addNotification]);
 }
 
-function isEnabled(type: NotificationType, preferences: Record<string, boolean>, e: AuditEntry) {
-  // Preserve the legacy switches as aliases so existing projects keep their behavior.
-  const legacy: Record<string, boolean | undefined> = {
-    medicineDelete: e.entityType === "medicine" ? undefined : undefined,
-    medicineAdd: e.entityType === "medicine" ? undefined : undefined,
-    customerAdd: e.entityType === "customer" ? undefined : undefined,
-    forceSale: e.action === "force-sale" ? undefined : undefined,
+function isEnabled(type: NotificationType, preferences: Record<string, boolean>, settings: ReturnType<typeof useProjectStore.getState>["data"] extends infer D ? D extends { settings: infer S } ? S : never : never, e: AuditEntry) {
+  const legacy: Partial<Record<NotificationType, boolean | undefined>> = {
+    medicineDelete: settings?.notifyOnDeleteMedicine,
+    medicineAdd: settings?.notifyOnAddMedicine,
+    customerAdd: settings?.notifyOnAddCustomer,
+    forceSale: settings?.notifyOnForceSale,
+    largeSale: settings?.notifyOnLargeSale,
   };
-  void legacy;
+  if (legacy[type] !== undefined) return legacy[type] === true;
+  if (type === "largeSale" && !settings?.notifyOnLargeSale) return false;
+  void e;
   return preferences[type] ?? DEFAULT_NOTIFICATION_PREFERENCES[type];
 }
 
