@@ -11,4 +11,4 @@ export const useNotificationStore = create<NotificationState>()(persist((set) =>
   clearAll: (recipientUserId) => set((s) => ({ items: recipientUserId ? s.items.filter((x) => x.recipientUserId !== recipientUserId) : [] })),
   markRead: (id) => set((s) => ({ items: s.items.map((x) => x.id === id ? { ...x, read: true } : x) })),
   markAllRead: (recipientUserId) => set((s) => ({ items: s.items.map((x) => !recipientUserId || x.recipientUserId === recipientUserId ? { ...x, read: true } : x) })),
-}), { name: "medicore.notifications" }));
+}), { name: "medicore.admin-notifications" }));
