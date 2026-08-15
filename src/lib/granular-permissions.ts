@@ -22,6 +22,11 @@ export function canDeleteSupplier(u: StoredUser | null) { return allowed(u, "sup
 export function canAddCategory(u: StoredUser | null) { return allowed(u, "categoriesAdd", "categories"); }
 export function canEditCategory(u: StoredUser | null) { return allowed(u, "categoriesEdit", "categories"); }
 export function canDeleteCategory(u: StoredUser | null) { return allowed(u, "categoriesDelete", "categories"); }
+export function canAddPrescription(u: StoredUser | null) { return allowed(u, "prescriptionsAdd", "prescriptions"); }
+export function canEditPrescription(u: StoredUser | null) { return allowed(u, "prescriptionsEdit", "prescriptions"); }
+export function canDeletePrescription(u: StoredUser | null) { return allowed(u, "prescriptionsDelete", "prescriptions"); }
+export function canPrintPrescription(u: StoredUser | null) { return allowed(u, "prescriptionsPrint", "prescriptions"); }
+export function canLoadPrescription(u: StoredUser | null) { return allowed(u, "prescriptionsLoadToSale", "prescriptions"); }
 export function canExportReports(u: StoredUser | null) { if (!u || u.role === "admin" || !u.permissions.reports) return u?.role === "admin"; const v = u.permissions.reportsExport; return v === undefined ? true : v; }
 export function canPrintReports(u: StoredUser | null) { if (!u || u.role === "admin") return true; if (!u.permissions.reports) return false; const v = u.permissions.reportsPrint; return v === undefined ? true : v; }
 export function canApplyDiscount(u: StoredUser | null) { return !u || u.role === "admin" || u.permissions.applyDiscount === true; }
