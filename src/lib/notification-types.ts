@@ -3,15 +3,15 @@ export const NOTIFICATION_TYPES = [
   "medicineAdd","medicineEdit","medicineDelete","medicinePriceChange","medicineMrpChange","medicineStockChange","medicineLowStock","medicineOutOfStock","medicineExpirySoon","medicineExpired","medicineBatchAdd","medicineBatchEdit","medicineBatchDelete",
   "saleCompleted","forceSale","largeSale","saleCancelled","saleEdited","saleReturned","partialSaleReturn","fullSaleReturn","salePriceChanged","discountApplied","largeDiscount","taxChanged","paymentReceived","paymentPartial","creditSale","customerAdd","customerEdit","customerDelete","customerPayment","customerCreditLimit","customerBalanceHigh",
   "purchaseAdd","purchaseEdit","purchaseDelete","purchaseReturned","partialPurchaseReturn","fullPurchaseReturn","purchasePriceChanged","supplierAdd","supplierEdit","supplierDelete","supplierPayment","supplierBalanceHigh","supplierInvoiceDuplicate",
-  "categoryAdd","categoryEdit","categoryDelete","inventoryBatchAdd","inventoryBatchLowStock","inventoryBatchExpired","inventoryAdjustment","stockTransfer","stockCorrection","negativeStockPrevented","prescriptionAdd","prescriptionEdit","prescriptionDelete","backupCreated","backupFailed","backupRestored","loginSuccess","loginFailed","userCreated","userEdited","userDeleted","permissionChanged","serverConnected","serverDisconnected","syncConflict","syncCompleted","dataSaveFailed","dataRestored","printerFailed","printCompleted","returnRejected","mrpValidationFailed","checkoutPriceChanged","settingsChanged","pinAdded","pinRemoved","reportExported","reportPrinted",
+  "categoryAdd","categoryEdit","categoryDelete","inventoryBatchAdd","inventoryBatchLowStock","inventoryBatchExpired","inventoryAdjustment","stockTransfer","stockCorrection","negativeStockPrevented","prescriptionAdd","prescriptionEdit","prescriptionDelete","prescriptionDueSoon","prescriptionDueToday","prescriptionVisitLoaded","prescriptionMedicineOutOfStock","prescriptionVisibilityChanged","backupCreated","backupFailed","backupRestored","loginSuccess","loginFailed","userCreated","userEdited","userDeleted","permissionChanged","serverConnected","serverDisconnected","syncConflict","syncCompleted","dataSaveFailed","dataRestored","printerFailed","printCompleted","returnRejected","mrpValidationFailed","checkoutPriceChanged","settingsChanged","pinAdded","pinRemoved","reportExported","reportPrinted",
 ] as const;
 
 export type NotificationType = typeof NOTIFICATION_TYPES[number];
 
-/** Defaults: important safety/stock/account events are enabled; noisy activity is opt-in. */
+/** Defaults: safety, stock and scheduled-care events are enabled. */
 export const DEFAULT_NOTIFICATION_PREFERENCES: Record<NotificationType, boolean> = Object.fromEntries(
   NOTIFICATION_TYPES.map((type) => [type, [
-    "forceSale","medicineLowStock","medicineOutOfStock","medicineExpirySoon","medicineExpired","saleReturned","purchaseReturned","customerPayment","supplierPayment","syncConflict","dataSaveFailed","backupFailed","printerFailed","negativeStockPrevented","mrpValidationFailed","returnRejected","checkoutPriceChanged",
+    "forceSale","medicineLowStock","medicineOutOfStock","medicineExpirySoon","medicineExpired","saleReturned","purchaseReturned","customerPayment","supplierPayment","syncConflict","dataSaveFailed","backupFailed","printerFailed","negativeStockPrevented","mrpValidationFailed","returnRejected","checkoutPriceChanged","prescriptionAdd","prescriptionDueSoon","prescriptionDueToday","prescriptionMedicineOutOfStock","prescriptionVisitLoaded",
   ].includes(type)])
 ) as Record<NotificationType, boolean>;
 
