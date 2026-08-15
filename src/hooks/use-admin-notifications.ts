@@ -4,6 +4,7 @@ import { useSession } from "@/store/session-store";
 import { getRecentEvents, type AuditEntry } from "@/lib/audit-log";
 import { useNotificationStore, type NotificationType } from "@/store/notification-store";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/lib/notification-types";
+import type { PharmacySettings } from "@/domain/schema";
 
 const NOTIFICATION_CURSOR_KEY = "medicore.admin-notification-audit-cursor";
 function readCursor(): string | null { try { return localStorage.getItem(NOTIFICATION_CURSOR_KEY); } catch { return null; } }
@@ -45,7 +46,7 @@ export function useAdminNotifications() {
   }, [active, user, preferences, threshold, settings, addNotification]);
 }
 
-function isEnabled(type: NotificationType, preferences: Record<string, boolean>, settings: ReturnType<typeof useProjectStore.getState>["data"] extends infer D ? D extends { settings: infer S } ? S : never : never, e: AuditEntry) {
+function isEnabled(type: NotificationType, preferences: Record<string, boolean>, settings: PharmacySettings | undefined, e: AuditEntry) {
   const legacy: Partial<Record<NotificationType, boolean | undefined>> = {
     medicineDelete: settings?.notifyOnDeleteMedicine,
     medicineAdd: settings?.notifyOnAddMedicine,
@@ -54,7 +55,6 @@ function isEnabled(type: NotificationType, preferences: Record<string, boolean>,
     largeSale: settings?.notifyOnLargeSale,
   };
   if (legacy[type] !== undefined) return legacy[type] === true;
-  if (type === "largeSale" && !settings?.notifyOnLargeSale) return false;
   void e;
   return preferences[type] ?? DEFAULT_NOTIFICATION_PREFERENCES[type];
 }
