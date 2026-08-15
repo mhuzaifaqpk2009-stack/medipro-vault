@@ -16,6 +16,7 @@ const BUILT_IN = [
   { combo: "Ctrl+P", label: "Print (checks a printer is available first)" },
   { combo: "Ctrl+Shift+P", label: "Print As (choose printer / save as PDF)" },
   { combo: "F5", label: "Save a backup now" },
+  { combo: "Ctrl+Esc", label: "Sign out / logout" },
   { combo: "Ctrl+Tab", label: "Next tab" },
   { combo: "Ctrl+Shift+Tab", label: "Previous tab" },
   { combo: "Ctrl+Z", label: "Undo" },
