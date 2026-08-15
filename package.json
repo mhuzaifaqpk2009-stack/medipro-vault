@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:8080 && cross-env MEDICORE_DEV_URL=http://localhost:8080 electron .\"",
-    "build": "node scripts/apply-hpms-ui-fixes.mjs && vite build",
+    "build": "node scripts/apply-hpms-ui-fixes.mjs && node scripts/finalize-hpms-scanner.mjs && vite build",
     "build:dev": "vite build --mode development",
     "dist": "npm run build && electron-builder",
     "preview": "vite preview",
