@@ -95,7 +95,7 @@
     "vite-tsconfig-paths": "^5.1.4",
     "wait-on": "^8.0.1"
   },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Huzaifa Pharmacy Management Software",
   "author": "Muhammad Huzaifa Qureshi",
   "main": "electron/secure-main.cjs",
