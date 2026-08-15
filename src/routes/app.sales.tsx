@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle, Camera } from "lucide-react";
+import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle, Camera, FileText, BellRing } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/SearchInput";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { useCartStore } from "@/store/cart-store";
@@ -18,7 +19,8 @@ import type { PaymentMethod, Sale } from "@/domain/schema";
 import { PermissionGate } from "@/components/PermissionGate";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { logSaleEvent } from "@/lib/audit-log";
-import { canChangeCheckoutPrice, canForceSale } from "@/lib/granular-permissions";
+import { canChangeCheckoutPrice, canForceSale, canLoadPrescription } from "@/lib/granular-permissions";
+import { advancePrescriptionVisit, isPrescriptionDueSoon, isPrescriptionVisible, type Prescription } from "@/lib/prescriptions";
 
 export const Route = createFileRoute("/app/sales")({
   component: () => <PermissionGate perm="sales"><SalesPage /></PermissionGate>,
@@ -30,6 +32,7 @@ function SalesPage() {
   const sym = useCurrencySymbol();
   const user = useSession((s) => s.user);
   const isAdmin = user?.role === "admin";
+  const canLoadRx = canLoadPrescription(user);
   const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
   const forcePermission = canForceSale(user);
   const canPriceByPermission = canChangeCheckoutPrice(user);
@@ -57,6 +60,8 @@ function SalesPage() {
   const [q, setQ] = useState("");
   const [by, setBy] = useState<SearchBy>(data.settings.defaultSearchBy ?? "name");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [rxOpen, setRxOpen] = useState(false);
+  const [rxSearch, setRxSearch] = useState("");
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -69,6 +74,11 @@ function SalesPage() {
       return Number(bc) - Number(ac);
     }).slice(0, 8);
   }, [q, data.medicines, by]);
+
+  const prescriptions = useMemo(() => {
+    const t = rxSearch.trim().toLowerCase();
+    return (data.settings.prescriptions ?? []).filter((p) => isPrescriptionVisible(p, user) && (!t || `${p.patientName} ${p.patientPhone ?? ""} ${p.doctorName ?? ""}`.toLowerCase().includes(t))).sort((a,b) => Number(isPrescriptionDueSoon(b)) - Number(isPrescriptionDueSoon(a)) || (b.date.localeCompare(a.date))).slice(0, 40);
+  }, [data.settings.prescriptions, user, rxSearch]);
 
   function confirmForce(med: (typeof data.medicines)[number], quantity: number) {
     if (quantity <= med.stockQuantity) return true;
@@ -108,6 +118,26 @@ function SalesPage() {
     setScannerOpen(false);
     add(med.id);
   }, [data.medicines, cart]);
+
+  function loadPrescription(p: Prescription) {
+    if (!canLoadRx) return toast.error("You do not have permission to load prescriptions");
+    setCart((current) => {
+      const next = [...current];
+      for (const line of p.items) {
+        const med = data.medicines.find((m) => m.id === line.medicineId);
+        if (!med) continue;
+        const qty = Math.max(1, line.quantity || 1);
+        const i = next.findIndex((x) => x.medicineId === med.id);
+        if (i >= 0) next[i] = { ...next[i], quantity: next[i].quantity + qty };
+        else next.push({ medicineId: med.id, quantity: qty, salePrice: med.salePrice, discountPercent: 0, name: med.name, forced: false, forcedSale: false });
+      }
+      return next;
+    });
+    if (p.nextVisitDate) mutate((d) => { const target = (d.settings.prescriptions ?? []).find((x) => x.id === p.id); if (target) target.nextVisitDate = advancePrescriptionVisit(target); });
+    setCustomerId("");
+    setRxOpen(false);
+    toast.success(`${p.patientName}'s prescription loaded into the cart`);
+  }
 
   function setQuantity(i: number, value: number) {
     const clean = Math.max(1, Math.floor(value || 1));
@@ -190,12 +220,13 @@ function SalesPage() {
           <div className="flex items-center gap-1.5">
             <Select value={by} onValueChange={(v) => setBy(v as SearchBy)}><SelectTrigger className="h-11 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="generic">Generic</SelectItem><SelectItem value="company">Company</SelectItem></SelectContent></Select>
             <div className="relative flex-1"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><SearchInput data-search phrases={["Scan barcode or QR code or search medicine…", "Enter adds the top match…"]} value={q} autoFocus onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && results[0]) add(results[0].id); }} className="h-11 pl-8 text-sm" /></div>
+            {canLoadRx && <Button type="button" variant="outline" className="h-11 shrink-0" title="Load prescription" onClick={() => { setRxSearch(""); setRxOpen(true); }}><FileText className="mr-1.5 h-4 w-4" />Prescription</Button>}
             <Button type="button" size="icon" variant="outline" className="h-11 w-11 shrink-0" title="Scan barcode or QR code with camera" onClick={() => setScannerOpen(true)}><Camera className="h-4 w-4" /></Button>
           </div>
           {results.length > 0 && <div className="absolute left-3 right-3 top-14 z-10 max-h-72 overflow-auto rounded-md border bg-popover shadow-elevated">{results.map((m) => <button key={m.id} onClick={() => add(m.id)} className="flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted"><span><span className="font-medium">{m.name}</span><span className="ml-2 text-xs text-muted-foreground">{m.barcode || m.qrCode || m.genericName || ""}</span></span><span className={`text-xs ${m.stockQuantity <= 0 ? "text-destructive" : "text-muted-foreground"}`}>Stock {m.stockQuantity} · {money(m.salePrice, sym)}</span></button>)}</div>}
         </div>
         <div className="flex-1 overflow-auto p-3">
-          {cart.length === 0 ? <div className="grid place-items-center py-24 text-sm text-muted-foreground">Cart is empty — scan or search a medicine to begin.</div> : <table className="w-full text-sm"><thead className="text-xs text-muted-foreground"><tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr></thead><tbody>{cart.map((l, i) => <tr key={l.medicineId} className="border-b last:border-0"><td className="p-2">{l.name}{(l.forced || l.forcedSale) && <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">FORCED</span>}</td><td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => setQuantity(i, +e.target.value)} /></td><td className="p-2"><Input type="number" min={0} step="0.01" disabled={!canChangePrice} title={!canChangePrice ? "You do not have permission to change the checkout price" : "Change price for this sale only"} className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td><td className="p-2 text-right tabular-nums">{money(l.salePrice * l.quantity, sym)}</td><td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table>}
+          {cart.length === 0 ? <div className="grid place-items-center py-24 text-sm text-muted-foreground">Cart is empty — scan, search or load a prescription to begin.</div> : <table className="w-full text-sm"><thead className="text-xs text-muted-foreground"><tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr></thead><tbody>{cart.map((l, i) => <tr key={l.medicineId} className="border-b last:border-0"><td className="p-2">{l.name}{(l.forced || l.forcedSale) && <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">FORCED</span>}</td><td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => setQuantity(i, +e.target.value)} /></td><td className="p-2"><Input type="number" min={0} step="0.01" disabled={!canChangePrice} title={!canChangePrice ? "You do not have permission to change the checkout price" : "Change price for this sale only"} className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td><td className="p-2 text-right tabular-nums">{money(l.salePrice * l.quantity, sym)}</td><td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table>}
         </div>
       </div>
       <aside className="surface-card flex flex-col gap-3 p-4">
@@ -207,7 +238,8 @@ function SalesPage() {
         {method === "cash" && <><div><Label className="text-xs">Cash received (optional)</Label><Input type="number" value={received || ""} onChange={(e) => setReceived(+e.target.value || 0)} /></div><Row k="Change" v={money(change, sym)} /></>}
         <label className="mt-auto flex items-center gap-2 text-sm"><Checkbox checked={printBill} onCheckedChange={(v) => setPrintBill(v === true)} /><span>Print bill</span></label><Button size="lg" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
       </aside>
-      <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={({ value }) => addScannedCode(value)} title="Scan medicine barcode or QR code" />
+      <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={({ value }) => addScannedCode(value)} />
+      <Dialog open={rxOpen} onOpenChange={setRxOpen}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Load prescription</DialogTitle></DialogHeader><Input autoFocus placeholder="Search patient, phone or doctor" value={rxSearch} onChange={(e) => setRxSearch(e.target.value)} /><div className="mt-3 space-y-2">{prescriptions.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No accessible prescriptions found.</p> : prescriptions.map((p) => <button key={p.id} onClick={() => loadPrescription(p)} className="w-full rounded-lg border p-3 text-left hover:bg-muted"><div className="flex items-center justify-between gap-3"><div><b>{p.patientName}</b><p className="text-xs text-muted-foreground">{p.patientPhone ?? "No phone"}{p.doctorName ? ` · Dr. ${p.doctorName}` : ""}</p></div>{isPrescriptionDueSoon(p) && <BellRing className="h-4 w-4 text-warning" />}</div><div className="mt-2 text-xs text-muted-foreground">{p.items.map((x) => data.medicines.find((m) => m.id === x.medicineId)?.name ?? "Missing medicine").join(" · ")}{p.nextVisitDate ? ` · Next visit ${p.nextVisitDate}` : ""}</div></button>)}</div><DialogFooter><Button variant="ghost" onClick={() => setRxOpen(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
