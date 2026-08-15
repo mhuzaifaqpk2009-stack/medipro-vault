@@ -21,6 +21,7 @@ import {
   QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId,
 } from "@/lib/quick-actions";
 import { firePrintAction, hasPrinter } from "@/lib/print-action";
+import { BarcodeScanner, dispatchBarcodeScan } from "@/components/BarcodeScanner";
 
 
 
@@ -65,9 +66,6 @@ function AppLayout() {
   useAutoSave();
   useAdminNotifications();
 
-  // Part 5 live sync: a Client polls the Server for changes made anywhere
-  // else on the network. Single computer and Server mode never start this —
-  // the Server IS the source of truth, it doesn't need to poll itself.
   useEffect(() => {
     if (!isClientMode()) return;
     return startClientLiveSync();
@@ -79,21 +77,16 @@ function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const enabled = data?.settings.tabShortcutsEnabled !== false;
 
-  /** Always the sidebar's live visual order — reordering tabs remaps shortcuts. */
   const visibleTabs = useMemo(
     () => visibleNavItems(data?.settings, user),
     [data?.settings, user],
   );
 
-
-
-  // combo string (normalised) -> tab path
   const hotkeyMap = useMemo(
     () => buildHotkeyMap(visibleTabs, data?.settings.tabHotkeys),
     [visibleTabs, data?.settings.tabHotkeys],
   );
 
-  // combo string (normalised) -> quick action id (Ctrl+M etc.)
   const actionMap = useMemo(() => {
     const m = new Map<string, QuickActionId>();
     for (const a of QUICK_ACTIONS) {
@@ -104,7 +97,12 @@ function AppLayout() {
     return m;
   }, [data?.settings.actionHotkeys]);
 
-  // Quick actions (new medicine / purchase / customer / supplier) + undo & redo.
+  // One silent scanner service is shared by every page. It has no dialog or
+  // overlay; the active route decides what a scanned code means.
+  useEffect(() => {
+    return undefined;
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const combo = comboFromEvent(e);
@@ -125,7 +123,6 @@ function AppLayout() {
 
       const action = actionMap.get(key);
       if (!action) return;
-      // Never trigger while a dialog/panel is open.
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
       e.preventDefault();
       e.stopPropagation();
@@ -136,7 +133,6 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [actionMap, navigate]);
 
-
   useEffect(() => {
     if (!enabled) return;
     const go = (to: string) => {
@@ -145,17 +141,13 @@ function AppLayout() {
       window.dispatchEvent(new CustomEvent("medicore:nav-flash", { detail: to }));
     };
     const handler = (e: KeyboardEvent) => {
-      // Any open dialog/panel takes precedence — never switch tabs from inside one.
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
       const el = document.activeElement as HTMLElement | null;
       const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || !!el?.isContentEditable;
-
-      // Ctrl+Tab / Ctrl+Shift+Tab — cycle from the currently open tab, wrapping around.
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "Tab") {
         if (visibleTabs.length === 0) return;
         e.preventDefault();
         e.stopPropagation();
-        // Longest matching path wins so "/app" doesn't shadow "/app/sales".
         let currentIdx = -1;
         let bestLen = -1;
         visibleTabs.forEach((t, i) => {
@@ -169,7 +161,6 @@ function AppLayout() {
         go(visibleTabs[nextIdx].to);
         return;
       }
-
       const combo = comboFromEvent(e);
       if (!combo) return;
       const to = hotkeyMap.get(normaliseCombo(combo));
@@ -179,13 +170,10 @@ function AppLayout() {
       e.stopPropagation();
       go(to);
     };
-    // Capture phase so open dialogs/inputs cannot swallow the shortcut.
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [enabled, visibleTabs, hotkeyMap, navigate, pathname]);
 
-
-  // "/" — jump into the current page's search box. Ctrl+/ — top panel search.
   useEffect(() => {
     const onSlash = (e: KeyboardEvent) => {
       if (e.key !== "/" && e.code !== "Slash") return;
@@ -206,9 +194,6 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onSlash, true);
   }, [pathname]);
 
-
-
-  // Ctrl+P — print (after checking a printer exists). Ctrl+Shift+P — Print As.
   useEffect(() => {
     const runPrint = async (skipCheck: boolean) => {
       if (!skipCheck && !(await hasPrinter())) {
@@ -230,7 +215,6 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // F5 — create/overwrite a backup in the saved folder.
   useEffect(() => {
     const onKey = async (e: KeyboardEvent) => {
       if (e.key !== "F5") return;
@@ -252,11 +236,8 @@ function AppLayout() {
 
   if (!data) return null;
 
-
   return (
-    <SidebarProvider
-      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
-    >
+    <SidebarProvider style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <ResizeHandle
@@ -276,6 +257,13 @@ function AppLayout() {
         </SidebarInset>
       </div>
       <ItemMenuHost />
+      <BarcodeScanner
+        open
+        continuous
+        background
+        onClose={() => undefined}
+        onDetected={dispatchBarcodeScan}
+      />
     </SidebarProvider>
   );
 }
