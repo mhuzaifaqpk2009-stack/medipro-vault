@@ -20,7 +20,7 @@ export interface PinnedItem { id: string; label: string; kind: PinKind; to?: str
 export interface Category { id: string; name: string; description?: string; }
 export interface Supplier { id: string; name: string; phone?: string; email?: string; address?: string; company?: string; balance: number; }
 export interface Customer { id: string; name: string; phone?: string; email?: string; address?: string; balance: number; loyaltyPoints: number; specialDiscountPercent?: number; }
-export interface Medicine { id: string; name: string; genericName?: string; company?: string; categoryId?: string; batchNumber?: string; barcode?: string; purchasePrice: number; salePrice: number; mrp: number; stockQuantity: number; minimumStock: number; expiryDate?: string; manufactureDate?: string; rackNumber?: string; supplierId?: string; description?: string; pinOrder?: "first" | "last"; }
+export interface Medicine { id: string; name: string; genericName?: string; company?: string; categoryId?: string; batchNumber?: string; barcode?: string; qrCode?: string; purchasePrice: number; salePrice: number; mrp: number; stockQuantity: number; minimumStock: number; expiryDate?: string; manufactureDate?: string; rackNumber?: string; supplierId?: string; description?: string; pinOrder?: "first" | "last"; }
 export interface PurchaseItem { medicineId: string; quantity: number; purchasePrice: number; batchNumber?: string; expiryDate?: string; }
 export interface Purchase { id: string; supplierId: string; invoiceNumber: string; purchaseDate: string; receivedDate?: string; items: PurchaseItem[]; taxPercent: number; discount: number; notes?: string; }
 export type PaymentMethod = "cash" | "card" | "online" | "mixed";
