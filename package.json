@@ -51,6 +51,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.9",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.42.2",
     "input-otp": "^1.4.2",
@@ -77,6 +78,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
+    "cross-env": "^7.0.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "eslint": "^9.32.0",
@@ -102,6 +104,7 @@
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["dist/**/*", "electron/**/*", "package.json"],
     "extraMetadata": { "main": "electron/secure-main.cjs" },
+    "publish": { "provider": "github", "owner": "mhuzaifaqpk2009-stack", "repo": "medipro-vault", "releaseType": "release" },
     "win": { "target": "nsis", "icon": "build/icon.ico" },
     "nsis": {
       "oneClick": false,
