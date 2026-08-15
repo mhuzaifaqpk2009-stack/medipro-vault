@@ -151,14 +151,28 @@ function killProcessTree(child) {
   }
 }
 
+async function findSourceRoot(targetDir) {
+  const queue = [{ dir: targetDir, depth: 0 }];
+  while (queue.length) {
+    const { dir, depth } = queue.shift();
+    let entries;
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { continue; }
+    const names = new Set(entries.map((entry) => entry.name.toLowerCase()));
+    if (names.has("package.json") && names.has("src")) return dir;
+    if (depth >= 3) continue;
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+    }
+  }
+  throw new Error("GitHub archive did not contain a valid source folder (package.json + src were not found).");
+}
+
 async function extractZip(zipPath, targetDir, signal) {
   await fsp.mkdir(targetDir, { recursive: true });
   const ps = `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${targetDir.replace(/'/g, "''")}' -Force`;
   await runCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps], targetDir, signal, () => {});
-  const entries = await fsp.readdir(targetDir, { withFileTypes: true });
-  const root = entries.find((entry) => entry.isDirectory());
-  if (!root) throw new Error("GitHub archive did not contain a source folder.");
-  return path.join(targetDir, root.name);
+  return findSourceRoot(targetDir);
 }
 
 async function findInstaller(releaseDir) {
