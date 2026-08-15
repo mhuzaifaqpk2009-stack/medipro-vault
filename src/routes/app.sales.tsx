@@ -62,6 +62,7 @@ function SalesPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [rxOpen, setRxOpen] = useState(false);
   const [rxSearch, setRxSearch] = useState("");
+  useEffect(() => { setScannerOpen(true); }, []);
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -115,7 +116,6 @@ function SalesPage() {
       toast.error(`No medicine found for code ${code}`);
       return;
     }
-    setScannerOpen(false);
     add(med.id);
   }, [data.medicines, cart]);
 
@@ -238,7 +238,7 @@ function SalesPage() {
         {method === "cash" && <><div><Label className="text-xs">Cash received (optional)</Label><Input type="number" value={received || ""} onChange={(e) => setReceived(+e.target.value || 0)} /></div><Row k="Change" v={money(change, sym)} /></>}
         <label className="mt-auto flex items-center gap-2 text-sm"><Checkbox checked={printBill} onCheckedChange={(v) => setPrintBill(v === true)} /><span>Print bill</span></label><Button size="lg" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
       </aside>
-      <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={({ value }) => addScannedCode(value)} />
+      <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={({ value }) => addScannedCode(value)} continuous />
       <Dialog open={rxOpen} onOpenChange={setRxOpen}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Load prescription</DialogTitle></DialogHeader><Input autoFocus placeholder="Search patient, phone or doctor" value={rxSearch} onChange={(e) => setRxSearch(e.target.value)} /><div className="mt-3 space-y-2">{prescriptions.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No accessible prescriptions found.</p> : prescriptions.map((p) => <button key={p.id} onClick={() => loadPrescription(p)} className="w-full rounded-lg border p-3 text-left hover:bg-muted"><div className="flex items-center justify-between gap-3"><div><b>{p.patientName}</b><p className="text-xs text-muted-foreground">{p.patientPhone ?? "No phone"}{p.doctorName ? ` · Dr. ${p.doctorName}` : ""}</p></div>{isPrescriptionDueSoon(p) && <BellRing className="h-4 w-4 text-warning" />}</div><div className="mt-2 text-xs text-muted-foreground">{p.items.map((x) => data.medicines.find((m) => m.id === x.medicineId)?.name ?? "Missing medicine").join(" · ")}{p.nextVisitDate ? ` · Next visit ${p.nextVisitDate}` : ""}</div></button>)}</div><DialogFooter><Button variant="ghost" onClick={() => setRxOpen(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );

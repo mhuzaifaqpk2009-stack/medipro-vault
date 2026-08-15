@@ -119,12 +119,12 @@ function Editor({ value, onCancel, onSave }: { value: Supplier; onCancel: () => 
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
       <DialogContent><DialogHeader><DialogTitle>{value.id ? "Edit" : "New"} supplier</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><Label className="text-xs">Name *</Label><Input value={v.name} onChange={(e) => upd("name", e.target.value)} autoFocus /></div>
-          <div><Label className="text-xs">Company</Label><Input value={v.company ?? ""} onChange={(e) => upd("company", e.target.value)} /></div>
-          <div><Label className="text-xs">Phone</Label><Input value={v.phone ?? ""} onChange={(e) => upd("phone", e.target.value)} /></div>
-          <div><Label className="text-xs">Email</Label><Input value={v.email ?? ""} onChange={(e) => upd("email", e.target.value)} /></div>
-          <div className="sm:col-span-2"><Label className="text-xs">Address</Label><Input value={v.address ?? ""} onChange={(e) => upd("address", e.target.value)} /></div>
-          <div><Label className="text-xs">Balance</Label><Input type="number" value={v.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} /></div>
+          <div><Label className="text-xs">Name *</Label><Input value={v.name} onChange={(e) => upd("name", e.target.value)} placeholder="Supplier name" autoFocus /></div>
+          <div><Label className="text-xs">Company</Label><Input value={v.company ?? ""} onChange={(e) => upd("company", e.target.value)} placeholder="Company name" /></div>
+          <div><Label className="text-xs">Phone</Label><Input value={v.phone ?? ""} onChange={(e) => upd("phone", e.target.value)} placeholder="Phone number" /></div>
+          <div><Label className="text-xs">Email</Label><Input value={v.email ?? ""} onChange={(e) => upd("email", e.target.value)} placeholder="Email address" /></div>
+          <div className="sm:col-span-2"><Label className="text-xs">Address</Label><Input value={v.address ?? ""} onChange={(e) => upd("address", e.target.value)} placeholder="Supplier address" /></div>
+          <div><Label className="text-xs">Balance</Label><Input type="number" value={v.balance || ""} onChange={(e) => upd("balance", +e.target.value || 0)} placeholder="0.00" /></div>
         </div>
         <DialogFooter><Button variant="ghost" onClick={onCancel}>Cancel</Button><Button onClick={() => onSave(v)}>Save</Button></DialogFooter>
       </DialogContent>
