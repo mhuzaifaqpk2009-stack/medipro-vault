@@ -148,6 +148,13 @@ async function cleanup(dir) {
   try { await fsp.rm(dir, { recursive: true, force: true, maxRetries: 4, retryDelay: 250 }); } catch {}
 }
 
+function launchInstallerAfterExit(installer, workDir) {
+  const installerEscaped = installer.replace(/'/g, "''");
+  const workDirEscaped = workDir.replace(/'/g, "''");
+  const ps = `$ErrorActionPreference='SilentlyContinue'; Start-Sleep -Seconds 2; Start-Process -FilePath '${installerEscaped}' -ArgumentList '/S'; Start-Sleep -Seconds 20; Remove-Item -LiteralPath '${workDirEscaped}' -Recurse -Force`;
+  spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+}
+
 async function performUpdate() {
   if (activeJob) return { supported: true, state: "error", message: "An update is already running." };
   if (!app.isPackaged) return { supported: false, state: "dev", currentVersion: app.getVersion() };
@@ -184,28 +191,18 @@ async function performUpdate() {
 
     updateProgress(96, "Preparing installation", "Locating the new Windows installer…");
     const installer = await findInstaller(path.join(sourceDir, "release"));
-    updateProgress(100, "Update ready", "Launching the installer and closing the current application…");
+    updateProgress(100, "Update ready", "The installer is ready. Closing this app and installing the update…");
 
     send("status", { state: "downloaded", version: "source-build", percent: 100, installer });
-    setTimeout(() => {
-      try {
-        spawn(installer, ["/S"], { detached: true, stdio: "ignore", windowsHide: false }).unref();
-      } catch (error) {
-        send("status", { state: "error", message: `Could not launch installer: ${error?.message || String(error)}` });
-        return;
-      }
-      setTimeout(() => {
-        cleanup(workDir);
-        app.quit();
-      }, 700);
-    }, 400);
+    launchInstallerAfterExit(installer, workDir);
+    setTimeout(() => { try { app.quit(); } catch {} }, 500);
 
     return { supported: true, state: "downloaded", currentVersion: app.getVersion(), version: "source-build" };
   } catch (error) {
     const canceled = controller.signal.aborted || /canceled/i.test(error?.message || "");
     await cleanup(workDir);
     const message = canceled ? "Update canceled. Downloaded and temporary build files were deleted." : (error?.message || String(error));
-    send("status", { state: canceled ? "error" : "error", message });
+    send("status", { state: "error", message });
     return { supported: true, state: "error", currentVersion: app.getVersion(), message };
   } finally {
     activeJob = null;
