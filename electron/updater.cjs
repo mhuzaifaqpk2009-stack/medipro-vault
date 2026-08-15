@@ -35,9 +35,9 @@ ipcMain.handle("updater:check", async () => {
   configure();
   try {
     const result = await autoUpdater.checkForUpdates();
-    if (!result?.updateInfo) return { supported: true, state: "up-to-date", currentVersion: app.getVersion() };
+    if (!result?.isUpdateAvailable) return { supported: true, state: "up-to-date", currentVersion: app.getVersion(), latestVersion: result?.updateInfo?.version || app.getVersion() };
     downloadedVersion = result.updateInfo.version;
-    await autoUpdater.downloadUpdate();
+    await autoUpdater.downloadUpdate(result.cancellationToken);
     return { supported: true, state: "downloaded", currentVersion: app.getVersion(), version: downloadedVersion };
   } catch (error) {
     const message = error?.message || String(error);
