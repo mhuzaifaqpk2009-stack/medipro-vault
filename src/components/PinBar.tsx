@@ -1,10 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  Pin, ChevronDown, ChevronUp, Save, HardDriveDownload, X, Plus,
-  LayoutDashboard, ShoppingCart, Receipt, Pill, Boxes, Truck, Building2, Users, Tags, BarChart3, Settings,
-} from "lucide-react";
+import { Pin, ChevronDown, ChevronUp, Save, HardDriveDownload, X, Plus, LayoutDashboard, ShoppingCart, Receipt, Pill, Boxes, Truck, Building2, Users, Tags, BarChart3, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
@@ -12,161 +9,13 @@ import { counterValue, pinContext, unpin } from "@/lib/pins";
 import { runBackupNow } from "@/lib/backup";
 import { ResizeHandle } from "@/components/ResizeHandle";
 import { runQuickAction, type QuickActionId } from "@/lib/quick-actions";
-
-const ICONS: Record<string, any> = {
-  "/app": LayoutDashboard,
-  "/app/sales": ShoppingCart,
-  "/app/bills": Receipt,
-  "/app/medicines": Pill,
-  "/app/inventory": Boxes,
-  "/app/purchases": Truck,
-  "/app/suppliers": Building2,
-  "/app/customers": Users,
-  "/app/categories": Tags,
-  "/app/reports": BarChart3,
-  "/app/settings": Settings,
-  "cmd:save": Save,
-  "cmd:backup": HardDriveDownload,
-};
-
-/** Always-visible bottom strip holding pinned buttons, counters and commands. */
+const ICONS: Record<string, any> = { "/app": LayoutDashboard, "/app/sales": ShoppingCart, "/app/bills": Receipt, "/app/medicines": Pill, "/app/inventory": Boxes, "/app/purchases": Truck, "/app/suppliers": Building2, "/app/customers": Users, "/app/categories": Tags, "/app/reports": BarChart3, "/app/settings": Settings, "cmd:save": Save, "cmd:backup": HardDriveDownload };
 export function PinBar() {
-  const data = useProjectStore((s) => s.data);
-  const mutate = useProjectStore((s) => s.mutate);
-  const save = useProjectStore((s) => s.save);
-  const user = useSession((s) => s.user);
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-
-  if (!data) return null;
-  const s = data.settings;
-  const allowed = user?.role === "admin" || !!user?.permissions.pinPanel;
-  if (!allowed || s.pinPanelHidden) return null;
-
-  const items = s.pinnedItems ?? [];
-  const minimized = !!s.pinPanelMinimized;
-  const height = Math.min(220, Math.max(44, s.pinBarHeight ?? 60));
-
-  function setMinimized(v: boolean) {
-    mutate((d) => { d.settings.pinPanelMinimized = v; }, { history: false });
-  }
-
-  async function runCmd(id: string) {
-    setBusy(true);
-    try {
-      if (id === "cmd:save") {
-        const ok = await save();
-        toast[ok ? "success" : "error"](ok ? "Saved" : "Save failed");
-      } else if (id === "cmd:backup") {
-        const written = await runBackupNow();
-        if (written) toast.success(`Backup saved: ${written}`);
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Action failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const UnpinBtn = ({ id }: { id: string }) => (
-    <button
-      title="Unpin"
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); unpin(id); }}
-      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-    >
-      <X className="h-3 w-3" />
-    </button>
-  );
-
-  return (
-    <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur">
-      {!minimized && (
-        <ResizeHandle
-          orientation="horizontal"
-          value={height}
-          invert
-          min={44}
-          max={220}
-          onChange={(v) => mutate((d) => { d.settings.pinBarHeight = v; }, { history: false })}
-        />
-      )}
-      <div
-        className="flex items-center gap-2 overflow-x-auto px-3"
-        style={{ height: minimized ? 32 : height }}
-      >
-        <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
-        {minimized ? (
-          <span className="text-xs text-muted-foreground">Pinned panel ({items.length})</span>
-        ) : items.length === 0 ? (
-          <span className="text-xs text-muted-foreground">
-            Right-click any tab, counter or button and choose “Pin” to place it here.
-          </span>
-        ) : (
-          items.map((p) => {
-            const Icon = ICONS[p.id] ?? ICONS[p.to ?? ""] ?? (p.kind === "action" ? Plus : Pin);
-            const menu = pinContext({ ...p });
-            if (p.kind === "counter") {
-              return (
-                <div
-                  key={p.id}
-                  {...menu}
-                  className="flex shrink-0 items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
-                >
-                  <span className="text-muted-foreground">{p.label}</span>
-                  <span className="font-display text-sm font-bold tabular-nums">
-                    {counterValue(data, p.id)}
-                  </span>
-                  <UnpinBtn id={p.id} />
-                </div>
-              );
-            }
-            if (p.kind === "cmd" || p.kind === "action") {
-              const isAction = p.kind === "action";
-              return (
-                <div key={p.id} className="flex shrink-0 items-center gap-1 rounded-md border pr-1.5">
-                  <Button
-                    {...menu}
-                    size="sm"
-                    variant="ghost"
-                    className="h-8"
-                    disabled={busy}
-                    onClick={() =>
-                      isAction
-                        ? runQuickAction(p.id.replace(/^action:/, "") as QuickActionId, navigate)
-                        : void runCmd(p.id)
-                    }
-                  >
-                    <Icon className="mr-1.5 h-4 w-4" /> {p.label}
-                  </Button>
-                  <UnpinBtn id={p.id} />
-                </div>
-              );
-            }
-            return (
-              <div key={p.id} className="flex shrink-0 items-center gap-1 rounded-md border pr-1.5">
-                <Link
-                  to={p.to ?? p.id}
-                  draggable={false}
-                  {...menu}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs hover:bg-accent"
-                >
-                  <Icon className="h-4 w-4 text-primary" /> {p.label}
-                </Link>
-                <UnpinBtn id={p.id} />
-              </div>
-            );
-          })
-        )}
-        <Button
-          size="icon"
-          variant="ghost"
-          className="ml-auto h-7 w-7 shrink-0"
-          title={minimized ? "Expand pinned panel" : "Minimize pinned panel"}
-          onClick={() => setMinimized(!minimized)}
-        >
-          {minimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
-      </div>
-    </div>
-  );
+  const data = useProjectStore((s) => s.data); const mutate = useProjectStore((s) => s.mutate); const save = useProjectStore((s) => s.save); const user = useSession((s) => s.user); const navigate = useNavigate(); const [busy, setBusy] = useState(false);
+  if (!data) return null; const s = data.settings; const allowed = user?.role === "admin" || user?.permissions.viewPinPanel === true; if (!allowed || s.pinPanelHidden) return null;
+  const items = s.pinnedItems ?? []; const minimized = !!s.pinPanelMinimized; const height = Math.min(220, Math.max(44, s.pinBarHeight ?? 60));
+  function setMinimized(v: boolean) { mutate((d) => { d.settings.pinPanelMinimized = v; }, { history: false }); }
+  async function runCmd(id: string) { setBusy(true); try { if (id === "cmd:save") { const ok = await save(); toast[ok ? "success" : "error"](ok ? "Saved" : "Save failed"); } else if (id === "cmd:backup") { const written = await runBackupNow(); if (written) toast.success(`Backup saved: ${written}`); } } catch (e: any) { toast.error(e?.message ?? "Action failed"); } finally { setBusy(false); } }
+  const UnpinBtn = ({ id }: { id: string }) => <button title="Unpin" onClick={(e) => { e.preventDefault(); e.stopPropagation(); unpin(id); }} className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><X className="h-3 w-3" /></button>;
+  return <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur">{!minimized && <ResizeHandle orientation="horizontal" value={height} invert min={44} max={220} onChange={(v) => mutate((d) => { d.settings.pinBarHeight = v; }, { history: false })} />}<div className="flex items-center gap-2 overflow-x-auto px-3" style={{ height: minimized ? 32 : height }}><Pin className="h-3.5 w-3.5 shrink-0 text-primary" />{minimized ? <span className="text-xs text-muted-foreground">Pinned panel ({items.length})</span> : items.length === 0 ? <span className="text-xs text-muted-foreground">Right-click any tab, counter or button and choose “Pin” to place it here.</span> : items.map((p) => { const Icon = ICONS[p.id] ?? ICONS[p.to ?? ""] ?? (p.kind === "action" ? Plus : Pin); const menu = pinContext({ ...p }); if (p.kind === "counter") return <div key={p.id} {...menu} className="flex shrink-0 items-center gap-2 rounded-md border px-3 py-1.5 text-xs"><span className="text-muted-foreground">{p.label}</span><span className="font-display text-sm font-bold tabular-nums">{counterValue(data, p.id)}</span><UnpinBtn id={p.id} /></div>; if (p.kind === "cmd" || p.kind === "action") { const isAction = p.kind === "action"; return <div key={p.id} className="flex shrink-0 items-center gap-1 rounded-md border pr-1.5"><Button {...menu} size="sm" variant="ghost" className="h-8" disabled={busy} onClick={() => isAction ? runQuickAction(p.id.replace(/^action:/, "") as QuickActionId, navigate) : void runCmd(p.id)}><Icon className="mr-1.5 h-4 w-4" /> {p.label}</Button><UnpinBtn id={p.id} /></div>; } return <div key={p.id} className="flex shrink-0 items-center gap-1 rounded-md border pr-1.5"><Link to={p.to ?? p.id} draggable={false} {...menu} className="flex items-center gap-1.5 px-3 py-1.5 text-xs hover:bg-accent"><Icon className="h-4 w-4 text-primary" /> {p.label}</Link><UnpinBtn id={p.id} /></div>; })}<Button size="icon" variant="ghost" className="ml-auto h-7 w-7 shrink-0" title={minimized ? "Expand pinned panel" : "Minimize pinned panel"} onClick={() => setMinimized(!minimized)}>{minimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button></div></div>;
 }
