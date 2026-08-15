@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Camera, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,8 +26,8 @@ export function BarcodeScanner({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const zxingControlsRef = useRef<{ stop: () => void } | null>(null);
   const onDetectedRef = useRef(onDetected);
-  const armedRef = useRef(true);
   const keyboardRef = useRef({ value: "", startedAt: 0, lastAt: 0 });
   const [error, setError] = useState("");
   onDetectedRef.current = onDetected;
@@ -35,14 +36,24 @@ export function BarcodeScanner({
     if (!open || typeof window === "undefined") return;
     let cancelled = false;
     let clearArmTimer: ReturnType<typeof setTimeout> | null = null;
+    let cameraStarted = false;
+
+    if (background) {
+      (window as any).__medicoreGlobalScannerActive = true;
+    } else if ((window as any).__medicoreGlobalScannerActive) {
+      // The app already has one scanner service. Local scanner instances must
+      // not open another camera stream or another popup.
+      return;
+    }
+
     const stop = () => {
+      zxingControlsRef.current?.stop();
+      zxingControlsRef.current = null;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       if (clearArmTimer) clearTimeout(clearArmTimer);
     };
 
-    // USB/Bluetooth barcode scanners normally behave like a very fast keyboard.
-    // Keep this listener global so scanning works without focusing a field.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const now = performance.now();
@@ -69,59 +80,101 @@ export function BarcodeScanner({
     };
     window.addEventListener("keydown", onKeyDown, true);
 
-    const startCamera = async () => {
-      setError("");
-      armedRef.current = true;
-      const Detector = (window as any).BarcodeDetector;
-      if (!Detector || !navigator.mediaDevices?.getUserMedia) return;
+    const emitCameraResult = (value: string, format?: string) => {
+      const clean = value.trim();
+      if (!clean) return;
+      onDetectedRef.current({ value: clean, format });
+    };
+
+    const startZxing = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
+        const reader = new BrowserMultiFormatReader(undefined, {
+          delayBetweenScanSuccess: continuous ? 700 : 250,
+          delayBetweenScanAttempts: 150,
         });
+        if (!videoRef.current || cancelled) return;
+        const controls = await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result) => {
+            if (!result || cancelled) return;
+            const formatValue = result.getBarcodeFormat();
+            emitCameraResult(result.getText(), formatValue === 11 ? "qr_code" : "zxing");
+            if (!continuous) {
+              controls.stop();
+              zxingControlsRef.current = null;
+            }
+          },
+        );
         if (cancelled) {
-          stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+          controls.stop();
           return;
         }
-        streamRef.current = stream;
-        if (!videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        const detector = new Detector({
-          formats: [
-            "qr_code", "ean_13", "ean_8", "code_128", "code_39", "code_93",
-            "codabar", "itf", "upc_a", "upc_e", "data_matrix",
-          ],
-        });
-        const tick = async () => {
-          if (cancelled || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            const first = codes?.[0];
-            const value = first?.rawValue?.trim();
-            if (value) {
-              if (armedRef.current) {
-                armedRef.current = false;
-                onDetectedRef.current({ value, format: first?.format });
+        zxingControlsRef.current = controls;
+        cameraStarted = true;
+      } catch {
+        // Camera is optional. USB/Bluetooth keyboard scanners remain active.
+      }
+    };
+
+    const startCamera = async () => {
+      setError("");
+      if (!videoRef.current) return;
+
+      // BarcodeDetector is fast where the platform supports it. On Windows
+      // Chromium builds it may be unavailable, so fall back to ZXing, which
+      // performs the decoding in JavaScript and supports webcam scanning.
+      const Detector = (window as any).BarcodeDetector;
+      if (Detector && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false,
+          });
+          if (cancelled) {
+            stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+            return;
+          }
+          streamRef.current = stream;
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          const detector = new Detector({
+            formats: [
+              "qr_code", "ean_13", "ean_8", "code_128", "code_39", "code_93",
+              "codabar", "itf", "upc_a", "upc_e", "data_matrix",
+            ],
+          });
+          const tick = async () => {
+            if (cancelled || !videoRef.current) return;
+            try {
+              const codes = await detector.detect(videoRef.current);
+              const first = codes?.[0];
+              const value = first?.rawValue?.trim();
+              if (value) {
+                emitCameraResult(value, first?.format);
                 if (!continuous) {
                   stop();
                   return;
                 }
+                if (clearArmTimer) clearTimeout(clearArmTimer);
+                clearArmTimer = setTimeout(() => undefined, 500);
               }
-              if (clearArmTimer) clearTimeout(clearArmTimer);
-              clearArmTimer = setTimeout(() => { armedRef.current = true; }, 500);
-            } else if (continuous) {
-              armedRef.current = true;
+            } catch {
+              // Keep scanning silently.
             }
-          } catch {
-            // Keep the silent background scanner alive.
-          }
-          if (!cancelled) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      } catch (e) {
-        // Background mode must never replace the current page with a scanner error.
-        if (!background) setError(e instanceof Error ? e.message : "Could not access the camera.");
+            if (!cancelled) requestAnimationFrame(tick);
+          };
+          cameraStarted = true;
+          requestAnimationFrame(tick);
+          return;
+        } catch {
+          stop();
+        }
+      }
+
+      await startZxing();
+      if (!cameraStarted && !background) {
+        setError("Camera scanning is unavailable. You can still use a USB/Bluetooth scanner or type the code manually.");
       }
     };
 
@@ -130,12 +183,12 @@ export function BarcodeScanner({
       cancelled = true;
       stop();
       window.removeEventListener("keydown", onKeyDown, true);
+      if (background) (window as any).__medicoreGlobalScannerActive = false;
     };
   }, [open, continuous, background]);
 
-  // The background scanner has no UI at all. Scan results are routed by the
-  // active page through the shared custom event.
   if (background) return null;
+  if ((typeof window !== "undefined") && (window as any).__medicoreGlobalScannerActive) return null;
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
