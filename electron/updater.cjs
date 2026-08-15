@@ -103,9 +103,35 @@ async function downloadZip(target, signal) {
   });
 }
 
+function quoteWindowsArg(value) {
+  const text = String(value);
+  if (!/[\s"]/.test(text)) return text;
+  return `"${text.replace(/(\\*)"/g, "$1$1\\\"").replace(/(\\+)$/g, "$1$1")}"`;
+}
+
 function runCommand(command, args, cwd, signal, onOutput) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, windowsHide: true, shell: false, env: { ...process.env, CI: "1" } });
+    const env = { ...process.env, CI: "1" };
+    const isWindows = process.platform === "win32";
+    const executable = isWindows ? (process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe") : command;
+    const spawnArgs = isWindows
+      ? ["/d", "/s", "/c", [command, ...args].map(quoteWindowsArg).join(" ")]
+      : args;
+
+    let child;
+    try {
+      child = spawn(executable, spawnArgs, {
+        cwd,
+        windowsHide: true,
+        shell: false,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
     if (activeJob) activeJob.child = child;
     let stderr = "";
     child.stdout?.on("data", (buf) => onOutput?.(buf.toString()));
@@ -119,7 +145,7 @@ function runCommand(command, args, cwd, signal, onOutput) {
 function killProcessTree(child) {
   if (!child || child.killed) return;
   if (process.platform === "win32") {
-    try { spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true }); } catch {}
+    try { spawn(process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe", ["/d", "/s", "/c", `taskkill.exe /pid ${Number(child.pid)} /t /f`], { windowsHide: true, stdio: "ignore" }); } catch {}
   } else {
     try { child.kill("SIGTERM"); } catch {}
   }
