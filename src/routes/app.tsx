@@ -14,22 +14,12 @@ import { useProjectStore, startClientLiveSync } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isClientMode } from "@/lib/install";
 import { visibleNavItems } from "@/lib/nav";
-import {
-  comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor,
-} from "@/lib/hotkeys";
-import {
-  QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId,
-} from "@/lib/quick-actions";
+import { comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor } from "@/lib/hotkeys";
+import { QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId } from "@/lib/quick-actions";
 import { firePrintAction, hasPrinter } from "@/lib/print-action";
-import { BarcodeScanner, dispatchBarcodeScan } from "@/components/BarcodeScanner";
+import { BarcodeScanner, BARCODE_SCAN_EVENT, dispatchBarcodeScan } from "@/components/BarcodeScanner";
 
-
-
-/** Resolve the effective combo -> path map for the given tabs. */
-export function buildHotkeyMap(
-  tabs: { to: string }[],
-  custom?: Record<string, string>,
-) {
+export function buildHotkeyMap(tabs: { to: string }[], custom?: Record<string, string>) {
   const map = new Map<string, string>();
   tabs.forEach((t, i) => {
     const combo = custom?.[t.to] || defaultHotkeyFor(i);
@@ -40,19 +30,63 @@ export function buildHotkeyMap(
   return map;
 }
 
-/** Effective (possibly custom) combo label for a tab at a given index. */
 export function effectiveHotkey(to: string, index: number, custom?: Record<string, string>) {
   return custom?.[to] || defaultHotkeyFor(index);
 }
 
+function setReactInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function routeBackgroundScan(pathname: string, value: string, format?: string) {
+  if (!value || pathname === "/app/sales") return;
+  const qr = format === "qr_code";
+  const active = document.activeElement;
+  if (active instanceof HTMLInputElement) {
+    const placeholder = (active.placeholder || "").toLowerCase();
+    if (placeholder.includes("barcode") || placeholder.includes("qr code")) {
+      setReactInputValue(active, value);
+      return;
+    }
+  }
+
+  if (pathname === "/app/medicines") {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (dialog) {
+      const selector = qr ? 'input[placeholder="Type or scan QR code"]' : 'input[placeholder="Type or scan barcode"]';
+      const target = dialog.querySelector<HTMLInputElement>(selector);
+      if (target) {
+        setReactInputValue(target, value);
+        return;
+      }
+    }
+    const codeSearch = document.querySelector<HTMLInputElement>('input[placeholder="Enter barcode or QR code…"]');
+    if (codeSearch) {
+      setReactInputValue(codeSearch, value);
+      return;
+    }
+  }
+
+  if (pathname === "/app/operations") {
+    const operationSearch = document.querySelector<HTMLInputElement>('input[placeholder="Scan barcode…"]');
+    if (operationSearch) {
+      setReactInputValue(operationSearch, value);
+      return;
+    }
+  }
+
+  const barcodeField = Array.from(document.querySelectorAll<HTMLInputElement>("input")).find((input) => {
+    const placeholder = (input.placeholder || "").toLowerCase();
+    return placeholder.includes("barcode") || placeholder.includes("qr code");
+  });
+  if (barcodeField) setReactInputValue(barcodeField, value);
+}
 
 export const Route = createFileRoute("/app")({
-  head: () => ({
-    meta: [
-      { title: "MediCore Workspace" },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "MediCore Workspace" }, { name: "robots", content: "noindex" }] }),
   beforeLoad: () => {
     if (typeof window !== "undefined") {
       if (!useSession.getState().user) throw redirect({ to: "/" });
@@ -77,16 +111,8 @@ function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const enabled = data?.settings.tabShortcutsEnabled !== false;
 
-  const visibleTabs = useMemo(
-    () => visibleNavItems(data?.settings, user),
-    [data?.settings, user],
-  );
-
-  const hotkeyMap = useMemo(
-    () => buildHotkeyMap(visibleTabs, data?.settings.tabHotkeys),
-    [visibleTabs, data?.settings.tabHotkeys],
-  );
-
+  const visibleTabs = useMemo(() => visibleNavItems(data?.settings, user), [data?.settings, user]);
+  const hotkeyMap = useMemo(() => buildHotkeyMap(visibleTabs, data?.settings.tabHotkeys), [visibleTabs, data?.settings.tabHotkeys]);
   const actionMap = useMemo(() => {
     const m = new Map<string, QuickActionId>();
     for (const a of QUICK_ACTIONS) {
@@ -97,11 +123,14 @@ function AppLayout() {
     return m;
   }, [data?.settings.actionHotkeys]);
 
-  // One silent scanner service is shared by every page. It has no dialog or
-  // overlay; the active route decides what a scanned code means.
   useEffect(() => {
-    return undefined;
-  }, []);
+    const onScan = (event: Event) => {
+      const detail = (event as CustomEvent<{ value?: string; format?: string }>).detail;
+      if (detail?.value) routeBackgroundScan(pathname, detail.value, detail.format);
+    };
+    window.addEventListener(BARCODE_SCAN_EVENT, onScan);
+    return () => window.removeEventListener(BARCODE_SCAN_EVENT, onScan);
+  }, [pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -110,7 +139,6 @@ function AppLayout() {
       const key = normaliseCombo(combo);
       const el = document.activeElement as HTMLElement | null;
       const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable;
-
       if (key === "ctrl+z" || key === "ctrl+y" || key === "ctrl+shift+z") {
         if (typing) return;
         e.preventDefault();
@@ -120,7 +148,6 @@ function AppLayout() {
         else toast.message(key === "ctrl+z" ? "Nothing to undo" : "Nothing to redo");
         return;
       }
-
       const action = actionMap.get(key);
       if (!action) return;
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
@@ -155,9 +182,7 @@ function AppLayout() {
           if (hit && t.to.length > bestLen) { bestLen = t.to.length; currentIdx = i; }
         });
         const base = currentIdx < 0 ? 0 : currentIdx;
-        const nextIdx = e.shiftKey
-          ? (base - 1 + visibleTabs.length) % visibleTabs.length
-          : (base + 1) % visibleTabs.length;
+        const nextIdx = e.shiftKey ? (base - 1 + visibleTabs.length) % visibleTabs.length : (base + 1) % visibleTabs.length;
         go(visibleTabs[nextIdx].to);
         return;
       }
@@ -182,9 +207,7 @@ function AppLayout() {
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName;
       if (!global && (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable)) return;
-      const search = global
-        ? document.querySelector<HTMLInputElement>("[data-global-search]")
-        : document.querySelector<HTMLInputElement>("[data-search]");
+      const search = global ? document.querySelector<HTMLInputElement>("[data-global-search]") : document.querySelector<HTMLInputElement>("[data-search]");
       if (!search) return;
       e.preventDefault();
       search.focus();
@@ -197,9 +220,7 @@ function AppLayout() {
   useEffect(() => {
     const runPrint = async (skipCheck: boolean) => {
       if (!skipCheck && !(await hasPrinter())) {
-        toast.error("No printer found — please connect and install a printer, then try again.", {
-          action: { label: "Retry", onClick: () => void runPrint(false) },
-        });
+        toast.error("No printer found — please connect and install a printer, then try again.", { action: { label: "Retry", onClick: () => void runPrint(false) } });
         return;
       }
       firePrintAction({ skipCheck });
@@ -233,38 +254,21 @@ function AppLayout() {
 
   const mutate = useProjectStore((s) => s.mutate);
   const sidebarWidth = Math.min(420, Math.max(180, data?.settings.sidebarWidth ?? 256));
-
   if (!data) return null;
 
   return (
     <SidebarProvider style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
-        <ResizeHandle
-          orientation="vertical"
-          value={sidebarWidth}
-          min={180}
-          max={420}
-          onChange={(v) => mutate((d) => { d.settings.sidebarWidth = v; })}
-          className="hidden md:block"
-        />
+        <ResizeHandle orientation="vertical" value={sidebarWidth} min={180} max={420} onChange={(v) => mutate((d) => { d.settings.sidebarWidth = v; })} className="hidden md:block" />
         <SidebarInset className="flex min-w-0 flex-1 flex-col">
           <AppTopbar />
-          <main className="flex-1 overflow-auto">
-            <Outlet />
-          </main>
+          <main className="flex-1 overflow-auto"><Outlet /></main>
           <PinBar />
         </SidebarInset>
       </div>
       <ItemMenuHost />
-      <BarcodeScanner
-        open
-        continuous
-        background
-        onClose={() => undefined}
-        onDetected={dispatchBarcodeScan}
-      />
+      <BarcodeScanner open continuous background onClose={() => undefined} onDetected={dispatchBarcodeScan} />
     </SidebarProvider>
   );
 }
-
