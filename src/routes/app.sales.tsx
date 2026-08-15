@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ShoppingCart, Search, Trash2, Receipt, AlertTriangle, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { nextInvoiceNumber, printReceipt } from "@/lib/receipt";
 import { cartTotals } from "@/lib/sale-math";
 import type { PaymentMethod, Sale } from "@/domain/schema";
 import { PermissionGate } from "@/components/PermissionGate";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { logSaleEvent } from "@/lib/audit-log";
 import { canChangeCheckoutPrice, canForceSale } from "@/lib/granular-permissions";
 
@@ -32,9 +33,7 @@ function SalesPage() {
   const canDiscount = isAdmin || !!user?.permissions.applyDiscount;
   const forcePermission = canForceSale(user);
   const canPriceByPermission = canChangeCheckoutPrice(user);
-  const canChangePrice = isAdmin
-    ? data.settings.allowCheckoutPriceChange !== false
-    : canPriceByPermission;
+  const canChangePrice = isAdmin ? data.settings.allowCheckoutPriceChange !== false : canPriceByPermission;
   const maxDiscount = (user?.maxDiscount && user.maxDiscount > 0) ? user.maxDiscount : (data.settings.maxDiscount ?? 0);
 
   const cart = useCartStore((s) => s.cart);
@@ -57,12 +56,18 @@ function SalesPage() {
   type SearchBy = "name" | "generic" | "company";
   const [q, setQ] = useState("");
   const [by, setBy] = useState<SearchBy>(data.settings.defaultSearchBy ?? "name");
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
     const field = (m: (typeof data.medicines)[number]) => by === "generic" ? m.genericName : by === "company" ? m.company : m.name;
-    return data.medicines.filter((m) => (m.barcode ?? "").toLowerCase().includes(t) || (field(m) ?? "").toLowerCase().includes(t)).slice(0, 8);
+    const matches = data.medicines.filter((m) => (m.barcode ?? "").toLowerCase().includes(t) || (m.qrCode ?? "").toLowerCase().includes(t) || (field(m) ?? "").toLowerCase().includes(t));
+    return matches.sort((a, b) => {
+      const ac = (a.barcode ?? "").toLowerCase() === t || (a.qrCode ?? "").toLowerCase() === t;
+      const bc = (b.barcode ?? "").toLowerCase() === t || (b.qrCode ?? "").toLowerCase() === t;
+      return Number(bc) - Number(ac);
+    }).slice(0, 8);
   }, [q, data.medicines, by]);
 
   function confirmForce(med: (typeof data.medicines)[number], quantity: number) {
@@ -90,6 +95,19 @@ function SalesPage() {
     });
     setQ("");
   }
+
+  const addScannedCode = useCallback((code: string) => {
+    const normalized = code.trim().toLowerCase();
+    const med = data.medicines.find((m) => (m.barcode ?? "").trim().toLowerCase() === normalized || (m.qrCode ?? "").trim().toLowerCase() === normalized);
+    if (!med) {
+      setScannerOpen(false);
+      setQ(code);
+      toast.error(`No medicine found for code ${code}`);
+      return;
+    }
+    setScannerOpen(false);
+    add(med.id);
+  }, [data.medicines, cart]);
 
   function setQuantity(i: number, value: number) {
     const clean = Math.max(1, Math.floor(value || 1));
@@ -127,14 +145,8 @@ function SalesPage() {
   function validateStockBeforeCheckout() {
     for (const line of cart) {
       const med = data.medicines.find((m) => m.id === line.medicineId);
-      if (!med) {
-        toast.error(`Medicine no longer exists: ${line.name}`);
-        return false;
-      }
-      if (line.quantity > med.stockQuantity && !forcePermission) {
-        toast.error(`${med.name}: only ${med.stockQuantity} in stock. Force Sale permission is required.`);
-        return false;
-      }
+      if (!med) { toast.error(`Medicine no longer exists: ${line.name}`); return false; }
+      if (line.quantity > med.stockQuantity && !forcePermission) { toast.error(`${med.name}: only ${med.stockQuantity} in stock. Force Sale permission is required.`); return false; }
       if (line.quantity > med.stockQuantity && !line.forcedSale) {
         const ok = window.confirm(`"${med.name}" is below requested stock. Force sell ${line.quantity - med.stockQuantity} extra item(s)?`);
         if (!ok) return false;
@@ -149,36 +161,18 @@ function SalesPage() {
     if (!validateStockBeforeCheckout()) return;
     const invoiceNumber = nextInvoiceNumber(data);
     const newSale: Sale = {
-      id: uid("sale_"), invoiceNumber, date: new Date().toISOString(),
-      customerId: customerId || undefined, remark: remark.trim() || undefined,
-      items: cart.map(({ name: _n, forced, ...rest }) => ({
-        ...rest,
-        forcedSale: forced === true || rest.forcedSale === true,
-        costPriceAtSale: data.medicines.find((m) => m.id === rest.medicineId)?.purchasePrice ?? 0,
-      })),
-      discount: canDiscount ? discount : 0,
-      taxPercent,
-      payments: [{ method: method === "mixed" ? "cash" : method, amount: total }],
-      status: "completed", createdBy: user?.username,
+      id: uid("sale_"), invoiceNumber, date: new Date().toISOString(), customerId: customerId || undefined, remark: remark.trim() || undefined,
+      items: cart.map(({ name: _n, forced, ...rest }) => ({ ...rest, forcedSale: forced === true || rest.forcedSale === true, costPriceAtSale: data.medicines.find((m) => m.id === rest.medicineId)?.purchasePrice ?? 0 })),
+      discount: canDiscount ? discount : 0, taxPercent, payments: [{ method: method === "mixed" ? "cash" : method, amount: total }], status: "completed", createdBy: user?.username,
     };
-
     mutate((d) => {
-      for (const line of cart) {
-        const m = d.medicines.find((x) => x.id === line.medicineId);
-        if (m) m.stockQuantity = Math.max(0, m.stockQuantity - line.quantity);
-      }
-      if (customerId) {
-        const c = d.customers.find((x) => x.id === customerId);
-        if (c) c.loyaltyPoints = (c.loyaltyPoints ?? 0) + Math.floor(total);
-      }
-      d.sales.push(newSale);
-      d.settings.invoiceCounter = Number(invoiceNumber) + 1;
+      for (const line of cart) { const m = d.medicines.find((x) => x.id === line.medicineId); if (m) m.stockQuantity = Math.max(0, m.stockQuantity - line.quantity); }
+      if (customerId) { const c = d.customers.find((x) => x.id === customerId); if (c) c.loyaltyPoints = (c.loyaltyPoints ?? 0) + Math.floor(total); }
+      d.sales.push(newSale); d.settings.invoiceCounter = Number(invoiceNumber) + 1;
     }, { history: false });
     void logSaleEvent(newSale.id, total, user?.username, user?.id);
     toast.success(`Sale complete · ${invoiceNumber}`);
-    if (newSale.items.some((x) => x.forcedSale) && data.settings.notifyOnForceSale !== false && isAdmin) {
-      toast.warning("This sale contains a forced-sale item");
-    }
+    if (newSale.items.some((x) => x.forcedSale) && data.settings.notifyOnForceSale !== false && isAdmin) toast.warning("This sale contains a forced-sale item");
     if (printBill) printReceipt(newSale, useProjectStore.getState().data!);
     reset();
   }
@@ -189,57 +183,31 @@ function SalesPage() {
     <div className="grid h-full grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr,380px]">
       <div className="surface-card flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 border-b p-4">
-          <ShoppingCart className="h-5 w-5 text-primary" />
-          <h1 className="font-display text-lg font-semibold">Point of Sale</h1>
+          <ShoppingCart className="h-5 w-5 text-primary" /><h1 className="font-display text-lg font-semibold">Point of Sale</h1>
           {hasForced && <span className="ml-auto flex items-center gap-1 rounded bg-warning/15 px-2 py-1 text-[11px] font-medium text-warning"><AlertTriangle className="h-3 w-3" /> Contains force-sold items</span>}
         </div>
         <div className="relative border-b p-3">
           <div className="flex items-center gap-1.5">
-            <Select value={by} onValueChange={(v) => setBy(v as SearchBy)}>
-              <SelectTrigger className="h-11 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="generic">Generic</SelectItem><SelectItem value="company">Company</SelectItem></SelectContent>
-            </Select>
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <SearchInput data-search phrases={["Scan barcode or search medicine…", "Enter adds the top match…"]} value={q} autoFocus onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && results[0]) add(results[0].id); }} className="h-11 pl-8 text-sm" />
-            </div>
+            <Select value={by} onValueChange={(v) => setBy(v as SearchBy)}><SelectTrigger className="h-11 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="generic">Generic</SelectItem><SelectItem value="company">Company</SelectItem></SelectContent></Select>
+            <div className="relative flex-1"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><SearchInput data-search phrases={["Scan barcode or QR code or search medicine…", "Enter adds the top match…"]} value={q} autoFocus onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && results[0]) add(results[0].id); }} className="h-11 pl-8 text-sm" /></div>
+            <Button type="button" size="icon" variant="outline" className="h-11 w-11 shrink-0" title="Scan barcode or QR code with camera" onClick={() => setScannerOpen(true)}><Camera className="h-4 w-4" /></Button>
           </div>
-          {results.length > 0 && <div className="absolute left-3 right-3 top-14 z-10 max-h-72 overflow-auto rounded-md border bg-popover shadow-elevated">
-            {results.map((m) => <button key={m.id} onClick={() => add(m.id)} className="flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted">
-              <span><span className="font-medium">{m.name}</span><span className="ml-2 text-xs text-muted-foreground">{m.barcode || m.genericName || ""}</span></span>
-              <span className={`text-xs ${m.stockQuantity <= 0 ? "text-destructive" : "text-muted-foreground"}`}>Stock {m.stockQuantity} · {money(m.salePrice, sym)}</span>
-            </button>)}
-          </div>}
+          {results.length > 0 && <div className="absolute left-3 right-3 top-14 z-10 max-h-72 overflow-auto rounded-md border bg-popover shadow-elevated">{results.map((m) => <button key={m.id} onClick={() => add(m.id)} className="flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted"><span><span className="font-medium">{m.name}</span><span className="ml-2 text-xs text-muted-foreground">{m.barcode || m.qrCode || m.genericName || ""}</span></span><span className={`text-xs ${m.stockQuantity <= 0 ? "text-destructive" : "text-muted-foreground"}`}>Stock {m.stockQuantity} · {money(m.salePrice, sym)}</span></button>)}</div>}
         </div>
         <div className="flex-1 overflow-auto p-3">
-          {cart.length === 0 ? <div className="grid place-items-center py-24 text-sm text-muted-foreground">Cart is empty — scan or search a medicine to begin.</div> : <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground"><tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr></thead>
-            <tbody>{cart.map((l, i) => <tr key={l.medicineId} className="border-b last:border-0">
-              <td className="p-2">{l.name}{(l.forced || l.forcedSale) && <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">FORCED</span>}</td>
-              <td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => setQuantity(i, +e.target.value)} /></td>
-              <td className="p-2"><Input type="number" min={0} step="0.01" disabled={!canChangePrice} title={!canChangePrice ? "You do not have permission to change the checkout price" : "Change price for this sale only"} className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td>
-              <td className="p-2 text-right tabular-nums">{money(l.salePrice * l.quantity, sym)}</td>
-              <td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
-            </tr>)}</tbody>
-          </table>}
+          {cart.length === 0 ? <div className="grid place-items-center py-24 text-sm text-muted-foreground">Cart is empty — scan or search a medicine to begin.</div> : <table className="w-full text-sm"><thead className="text-xs text-muted-foreground"><tr className="border-b"><th className="p-2 text-left">Item</th><th className="p-2 text-right w-20">Qty</th><th className="p-2 text-right w-24">Price</th><th className="p-2 text-right w-28">Line</th><th className="w-10"></th></tr></thead><tbody>{cart.map((l, i) => <tr key={l.medicineId} className="border-b last:border-0"><td className="p-2">{l.name}{(l.forced || l.forcedSale) && <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">FORCED</span>}</td><td className="p-2"><Input type="number" min={1} className="h-8 text-right" value={l.quantity || ""} onChange={(e) => setQuantity(i, +e.target.value)} /></td><td className="p-2"><Input type="number" min={0} step="0.01" disabled={!canChangePrice} title={!canChangePrice ? "You do not have permission to change the checkout price" : "Change price for this sale only"} className="h-8 text-right" value={l.salePrice || ""} onChange={(e) => updLine(i, { salePrice: +e.target.value || 0 })} /></td><td className="p-2 text-right tabular-nums">{money(l.salePrice * l.quantity, sym)}</td><td className="p-2 text-right"><Button size="icon" variant="ghost" onClick={() => setCart((c) => c.filter((_, k) => k !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table>}
         </div>
       </div>
       <aside className="surface-card flex flex-col gap-3 p-4">
         <h2 className="flex items-center gap-2 font-display text-base font-semibold"><Receipt className="h-4 w-4" /> Checkout</h2>
         <div><Label className="text-xs">Customer (optional)</Label><Select value={customerId || "none"} onValueChange={(v) => setCustomerId(v === "none" ? "" : v)}><SelectTrigger className="h-9"><SelectValue placeholder="Walk-in customer" /></SelectTrigger><SelectContent><SelectItem value="none">Walk-in customer</SelectItem>{data.customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
         <div><Label className="text-xs">Remark (optional)</Label><Input value={remark} placeholder="e.g. MUZAMMIL SB" onChange={(e) => setRemark(e.target.value)} /></div>
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-          <Row k="Subtotal" v={money(subtotal, sym)} /><div className="mt-2"><Row k={`Tax (${taxPercent}%)`} v={money(taxAmt, sym)} /></div>
-          <div className="mt-3 flex items-center gap-3"><Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount %</Label><Input type="number" max={100} className="h-8 flex-1" placeholder="0" disabled={!canDiscount} value={discount || ""} onChange={(e) => handleDiscountChange(+e.target.value)} /><span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">−{money(discountValue, sym)}</span></div>
-          {specialPercent > 0 && <p className="mt-1 text-[11px] text-primary">Customer special discount {specialPercent}% applied automatically.</p>}
-          {!isAdmin && maxDiscount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {maxDiscount}%</p>}
-          <div className="mt-3 flex items-center justify-between border-t pt-2"><span className="font-display font-semibold">Total</span><span className="font-display text-xl font-bold tabular-nums">{money(total, sym)}</span></div>
-        </div>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm"><Row k="Subtotal" v={money(subtotal, sym)} /><div className="mt-2"><Row k={`Tax (${taxPercent}%)`} v={money(taxAmt, sym)} /></div><div className="mt-3 flex items-center gap-3"><Label className="w-20 shrink-0 whitespace-nowrap text-xs">Discount %</Label><Input type="number" max={100} className="h-8 flex-1" placeholder="0" disabled={!canDiscount} value={discount || ""} onChange={(e) => handleDiscountChange(+e.target.value)} /><span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">−{money(discountValue, sym)}</span></div>{specialPercent > 0 && <p className="mt-1 text-[11px] text-primary">Customer special discount {specialPercent}% applied automatically.</p>}{!isAdmin && maxDiscount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">Max discount: {maxDiscount}%</p>}<div className="mt-3 flex items-center justify-between border-t pt-2"><span className="font-display font-semibold">Total</span><span className="font-display text-xl font-bold tabular-nums">{money(total, sym)}</span></div></div>
         <div><Label className="text-xs">Payment method</Label><Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="card">Card</SelectItem><SelectItem value="online">Online</SelectItem></SelectContent></Select></div>
         {method === "cash" && <><div><Label className="text-xs">Cash received (optional)</Label><Input type="number" value={received || ""} onChange={(e) => setReceived(+e.target.value || 0)} /></div><Row k="Change" v={money(change, sym)} /></>}
-        <label className="mt-auto flex items-center gap-2 text-sm"><Checkbox checked={printBill} onCheckedChange={(v) => setPrintBill(v === true)} /><span>Print bill</span></label>
-        <Button size="lg" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
+        <label className="mt-auto flex items-center gap-2 text-sm"><Checkbox checked={printBill} onCheckedChange={(v) => setPrintBill(v === true)} /><span>Print bill</span></label><Button size="lg" onClick={checkout} disabled={cart.length === 0}>Complete sale</Button>
       </aside>
+      <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={({ value }) => addScannedCode(value)} title="Scan medicine barcode or QR code" />
     </div>
   );
 }
