@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProjectStore } from "@/store/project-store";
-import { money, useCurrencySymbol } from "@/lib/format";
+import { dateKeyLocal, money, useCurrencySymbol } from "@/lib/format";
 import { printHtml } from "@/lib/receipt";
 import { saleProfit as saleProfitOf, saleTotal as saleTotalOf } from "@/lib/sale-math";
 import type { ProjectData } from "@/domain/schema";
@@ -45,7 +45,7 @@ function medicineNames(data: ProjectData, ids: string[]) {
   return ids.map((id) => data.medicines.find((m) => m.id === id)?.name ?? id).join(", ");
 }
 function endOfMonth(year: number, monthIndex: number) { return new Date(year, monthIndex + 1, 0).toISOString().slice(0, 10); }
-function startOfWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.toISOString().slice(0, 10); }
+function startOfWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return dateKeyLocal(d); }
 
 function buildRows(data: ProjectData): ReportRow[] {
   const rows: ReportRow[] = [];
@@ -89,11 +89,11 @@ function buildRows(data: ProjectData): ReportRow[] {
 
 function presetRange(preset: string) {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = dateKeyLocal(now);
   if (preset === "today") return [today, today] as const;
-  if (preset === "yesterday") { const d = new Date(now); d.setDate(d.getDate() - 1); const k = d.toISOString().slice(0, 10); return [k, k] as const; }
+  if (preset === "yesterday") { const d = new Date(now); d.setDate(d.getDate() - 1); const k = dateKeyLocal(d); return [k, k] as const; }
   if (preset === "week") return [startOfWeek(now), today] as const;
-  if (preset === "month") return [new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10), today] as const;
+  if (preset === "month") return [dateKeyLocal(new Date(now.getFullYear(), now.getMonth(), 1)), today] as const;
   if (preset === "year") return [new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10), today] as const;
   if (preset === "last-year") return [`${now.getFullYear() - 1}-01-01`, `${now.getFullYear() - 1}-12-31`] as const;
   return ["", ""] as const;

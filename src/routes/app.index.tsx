@@ -8,7 +8,7 @@ import {
 import { useProjectStore } from "@/store/project-store";
 import { useSession } from "@/store/session-store";
 import { isCounterVisible, type CounterId } from "@/lib/users";
-import { daysUntil, money } from "@/lib/format";
+import { dateKeyLocal, daysUntil, money } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
 import { saleTotal as saleTotalOf, saleProfit as saleProfitOf } from "@/lib/sale-math";
 import { AdminGate } from "@/components/PermissionGate";
@@ -84,8 +84,8 @@ function Dashboard() {
         buckets.push({
           label: cursor.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
           value: events.filter((e) => e.t >= from && e.t < next).reduce((a, e) => a + e.v, 0),
-          from: new Date(from).toISOString().slice(0, 10),
-          to: new Date(next - day).toISOString().slice(0, 10),
+          from: dateKeyLocal(new Date(from)),
+          to: dateKeyLocal(new Date(next - day)),
         });
         cursor.setMonth(cursor.getMonth() + 1);
       }
@@ -96,7 +96,7 @@ function Dashboard() {
         buckets.push({
           label: new Date(from).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
           value: events.filter((e) => e.t >= from && e.t < from + day).reduce((a, e) => a + e.v, 0),
-          from: new Date(from).toISOString().slice(0, 10),
+          from: dateKeyLocal(new Date(from)),
           to: new Date(from).toISOString().slice(0, 10),
         });
       }
