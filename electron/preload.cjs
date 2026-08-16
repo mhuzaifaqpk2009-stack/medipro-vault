@@ -15,12 +15,6 @@ contextBridge.exposeInMainWorld("medicore", {
   backup: { pickFolder: () => ipcRenderer.invoke("backup:pickFolder"), write: (dir, name, bytes) => ipcRenderer.invoke("backup:write", dir, name, bytes) },
   system: { userDataPath: () => ipcRenderer.invoke("system:userData"), platform: process.platform },
   print: { html: (html) => ipcRenderer.invoke("app:print-html", html), printers: () => ipcRenderer.invoke("app:list-printers") },
-  updater: {
-    status: () => ipcRenderer.invoke("updater:status"),
-    check: () => ipcRenderer.invoke("updater:check"),
-    install: () => ipcRenderer.invoke("updater:install"),
-    onStatus: (cb) => { const listener = (_e, status) => cb(status); ipcRenderer.on("updater:status", listener); return () => ipcRenderer.removeListener("updater:status", listener); },
-  },
 });
 
 const entity = (name) => ({ list: () => ipcRenderer.invoke("db:list", name), get: (id) => ipcRenderer.invoke("db:get", name, id), save: (row) => ipcRenderer.invoke("db:save", name, row), remove: (id) => ipcRenderer.invoke("db:remove", name, id) });

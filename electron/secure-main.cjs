@@ -147,5 +147,4 @@ http.createServer = function secureCreateServer(...args) {
 };
 
 require("./medicine-search.cjs");
-require("./updater.cjs");
 require("./main.cjs");
