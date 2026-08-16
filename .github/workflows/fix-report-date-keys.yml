@@ -1,0 +1,44 @@
+name: Fix report date keys
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fix-report-date-keys.yml
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use local date keys
+        shell: python
+        run: |
+          from pathlib import Path
+          app = Path('src/routes/app.index.tsx')
+          text = app.read_text(encoding='utf-8')
+          text = text.replace('import { daysUntil, money } from "@/lib/format";', 'import { dateKeyLocal, daysUntil, money } from "@/lib/format";')
+          text = text.replace('from: new Date(from).toISOString().slice(0, 10),', 'from: dateKeyLocal(new Date(from)),')
+          text = text.replace('to: new Date(next - day).toISOString().slice(0, 10),', 'to: dateKeyLocal(new Date(next - day)),')
+          text = text.replace('from: new Date(from).toISOString().slice(0, 10),\n          to: new Date(from).toISOString().slice(0, 10),', 'from: dateKeyLocal(new Date(from)),\n          to: dateKeyLocal(new Date(from)),')
+          app.write_text(text, encoding='utf-8')
+
+          report = Path('src/components/reports/ReportExplorer.tsx')
+          text = report.read_text(encoding='utf-8')
+          text = text.replace('import { money, useCurrencySymbol } from "@/lib/format";', 'import { dateKeyLocal, money, useCurrencySymbol } from "@/lib/format";')
+          text = text.replace('function dateKey(value?: string) { return value ? String(value).slice(0, 10) : ""; }', 'function dateKey(value?: string) { return value ? String(value).slice(0, 10) : ""; }')
+          text = text.replace('function startOfWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d.toISOString().slice(0, 10); }', 'function startOfWeek(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return dateKeyLocal(d); }')
+          text = text.replace('const today = now.toISOString().slice(0, 10);', 'const today = dateKeyLocal(now);')
+          text = text.replace('const k = d.toISOString().slice(0, 10);', 'const k = dateKeyLocal(d);')
+          text = text.replace('new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)', 'dateKeyLocal(new Date(now.getFullYear(), now.getMonth(), 1))')
+          report.write_text(text, encoding='utf-8')
+
+          Path('.github/workflows/fix-report-date-keys.yml').unlink()
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet || git commit -m 'Fix local date keys for reports'
+          git push
