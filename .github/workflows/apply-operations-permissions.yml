@@ -43,6 +43,10 @@ jobs:
               for old,new in replacements.items():
                   if old not in s: raise SystemExit(f'Operations content pattern not found: {old}')
                   s=s.replace(old,new,1)
+              block='''  <TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent><TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent><TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent><TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent>'''
+              wrapped='''  <><TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent><TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent><TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent><TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent></>'''
+              if block not in s: raise SystemExit('Guarded operations block not found')
+              s=s.replace(block,wrapped,1)
               return s
           edit('src/routes/app.operations.tsx', guard_ops)
 
@@ -64,8 +68,6 @@ jobs:
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
           grep -q 'operationsUnits' src/routes/app.operations.tsx
-          echo '--- operations source around reported build location ---'
-          nl -ba src/routes/app.operations.tsx | sed -n '45,52p'
           npm ci
           npm run build
       - name: Commit and push
