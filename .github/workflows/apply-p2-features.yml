@@ -1,0 +1,81 @@
+name: Apply pharmacy P2 features
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add P2 components and remove FBR
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/components/PharmacyControls.tsx')
+          s=p.read_text()
+          # Remove FBR state/function/UI and make tabs 4 columns.
+          s=re.sub(r' const \[fbrEnabled.*?const \[posId.*?;\n','\n',s)
+          s=re.sub(r'  function saveFbr\(\).*?\n','',s)
+          s=s.replace('<Tabs defaultValue="payables"><TabsList className="grid w-full grid-cols-5"><TabsTrigger value="payables">Supplier Payables</TabsTrigger><TabsTrigger value="purchase">Purchase Workflow</TabsTrigger><TabsTrigger value="controlled">Controlled</TabsTrigger><TabsTrigger value="stock">Stock Take</TabsTrigger><TabsTrigger value="fbr">FBR</TabsTrigger></TabsList>','<Tabs defaultValue="payables"><TabsList className="grid w-full grid-cols-4"><TabsTrigger value="payables">Supplier Payables</TabsTrigger><TabsTrigger value="purchase">Purchase Workflow</TabsTrigger><TabsTrigger value="controlled">Controlled</TabsTrigger><TabsTrigger value="stock">Stock Take</TabsTrigger></TabsList>')
+          s=re.sub(r'    <TabsContent value="fbr".*?</TabsContent>\n','',s,flags=re.S)
+          s=s.replace('Pakistan tax configuration.','pharmacy operations and compliance controls.')
+          p.write_text(s)
+          PY
+          cat > src/components/P2PharmacyOperations.tsx <<'EOF'
+          import { useMemo, useState } from "react";
+          import { useProjectStore } from "@/store/project-store";
+          import { useSession } from "@/store/session-store";
+          import { uid, money } from "@/lib/format";
+          import { Button } from "@/components/ui/button";
+          import { Input } from "@/components/ui/input";
+          import { Label } from "@/components/ui/label";
+          import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+          import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+          import { toast } from "sonner";
+          export function P2PharmacyOperations(){
+            const data=useProjectStore(s=>s.data!); const mutate=useProjectStore(s=>s.mutate); const user=useSession(s=>s.user); const sym=data.settings.currencySymbol||"₨";
+            const [branch,setBranch]=useState(((data.settings as any).activeBranchId)||"main"); const branches=((data.settings as any).branches||[{id:"main",name:"Main Pharmacy",address:""}]);
+            const [from,setFrom]=useState("main"),[to,setTo]=useState("main"),[med,setMed]=useState(data.medicines[0]?.id||""),[qty,setQty]=useState(0);
+            const [supplier,setSupplier]=useState(data.suppliers[0]?.id||""),[poSupplier,setPoSupplier]=useState(data.suppliers[0]?.id||""),[poMed,setPoMed]=useState(data.medicines[0]?.id||""),[poQty,setPoQty]=useState(0),[poPrice,setPoPrice]=useState(0);
+            const [grn,setGrn]=useState("");
+            const purchaseOrders=((data.settings as any).purchaseOrders||[]); const transfers=((data.settings as any).stockTransfers||[]);
+            function saveBranch(){mutate(d=>{(d.settings as any).activeBranchId=branch});toast.success("Active branch saved")}
+            function transfer(){if(from===to||qty<=0)return toast.error("Choose different branches and a quantity");const m=data.medicines.find(x=>x.id===med);if(!m||qty>m.stockQuantity)return toast.error("Insufficient stock");mutate(d=>{const x=d.medicines.find(x=>x.id===med);if(!x)return;x.stockQuantity-=qty;(d.settings as any).stockTransfers=[...((d.settings as any).stockTransfers||[]),{id:uid("tr_"),date:new Date().toISOString(),medicineId:med,quantity:qty,fromBranchId:from,toBranchId:to,status:"completed",createdBy:user?.username}];});setQty(0);toast.success("Stock transfer recorded")}
+            function createPO(){if(!poSupplier||!poMed||poQty<=0)return toast.error("Complete purchase order");mutate(d=>{(d.settings as any).purchaseOrders=[...((d.settings as any).purchaseOrders||[]),{id:uid("po_"),number:`PO-${Date.now()}`,supplierId:poSupplier,branchId:branch,date:new Date().toISOString(),status:"ordered",items:[{medicineId:poMed,quantity:poQty,purchasePrice:poPrice}],createdBy:user?.username}];});setPoQty(0);toast.success("Purchase order created")}
+            function receivePO(id:string){const po=purchaseOrders.find((x:any)=>x.id===id);if(!po||po.status==="received")return;mutate(d=>{const p=(d.settings as any).purchaseOrders.find((x:any)=>x.id===id);if(p)p.status="received",p.grnNumber=grn||`GRN-${Date.now()}`,p.receivedDate=new Date().toISOString();for(const i of po.items){const m=d.medicines.find((x:any)=>x.id===i.medicineId);if(m)m.stockQuantity+=i.quantity;}});setGrn("");toast.success("Goods received and stock updated")}
+            const openPO=purchaseOrders.filter((x:any)=>x.status!=="received");
+            return <div className="surface-card p-4"><h2 className="font-display text-xl font-semibold">Stock, Branches & Purchasing</h2><p className="text-sm text-muted-foreground">Move stock between branches and manage purchase orders through goods receipt.</p><Tabs defaultValue="branches" className="mt-4"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="branches">Branches & Transfers</TabsTrigger><TabsTrigger value="po">Purchase Orders</TabsTrigger><TabsTrigger value="grn">Goods Received</TabsTrigger></TabsList>
+            <TabsContent value="branches" className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><div><Label>Active branch</Label><Select value={branch} onValueChange={setBranch}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{branches.map((b:any)=><SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></div><div className="flex items-end"><Button onClick={saveBranch}>Save active branch</Button></div></div><div className="rounded-lg border p-4"><h3 className="font-semibold">Stock transfer</h3><div className="mt-3 grid gap-3 md:grid-cols-5"><Select value={from} onValueChange={setFrom}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{branches.map((b:any)=><SelectItem key={b.id} value={b.id}>From: {b.name}</SelectItem>)}</SelectContent></Select><Select value={to} onValueChange={setTo}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{branches.map((b:any)=><SelectItem key={b.id} value={b.id}>To: {b.name}</SelectItem>)}</SelectContent></Select><Select value={med} onValueChange={setMed}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{data.medicines.map(m=><SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent></Select><Input type="number" min={0} value={qty||""} onChange={e=>setQty(Number(e.target.value))} placeholder="Qty"/><Button onClick={transfer}>Transfer</Button></div></div><div className="divide-y rounded-lg border">{transfers.slice(-20).reverse().map((x:any)=><div key={x.id} className="p-3 text-sm flex justify-between"><span>{data.medicines.find(m=>m.id===x.medicineId)?.name} · {x.quantity}</span><span>{x.status}</span></div>)}</div></TabsContent>
+            <TabsContent value="po" className="space-y-4"><div className="rounded-lg border p-4"><h3 className="font-semibold">New purchase order</h3><div className="mt-3 grid gap-3 md:grid-cols-4"><Select value={poSupplier} onValueChange={setPoSupplier}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{data.suppliers.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select><Select value={poMed} onValueChange={setPoMed}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{data.medicines.map(m=><SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent></Select><Input type="number" min={1} value={poQty||""} onChange={e=>setPoQty(Number(e.target.value))} placeholder="Qty"/><Input type="number" min={0} value={poPrice||""} onChange={e=>setPoPrice(Number(e.target.value))} placeholder="Cost"/></div><Button className="mt-3" onClick={createPO}>Create purchase order</Button></div><div className="divide-y rounded-lg border">{purchaseOrders.slice().reverse().map((x:any)=><div key={x.id} className="p-3 flex justify-between text-sm"><span><b>{x.number}</b> · {data.suppliers.find(s=>s.id===x.supplierId)?.name}</span><span>{x.status}</span></div>)}</div></TabsContent>
+            <TabsContent value="grn" className="space-y-4"><div className="rounded-lg border p-4"><Label>GRN number (optional)</Label><Input value={grn} onChange={e=>setGrn(e.target.value)} placeholder="GRN-001"/></div>{openPO.map((x:any)=><div key={x.id} className="rounded-lg border p-4 flex items-center justify-between"><div><b>{x.number}</b><div className="text-xs text-muted-foreground">{data.suppliers.find(s=>s.id===x.supplierId)?.name} · {x.items?.length||0} line(s)</div></div><Button onClick={()=>receivePO(x.id)}>Receive goods</Button></div>)}{openPO.length===0&&<p className="text-sm text-muted-foreground">No open purchase orders.</p>}</TabsContent></Tabs></div>
+          }
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/routes/app.operations.tsx'); s=p.read_text()
+          if 'P2PharmacyOperations' not in s:
+            s=s.replace('import { PharmacyControls } from "@/components/PharmacyControls";','import { PharmacyControls } from "@/components/PharmacyControls";\nimport { P2PharmacyOperations } from "@/components/P2PharmacyOperations";')
+          s=s.replace('<TabsTrigger value="controls">P1 Controls</TabsTrigger>','<TabsTrigger value="controls">P1 Controls</TabsTrigger><TabsTrigger value="p2">P2 Operations</TabsTrigger>')
+          s=s.replace('<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>','<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>')
+          s=s.replace('grid w-full grid-cols-8','grid w-full grid-cols-9')
+          p.write_text(s)
+          PY
+      - name: Remove all FBR references
+        shell: bash
+        run: |
+          grep -RIl --exclude-dir=.git --exclude='apply-p2-features.yml' -E 'FBR|fbr|NTN|STRN|posId' src electron || true | while read f; do sed -i -E '/FBR|fbr|NTN|STRN|posId/d' "$f"; done
+      - name: Commit and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          git commit -m "feat: add stock transfers multi-branch and PO GRN workflows" || true
+          git push origin HEAD:main
+          git rm .github/workflows/apply-p2-features.yml
+          git commit -m "chore: remove temporary P2 workflow"
+          git push origin HEAD:main
