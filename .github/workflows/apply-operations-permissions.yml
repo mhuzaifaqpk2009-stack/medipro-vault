@@ -38,10 +38,10 @@ jobs:
               new_line='  const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;'
               if old_line not in s: raise SystemExit('Operations permission line not found')
               s=s.replace(old_line,new_line,1)
-              old_tabs='<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
-              new_tabs='<TabsTrigger value="units" disabled={!canUnits} className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" disabled={!canFinance} className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" disabled={!canControls} className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" disabled={!canP2} className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
-              if old_tabs not in s: raise SystemExit('Operations tab trigger line not found')
-              s=s.replace(old_tabs,new_tabs,1)
+              old_handler='<Tabs value={activeTab} onValueChange={setTab}>'
+              new_handler='<Tabs value={activeTab} onValueChange={(value)=>{if(value==="units"&&!canUnits)return;if(value==="finance"&&!canFinance)return;if(value==="controls"&&!canControls)return;if(value==="p2"&&!canP2)return;setTab(value);}}>'
+              if old_handler not in s: raise SystemExit('Operations Tabs handler not found')
+              s=s.replace(old_handler,new_handler,1)
               return s
           edit('src/routes/app.operations.tsx', guard_ops)
 
@@ -63,8 +63,6 @@ jobs:
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
           grep -q 'canUnits' src/routes/app.operations.tsx
-          echo '--- transformed operations source ---'
-          nl -ba src/routes/app.operations.tsx | sed -n '38,50p'
           npm ci
           npm run build
       - name: Commit and push
