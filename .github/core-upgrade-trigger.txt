@@ -1,1 +1,1 @@
-final trigger for core pharmacy upgrade
+trigger validation fix
