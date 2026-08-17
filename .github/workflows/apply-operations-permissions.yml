@@ -63,6 +63,8 @@ jobs:
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
           grep -q 'canUnits' src/routes/app.operations.tsx
+          echo '--- transformed operations source ---'
+          nl -ba src/routes/app.operations.tsx | sed -n '38,50p'
           npm ci
           npm run build
       - name: Commit and push
