@@ -20,6 +20,7 @@ import { useQuickAction } from "@/lib/quick-actions";
 import { cn } from "@/lib/utils";
 import type { Purchase, PurchaseItem, Medicine } from "@/domain/schema";
 import { canAddPurchase, canEditPurchase, canDeletePurchase } from "@/lib/granular-permissions";
+import { PurchaseLifecyclePanel } from "@/components/purchases/PurchaseLifecyclePanel";
 
 export const Route = createFileRoute("/app/purchases")({
   component: () => <PermissionGate perm="purchases"><PurchasesPage /></PermissionGate>,
@@ -114,6 +115,8 @@ function PurchasesPage() {
         <div className="relative ml-auto"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search invoice number…" className="h-9 w-64 pl-8" data-search /></div>
         {canAdd && <Button {...pinContext({ id: "action:new-purchase", label: "New purchase", kind: "action", to: "/app/purchases" })} onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>}
       </header>
+
+      <PurchaseLifecyclePanel />
 
       <div className="surface-card overflow-hidden">
         <Table><TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Items</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="w-28"></TableHead></TableRow></TableHeader>
