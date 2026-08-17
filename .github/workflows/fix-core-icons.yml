@@ -1,0 +1,30 @@
+name: Fix core upgrade icons
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch operations icons
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/routes/app.operations.tsx')
+          s=p.read_text()
+          s=s.replace('<TabsTrigger value="units"><CalendarClock className="mr-1 h-4 w-4"/>Units</TabsTrigger>','<TabsTrigger value="units">Units</TabsTrigger>')
+          s=s.replace('<TabsTrigger value="finance"><ArrowUpRight className="mr-1 h-4 w-4"/>Finance</TabsTrigger>','<TabsTrigger value="finance">Finance</TabsTrigger>')
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/app.operations.tsx
+          git rm .github/workflows/fix-core-icons.yml
+          git commit -m "fix: remove missing operations tab icon imports"
+          git push origin HEAD:main
