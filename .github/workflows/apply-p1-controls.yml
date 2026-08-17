@@ -1,0 +1,40 @@
+name: Apply pharmacy P1 controls
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Integrate P1 controls and fix duplicate operation tabs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/routes/app.operations.tsx')
+          s=p.read_text()
+          if 'PharmacyControls' not in s:
+              s=s.replace('import { financeSummary, expectedCash } from "@/lib/finance-engine";','import { financeSummary, expectedCash } from "@/lib/finance-engine";\nimport { PharmacyControls } from "@/components/PharmacyControls";')
+          old='{canBarcode&&<TabsTrigger value="barcode"><Barcode className="mr-1 h-4 w-4"/>Barcode</TabsTrigger>}{canBatches&&<TabsTrigger value="batches"><CalendarClock className="mr-1 h-4 w-4"/>Batch + FEFO</TabsTrigger>}{canReturns&&<TabsTrigger value="returns"><RotateCcw className="mr-1 h-4 w-4"/>Returns</TabsTrigger>}{canCustomers&&<TabsTrigger value="customers"><Users className="mr-1 h-4 w-4"/>Customer Ledger</TabsTrigger>}{canSuppliers&&<TabsTrigger value="suppliers"><Truck className="mr-1 h-4 w-4"/>Supplier Ledger</TabsTrigger>}<TabsTrigger value="units">Units</TabsTrigger><TabsTrigger value="finance">Finance</TabsTrigger><TabsTrigger value="units"><Layers className="mr-1 h-4 w-4"/>Units</TabsTrigger><TabsTrigger value="finance">Finance</TabsTrigger>'
+          new='{canBarcode&&<TabsTrigger value="barcode"><Barcode className="mr-1 h-4 w-4"/>Barcode</TabsTrigger>}{canBatches&&<TabsTrigger value="batches"><CalendarClock className="mr-1 h-4 w-4"/>Batch + FEFO</TabsTrigger>}{canReturns&&<TabsTrigger value="returns"><RotateCcw className="mr-1 h-4 w-4"/>Returns</TabsTrigger>}{canCustomers&&<TabsTrigger value="customers"><Users className="mr-1 h-4 w-4"/>Customer Ledger</TabsTrigger>}{canSuppliers&&<TabsTrigger value="suppliers"><Truck className="mr-1 h-4 w-4"/>Supplier Ledger</TabsTrigger>}<TabsTrigger value="units">Units</TabsTrigger><TabsTrigger value="finance">Finance</TabsTrigger><TabsTrigger value="controls">P1 Controls</TabsTrigger>'
+          s=s.replace(old,new)
+          old2='<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>'
+          new2='<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>'
+          s=s.replace(old2,new2)
+          s=s.replace('className="grid w-full grid-cols-7"','className="grid w-full grid-cols-8"')
+          p.write_text(s)
+          PY
+      - name: Commit and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/app.operations.tsx
+          git commit -m "feat: integrate pharmacy P1 controls" || true
+          git push origin HEAD:main
+          git rm .github/workflows/apply-p1-controls.yml || true
+          git commit -m "chore: remove temporary P1 integration workflow" || true
+          git push origin HEAD:main
