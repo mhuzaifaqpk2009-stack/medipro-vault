@@ -14,6 +14,8 @@ import { uid, money } from "@/lib/format";
 import type { InventoryBatch, PurchaseReturn, SaleReturn, MedicineUnitOption } from "@/domain/schema";
 import { recordPurchaseReturn, recordSaleReturn } from "@/lib/transaction-engine";
 import { financeSummary, expectedCash } from "@/lib/finance-engine";
+import { UnitManager } from "@/components/operations/UnitManager";
+import { FinanceManager } from "@/components/operations/FinanceManager";
 import { PharmacyControls } from "@/components/PharmacyControls";
 import { P2PharmacyOperations } from "@/components/P2PharmacyOperations";
 
