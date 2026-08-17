@@ -39,13 +39,9 @@ jobs:
               if old_line not in s: raise SystemExit('Operations permission line not found')
               s=s.replace(old_line,new_line,1)
               old_tabs='<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
-              new_tabs='{canUnits && <TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance && <TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canControls && <TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2 && <TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}'
+              new_tabs='<TabsTrigger value="units" disabled={!canUnits} className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" disabled={!canFinance} className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" disabled={!canControls} className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" disabled={!canP2} className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
               if old_tabs not in s: raise SystemExit('Operations tab trigger line not found')
               s=s.replace(old_tabs,new_tabs,1)
-              old_content='<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>'
-              new_content='{canUnits && <TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance && <TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canControls && <TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2 && <TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}'
-              if old_content not in s: raise SystemExit('Operations tab content line not found')
-              s=s.replace(old_content,new_content,1)
               return s
           edit('src/routes/app.operations.tsx', guard_ops)
 
