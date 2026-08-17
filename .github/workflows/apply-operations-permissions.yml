@@ -13,7 +13,6 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import re
 
           def edit(path, fn):
               p=Path(path); s=p.read_text(encoding='utf-8'); n=fn(s)
@@ -34,17 +33,18 @@ jobs:
             '{ key: "operations", label: "Pharmacy operations", actions: [{ key: "operationsBarcode", label: "Barcode" }, { key: "operationsBatches", label: "Batch + FEFO" }, { key: "operationsReturns", label: "Returns" }, { key: "operationsCustomerLedger", label: "Customer ledger" }, { key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsControls", label: "P1 Controls" }, { key: "operationsP2", label: "P2 Operations" }] },'
           ))
 
-          def ops(s):
-              old='  const p=user?.permissions; const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;\n  const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":"suppliers";\n  const activeTab=["barcode","batches","returns","customers","suppliers","units","finance","controls","p2"].includes(tab)&&(["units","finance","controls","p2"].includes(tab)||({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab])?tab:firstTab;'
-              new='  const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;\n  const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":canSuppliers?"suppliers":canUnits?"units":canFinance?"finance":canControls?"controls":"p2";\n  const allowedTabs: Record<string, boolean>={barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers,units:canUnits,finance:canFinance,controls:canControls,p2:canP2};\n  const activeTab=allowedTabs[tab]?tab:firstTab;'
-              if old not in s: raise SystemExit('Operations permission state block not found')
-              s=s.replace(old,new,1)
-              old_tabs='<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
-              new_tabs='{canUnits&&<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance&&<TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canControls&&<TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2&&<TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}'
-              if old_tabs not in s: raise SystemExit('Operations tab trigger block not found')
-              s=s.replace(old_tabs,new_tabs,1)
+          def guard_ops(s):
+              replacements={
+                '<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>':'<TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent>',
+                '<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>':'<TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent>',
+                '<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>':'<TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent>',
+                '<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>':'<TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent>',
+              }
+              for old,new in replacements.items():
+                  if old not in s: raise SystemExit(f'Operations content pattern not found: {old}')
+                  s=s.replace(old,new,1)
               return s
-          edit('src/routes/app.operations.tsx', ops)
+          edit('src/routes/app.operations.tsx', guard_ops)
 
           def help(s):
               marker='  { title: "Prescriptions", items: ['
@@ -63,7 +63,7 @@ jobs:
           grep -q 'operationsControls' src/lib/users.ts
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
-          grep -q 'canUnits' src/routes/app.operations.tsx
+          grep -q 'operationsUnits' src/routes/app.operations.tsx
           npm ci
           npm run build
       - name: Commit and push
