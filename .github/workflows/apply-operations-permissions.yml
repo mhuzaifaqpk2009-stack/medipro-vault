@@ -34,19 +34,18 @@ jobs:
           ))
 
           def guard_ops(s):
-              replacements={
-                '<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>':'<TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent>',
-                '<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>':'<TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent>',
-                '<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>':'<TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent>',
-                '<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>':'<TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent>',
-              }
-              for old,new in replacements.items():
-                  if old not in s: raise SystemExit(f'Operations content pattern not found: {old}')
-                  s=s.replace(old,new,1)
-              block='''  <TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent><TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent><TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent><TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent>'''
-              wrapped='''  <><TabsContent value="units" className="mt-4"><PermissionGate perm="operationsUnits"><UnitManager /></PermissionGate></TabsContent><TabsContent value="finance" className="mt-4"><PermissionGate perm="operationsFinance"><FinanceManager /></PermissionGate></TabsContent><TabsContent value="controls" className="mt-4"><PermissionGate perm="operationsControls"><PharmacyControls /></PermissionGate></TabsContent><TabsContent value="p2" className="mt-4"><PermissionGate perm="operationsP2"><P2PharmacyOperations /></PermissionGate></TabsContent></>'''
-              if block not in s: raise SystemExit('Guarded operations block not found')
-              s=s.replace(block,wrapped,1)
+              old_line='  const p=user?.permissions; const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;'
+              new_line='  const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;'
+              if old_line not in s: raise SystemExit('Operations permission line not found')
+              s=s.replace(old_line,new_line,1)
+              old_tabs='<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>'
+              new_tabs='{canUnits && <TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance && <TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canControls && <TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2 && <TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}'
+              if old_tabs not in s: raise SystemExit('Operations tab trigger line not found')
+              s=s.replace(old_tabs,new_tabs,1)
+              old_content='<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>'
+              new_content='{canUnits && <TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance && <TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canControls && <TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2 && <TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}'
+              if old_content not in s: raise SystemExit('Operations tab content line not found')
+              s=s.replace(old_content,new_content,1)
               return s
           edit('src/routes/app.operations.tsx', guard_ops)
 
@@ -67,7 +66,7 @@ jobs:
           grep -q 'operationsControls' src/lib/users.ts
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
-          grep -q 'operationsUnits' src/routes/app.operations.tsx
+          grep -q 'canUnits' src/routes/app.operations.tsx
           npm ci
           npm run build
       - name: Commit and push
