@@ -1,0 +1,103 @@
+name: Apply operations access and help update
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Apply source updates
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f"Expected text not found in {path}: {old[:120]}")
+              p.write_text(s.replace(old, new, 1))
+
+          # User permissions model
+          replace('src/lib/users.ts',
+              'operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean;',
+              'operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean; operationsUnits?: boolean; operationsFinance?: boolean; operationsP1Controls?: boolean; operationsP2Operations?: boolean;')
+          replace('src/lib/users.ts',
+              'operationsCustomerLedger: true, operationsSupplierLedger: true, prescriptionsAdd:',
+              'operationsCustomerLedger: true, operationsSupplierLedger: true, operationsUnits: true, operationsFinance: true, operationsP1Controls: true, operationsP2Operations: true, prescriptionsAdd:')
+          replace('src/lib/users.ts',
+              'operationsCustomerLedger: false, operationsSupplierLedger: false, prescriptionsAdd:',
+              'operationsCustomerLedger: false, operationsSupplierLedger: false, operationsUnits: false, operationsFinance: false, operationsP1Controls: false, operationsP2Operations: false, prescriptionsAdd:')
+          replace('src/lib/users.ts',
+              'operationsCustomerLedger: false, operationsSupplierLedger: false }',
+              'operationsCustomerLedger: false, operationsSupplierLedger: false, operationsUnits: false, operationsFinance: false, operationsP1Controls: false, operationsP2Operations: false }')
+
+          # Settings -> Users permission editor
+          replace('src/routes/app.settings.tsx',
+              '{ key: "operationsSupplierLedger", label: "Supplier ledger" }] },',
+              '{ key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsP1Controls", label: "P1 Controls" }, { key: "operationsP2Operations", label: "P2 Operations" }] },')
+
+          # Operations tab access is controlled by the same user permissions editor.
+          replace('src/routes/app.operations.tsx',
+              'const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;',
+              'const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true; const canUnits=user?.role==="admin"||p?.operationsUnits===true; const canFinance=user?.role==="admin"||p?.operationsFinance===true; const canP1Controls=user?.role==="admin"||p?.operationsP1Controls===true; const canP2Operations=user?.role==="admin"||p?.operationsP2Operations===true;')
+          replace('src/routes/app.operations.tsx',
+              'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":"suppliers";',
+              'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":canSuppliers?"suppliers":canUnits?"units":canFinance?"finance":canP1Controls?"controls":"p2";')
+          replace('src/routes/app.operations.tsx',
+              '(["units","finance","controls","p2"].includes(tab)||({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab])?tab:firstTab;',
+              '(({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers,units:canUnits,finance:canFinance,controls:canP1Controls,p2:canP2Operations} as Record<string,boolean>)[tab])?tab:firstTab;')
+          replace('src/routes/app.operations.tsx',
+              '<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>',
+              '{canUnits&&<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance&&<TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canP1Controls&&<TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2Operations&&<TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}')
+          replace('src/routes/app.operations.tsx',
+              '<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>',
+              '{canUnits&&<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance&&<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canP1Controls&&<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2Operations&&<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}')
+          replace('src/routes/app.operations.tsx',
+              '<h1 className="font-display text-3xl font-bold">Barcode, Batches, Returns & Ledgers</h1>',
+              '<h1 className="font-display text-3xl font-bold">Pharmacy Operations</h1>')
+
+          # Help Center: document the four newly permissioned operations tabs.
+          help_block = '''  { title: "Pharmacy Operations", items: [
+    ["Barcode", "Scan medicine barcodes with a USB scanner or search the barcode field. Barcode access can be granted separately under Settings → Users → Pharmacy operations."],
+    ["Batch + FEFO", "Manage inventory batches and review the earliest-expiry-first queue. Access is controlled by the Batch + FEFO permission."],
+    ["Returns", "Record customer sale returns and supplier purchase returns against the original transaction. Access is controlled by the Returns permission."],
+    ["Customer Ledger", "Review customer balances and record customer payments. Access is controlled by the Customer ledger permission."],
+    ["Supplier Ledger", "Review supplier balances and record supplier payments. Access is controlled by the Supplier ledger permission."],
+    ["Units", "Manage strip / tablet / box unit conversions and medicine unit settings. Access is controlled by the Units permission."],
+    ["Finance", "Review cash, expenses and profit-related operational finance information. Access is controlled by the Finance permission."],
+    ["P1 Controls", "Open pharmacy control and safety workflows from one place. Access is controlled by the P1 Controls permission."],
+    ["P2 Operations", "Open the additional operational tools and workflows from one place. Access is controlled by the P2 Operations permission."],
+    ["User access", "Admins can grant or remove each Pharmacy Operations tab independently under Settings → Users → edit a user → Pharmacy operations. Admin accounts always retain full access."],
+  ]},
+'''
+          p = Path('src/components/AppTopbar.tsx')
+          s = p.read_text()
+          marker = '  { title: "Backup & security", items: ['
+          if '  { title: "Pharmacy Operations", items: [' not in s:
+              if marker not in s:
+                  raise SystemExit('Help insertion marker not found')
+              s = s.replace(marker, help_block + marker, 1)
+              p.write_text(s)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/users.ts src/routes/app.settings.tsx src/routes/app.operations.tsx src/components/AppTopbar.tsx
+          git diff --cached --check
+          git commit -m "feat: add operations tab access controls and help"
+          git push origin main
+
+          rm .github/workflows/apply-ops-access-help.yml
+          git add .github/workflows/apply-ops-access-help.yml
+          git commit -m "chore: remove operations update workflow"
+          git push origin main
