@@ -9,7 +9,7 @@ on:
 jobs:
   validate:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,8 +29,5 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Production build
-        run: npm run build
-
-      - name: Windows package build
-        run: npx electron-builder --win nsis --publish never
+      - name: Production Windows distribution
+        run: npm run dist
