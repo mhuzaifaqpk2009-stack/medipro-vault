@@ -18,6 +18,8 @@ import { Route as AppCategoriesRouteImport } from './routes/app.categories'
 import { Route as AppCustomersRouteImport } from './routes/app.customers'
 import { Route as AppInventoryRouteImport } from './routes/app.inventory'
 import { Route as AppMedicinesRouteImport } from './routes/app.medicines'
+import { Route as AppOperationsRouteImport } from './routes/app.operations'
+import { Route as AppPrescriptionsRouteImport } from './routes/app.prescriptions'
 import { Route as AppPurchasesRouteImport } from './routes/app.purchases'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSalesRouteImport } from './routes/app.sales'
@@ -70,6 +72,16 @@ const AppMedicinesRoute = AppMedicinesRouteImport.update({
   path: '/medicines',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOperationsRoute = AppOperationsRouteImport.update({
+  id: '/operations',
+  path: '/operations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrescriptionsRoute = AppPrescriptionsRouteImport.update({
+  id: '/prescriptions',
+  path: '/prescriptions',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPurchasesRoute = AppPurchasesRouteImport.update({
   id: '/purchases',
   path: '/purchases',
@@ -110,6 +122,8 @@ export interface FileRoutesByFullPath {
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
   '/app/medicines': typeof AppMedicinesRoute
+  '/app/operations': typeof AppOperationsRoute
+  '/app/prescriptions': typeof AppPrescriptionsRoute
   '/app/purchases': typeof AppPurchasesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/sales': typeof AppSalesRoute
@@ -126,6 +140,8 @@ export interface FileRoutesByTo {
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
   '/app/medicines': typeof AppMedicinesRoute
+  '/app/operations': typeof AppOperationsRoute
+  '/app/prescriptions': typeof AppPrescriptionsRoute
   '/app/purchases': typeof AppPurchasesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/sales': typeof AppSalesRoute
@@ -144,6 +160,8 @@ export interface FileRoutesById {
   '/app/customers': typeof AppCustomersRoute
   '/app/inventory': typeof AppInventoryRoute
   '/app/medicines': typeof AppMedicinesRoute
+  '/app/operations': typeof AppOperationsRoute
+  '/app/prescriptions': typeof AppPrescriptionsRoute
   '/app/purchases': typeof AppPurchasesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/sales': typeof AppSalesRoute
@@ -163,6 +181,8 @@ export interface FileRouteTypes {
     | '/app/customers'
     | '/app/inventory'
     | '/app/medicines'
+    | '/app/operations'
+    | '/app/prescriptions'
     | '/app/purchases'
     | '/app/reports'
     | '/app/sales'
@@ -179,6 +199,8 @@ export interface FileRouteTypes {
     | '/app/customers'
     | '/app/inventory'
     | '/app/medicines'
+    | '/app/operations'
+    | '/app/prescriptions'
     | '/app/purchases'
     | '/app/reports'
     | '/app/sales'
@@ -196,6 +218,8 @@ export interface FileRouteTypes {
     | '/app/customers'
     | '/app/inventory'
     | '/app/medicines'
+    | '/app/operations'
+    | '/app/prescriptions'
     | '/app/purchases'
     | '/app/reports'
     | '/app/sales'
@@ -275,6 +299,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMedicinesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/operations': {
+      id: '/app/operations'
+      path: '/operations'
+      fullPath: '/app/operations'
+      preLoaderRoute: typeof AppOperationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/prescriptions': {
+      id: '/app/prescriptions'
+      path: '/prescriptions'
+      fullPath: '/app/prescriptions'
+      preLoaderRoute: typeof AppPrescriptionsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/purchases': {
       id: '/app/purchases'
       path: '/purchases'
@@ -327,6 +365,8 @@ interface AppRouteChildren {
   AppCustomersRoute: typeof AppCustomersRoute
   AppInventoryRoute: typeof AppInventoryRoute
   AppMedicinesRoute: typeof AppMedicinesRoute
+  AppOperationsRoute: typeof AppOperationsRoute
+  AppPrescriptionsRoute: typeof AppPrescriptionsRoute
   AppPurchasesRoute: typeof AppPurchasesRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSalesRoute: typeof AppSalesRoute
@@ -343,6 +383,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersRoute: AppCustomersRoute,
   AppInventoryRoute: AppInventoryRoute,
   AppMedicinesRoute: AppMedicinesRoute,
+  AppOperationsRoute: AppOperationsRoute,
+  AppPrescriptionsRoute: AppPrescriptionsRoute,
   AppPurchasesRoute: AppPurchasesRoute,
   AppReportsRoute: AppReportsRoute,
   AppSalesRoute: AppSalesRoute,
