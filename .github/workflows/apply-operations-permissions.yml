@@ -33,17 +33,6 @@ jobs:
             '{ key: "operations", label: "Pharmacy operations", actions: [{ key: "operationsBarcode", label: "Barcode" }, { key: "operationsBatches", label: "Batch + FEFO" }, { key: "operationsReturns", label: "Returns" }, { key: "operationsCustomerLedger", label: "Customer ledger" }, { key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsControls", label: "P1 Controls" }, { key: "operationsP2", label: "P2 Operations" }] },'
           ))
 
-          def guard_ops(s):
-              old_line='  const p=user?.permissions; const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;'
-              new_line='  const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;\n  function handleTabChange(value:string){if(value==="units"&&!canUnits)return;if(value==="finance"&&!canFinance)return;if(value==="controls"&&!canControls)return;if(value==="p2"&&!canP2)return;setTab(value);}'
-              if old_line not in s: raise SystemExit('Operations permission line not found')
-              s=s.replace(old_line,new_line,1)
-              old_handler='<Tabs value={activeTab} onValueChange={setTab}>'
-              if old_handler not in s: raise SystemExit('Operations Tabs handler not found')
-              s=s.replace(old_handler,'<Tabs value={activeTab} onValueChange={handleTabChange}>',1)
-              return s
-          edit('src/routes/app.operations.tsx', guard_ops)
-
           def help(s):
               marker='  { title: "Prescriptions", items: ['
               section='''  { title: "Pharmacy operations", items: [\n    ["Barcode", "Use a USB barcode scanner as keyboard input. Scan and press Enter to find a medicine quickly."],\n    ["Batch + FEFO", "Manage inventory batches and review expiry order. FEFO lists the earliest-expiring stock first."],\n    ["Returns", "Record customer sales returns or supplier purchase returns against the original transaction."],\n    ["Customer Ledger", "Record and review customer payments and outstanding balances."],\n    ["Supplier Ledger", "Record supplier payments and review outstanding supplier payables."],\n    ["Units", "Manage strip / tablet / box unit conversions and the unit settings used for pharmacy sales."],\n    ["Finance", "Review pharmacy cash, expenses and profit-related finance information."],\n    ["P1 Controls", "Use the purchase, inventory and compliance controls introduced in the P1 workflow."],\n    ["P2 Operations", "Use stock transfer, branch and purchasing operations introduced in the P2 workflow."],\n    ["User access", "Admins can grant each operations tab separately under Settings → Users → Pharmacy operations."],\n  ]},\n'''
@@ -61,13 +50,12 @@ jobs:
           grep -q 'operationsControls' src/lib/users.ts
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
-          grep -q 'handleTabChange' src/routes/app.operations.tsx
           npm ci
           npm run build
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/users.ts src/routes/app.settings.tsx src/routes/app.operations.tsx src/components/AppTopbar.tsx
+          git add src/lib/users.ts src/routes/app.settings.tsx src/components/AppTopbar.tsx
           git commit -m "feat: add operations tab permissions and help"
           git push origin HEAD:main
