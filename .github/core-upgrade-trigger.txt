@@ -1,1 +1,1 @@
-materialize core upgrade v3
+fix core icons
