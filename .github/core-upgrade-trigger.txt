@@ -1,1 +1,1 @@
-temporary trigger for core pharmacy upgrade
+final trigger for core pharmacy upgrade
