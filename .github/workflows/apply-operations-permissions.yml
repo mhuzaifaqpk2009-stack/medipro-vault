@@ -1,0 +1,79 @@
+name: Apply operations permissions and help
+on:
+  push:
+    branches: [feature/operations-permissions-help]
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def edit(path, fn):
+              p=Path(path); s=p.read_text(encoding='utf-8'); n=fn(s)
+              if n==s: raise SystemExit(f'No change made to {path}; expected source pattern not found')
+              p.write_text(n, encoding='utf-8')
+
+          edit('src/lib/users.ts', lambda s: s
+            .replace('operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean;',
+                     'operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean; operationsUnits?: boolean; operationsFinance?: boolean; operationsControls?: boolean; operationsP2?: boolean;')
+            .replace('operationsBarcode: true, operationsBatches: true, operationsReturns: true, operationsCustomerLedger: true, operationsSupplierLedger: true,',
+                     'operationsBarcode: true, operationsBatches: true, operationsReturns: true, operationsCustomerLedger: true, operationsSupplierLedger: true, operationsUnits: true, operationsFinance: true, operationsControls: true, operationsP2: true,')
+            .replace('operationsBarcode: false, operationsBatches: false, operationsReturns: false, operationsCustomerLedger: false, operationsSupplierLedger: false,',
+                     'operationsBarcode: false, operationsBatches: false, operationsReturns: false, operationsCustomerLedger: false, operationsSupplierLedger: false, operationsUnits: false, operationsFinance: false, operationsControls: false, operationsP2: false,')
+          )
+
+          edit('src/routes/app.settings.tsx', lambda s: s.replace(
+            '{ key: "operations", label: "Pharmacy operations", actions: [{ key: "operationsBarcode", label: "Barcode" }, { key: "operationsBatches", label: "Batch + FEFO" }, { key: "operationsReturns", label: "Returns" }, { key: "operationsCustomerLedger", label: "Customer ledger" }, { key: "operationsSupplierLedger", label: "Supplier ledger" }] },',
+            '{ key: "operations", label: "Pharmacy operations", actions: [{ key: "operationsBarcode", label: "Barcode" }, { key: "operationsBatches", label: "Batch + FEFO" }, { key: "operationsReturns", label: "Returns" }, { key: "operationsCustomerLedger", label: "Customer ledger" }, { key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsControls", label: "P1 Controls" }, { key: "operationsP2", label: "P2 Operations" }] },'
+          ))
+
+          def ops(s):
+              s=s.replace(
+                'const p=user?.permissions; const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;',
+                'const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;')
+              s=s.replace(
+                'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":"suppliers";',
+                'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":canSuppliers?"suppliers":canUnits?"units":canFinance?"finance":canControls?"controls":"p2";')
+              s=s.replace(
+                '(["units","finance","controls","p2"].includes(tab)||({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab])',
+                '({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers,units:canUnits,finance:canFinance,controls:canControls,p2:canP2} as Record<string,boolean>)[tab]')
+              s=s.replace('<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>',
+                           '{canUnits&&<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance&&<TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canControls&&<TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2&&<TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}')
+              s=s.replace('<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>',
+                           '{canUnits&&<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance&&<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canControls&&<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2&&<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}')
+              return s
+          edit('src/routes/app.operations.tsx', ops)
+
+          def help(s):
+              marker='  { title: "Prescriptions", items: ['
+              section='''  { title: "Pharmacy operations", items: [\n    ["Barcode", "Use a USB barcode scanner as keyboard input. Scan and press Enter to find a medicine quickly."],\n    ["Batch + FEFO", "Manage inventory batches and review expiry order. FEFO lists the earliest-expiring stock first."],\n    ["Returns", "Record customer sales returns or supplier purchase returns against the original transaction."],\n    ["Customer Ledger", "Record and review customer payments and outstanding balances."],\n    ["Supplier Ledger", "Record supplier payments and review outstanding supplier payables."],\n    ["Units", "Manage strip / tablet / box unit conversions and the unit settings used for pharmacy sales."],\n    ["Finance", "Review pharmacy cash, expenses and profit-related finance information."],\n    ["P1 Controls", "Use the purchase, inventory and compliance controls introduced in the P1 workflow."],\n    ["P2 Operations", "Use stock transfer, branch and purchasing operations introduced in the P2 workflow."],\n    ["User access", "Admins can grant each operations tab separately under Settings → Users → Pharmacy operations."],\n  ]},\n'''
+              if section in s: return s
+              if marker not in s: raise SystemExit('Help marker not found')
+              s=s.replace(marker, section+marker, 1)
+              s=s.replace('["Users", "Create users, change passwords, select role templates and configure panel/action permissions. Admins have full access."],',
+                          '["Users", "Create users, change passwords, select role templates and configure panel/action permissions, including separate access for the Pharmacy Operations tabs."],')
+              return s
+          edit('src/components/AppTopbar.tsx', help)
+      - name: Verify source changes
+        run: |
+          grep -q 'operationsUnits' src/lib/users.ts
+          grep -q 'operationsFinance' src/lib/users.ts
+          grep -q 'operationsControls' src/lib/users.ts
+          grep -q 'operationsP2' src/lib/users.ts
+          grep -q 'User access' src/components/AppTopbar.tsx
+          grep -q 'canUnits' src/routes/app.operations.tsx
+          npm ci
+          npm run build
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/users.ts src/routes/app.settings.tsx src/routes/app.operations.tsx src/components/AppTopbar.tsx
+          git commit -m "feat: add operations tab permissions and help"
+          git push origin HEAD:main
