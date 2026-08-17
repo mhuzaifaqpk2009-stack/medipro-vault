@@ -64,6 +64,8 @@ jobs:
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
           grep -q 'operationsUnits' src/routes/app.operations.tsx
+          echo '--- operations source around reported build location ---'
+          nl -ba src/routes/app.operations.tsx | sed -n '45,52p'
           npm ci
           npm run build
       - name: Commit and push
