@@ -1,1 +1,1 @@
-trigger validation fix
+materialize core upgrade now
