@@ -10,6 +10,7 @@ import { printReceipt } from "@/lib/receipt";
 import { usePrintAction } from "@/lib/print-action";
 import { saleTotal } from "@/lib/sale-math";
 import type { Sale } from "@/domain/schema";
+import { cancelSale } from "@/lib/transaction-engine";
 
 import { PermissionGate } from "@/components/PermissionGate";
 
@@ -51,10 +52,10 @@ function BillsPage() {
   const totalOf = (sale: Sale) => saleTotal(sale);
 
   function removeBill(sale: Sale) {
-    if (!window.confirm(`Delete bill ${sale.invoiceNumber}? The invoice counter is not affected.`)) return;
-    mutate((d) => { d.sales = d.sales.filter((x) => x.id !== sale.id); });
-    if (selected?.id === sale.id) setSelected(null);
-    toast.success("Bill deleted");
+    if (sale.status !== "completed") return toast.error("Only a completed bill can be cancelled");
+    if (!window.confirm(`Cancel bill ${sale.invoiceNumber}? Stock and customer credit will be reversed and history will remain.`)) return;
+    try { mutate(d => { cancelSale(d, sale.id, "Bill cancelled from Bills", undefined); }); } catch(e) { toast.error(e instanceof Error ? e.message : "Bill could not be cancelled"); return; }
+    setSelected(null); toast.success("Bill cancelled and inventory/credit reversed");
   }
 
   async function reprint(sale: Sale) {
@@ -130,7 +131,7 @@ function BillsPage() {
                       <td className="p-2 text-right tabular-nums">{money(totalOf(s), sym)}</td>
                       <td className="p-2 text-right">
                         <Button
-                          size="icon" variant="ghost" className="h-7 w-7" title="Delete this bill"
+                          size="icon" variant="ghost" className="h-7 w-7" title="Cancel this bill"
                           onClick={(e) => { e.stopPropagation(); removeBill(s); }}
                         >
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />

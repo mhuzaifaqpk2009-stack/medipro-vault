@@ -8,8 +8,9 @@ import { dateKeyLocal, money, useCurrencySymbol } from "@/lib/format";
 import { printHtml } from "@/lib/receipt";
 import { saleProfit as saleProfitOf, saleTotal as saleTotalOf } from "@/lib/sale-math";
 import type { ProjectData } from "@/domain/schema";
+import { financeSummary } from "@/lib/finance-engine";
 
-export type ReportKind = "all" | "sales" | "purchases" | "profit" | "customers" | "suppliers" | "inventory" | "returns" | "customer-ledger" | "supplier-ledger";
+export type ReportKind = "all" | "sales" | "purchases" | "profit" | "customers" | "suppliers" | "inventory" | "returns" | "customer-ledger" | "supplier-ledger" | "expenses" | "p&l";
 
 type ReportRow = {
   id: string;
@@ -34,6 +35,8 @@ const KIND_LABELS: Record<ReportKind, string> = {
   returns: "Returns",
   "customer-ledger": "Customer ledger",
   "supplier-ledger": "Supplier ledger",
+  expenses: "Expenses",
+  "p&l": "Profit & Loss",
 };
 
 function dateKey(value?: string) { return value ? String(value).slice(0, 10) : ""; }
@@ -81,6 +84,7 @@ function buildRows(data: ProjectData): ReportRow[] {
   for (const e of data.settings.supplierLedger ?? []) {
     rows.push({ id: `supplier-ledger:${e.id}`, date: dateKey(e.date), type: "supplier-ledger", reference: e.reference ?? e.id, party: suppliers.get(e.supplierId) ?? "Unknown supplier", details: e.note || `Supplier ${e.type}`, amount: e.amount, profit: null, status: e.type });
   }
+  for (const e of data.settings.expenses ?? []) { rows.push({ id:`expense:${e.id}`,date:dateKey(e.date),type:"expenses",reference:e.id,party:e.category,details:e.description||`Expense · ${e.paymentMethod}`,amount:e.amount,profit:null,status:"expense"}); }
   for (const m of data.medicines) {
     rows.push({ id: `medicine:${m.id}`, date: dateKey(m.expiryDate), type: "inventory", reference: m.barcode || m.id, party: m.name, details: `${m.genericName || ""}${m.genericName ? " · " : ""}${m.company || ""}${m.company ? " · " : ""}Stock ${m.stockQuantity} · Expiry ${dateKey(m.expiryDate) || "—"}`, amount: m.stockQuantity * Number(m.purchasePrice || 0), profit: null, status: m.stockQuantity <= (m.minimumStock ?? 0) ? "low stock" : "in stock" });
   }
@@ -98,6 +102,8 @@ function presetRange(preset: string) {
   if (preset === "last-year") return [`${now.getFullYear() - 1}-01-01`, `${now.getFullYear() - 1}-12-31`] as const;
   return ["", ""] as const;
 }
+
+function Metric({label,value}:{label:string;value:string}){return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>;}
 
 export function ReportExplorer({ initialKind = "all", initialFrom = "", initialTo = "", initialQuery = "" }: { initialKind?: ReportKind; initialFrom?: string; initialTo?: string; initialQuery?: string }) {
   const data = useProjectStore((s) => s.data!);
@@ -127,7 +133,7 @@ export function ReportExplorer({ initialKind = "all", initialFrom = "", initialT
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = rows.filter((row) => {
-      const typeMatch = kind === "all" || row.type === kind || (kind === "profit" && row.type === "sales");
+      const typeMatch = kind === "all" || row.type === kind || (kind === "profit" && row.type === "sales") || (kind === "p&l" && (row.type === "sales" || row.type === "expenses"));
       if (!typeMatch) return false;
       if (from && row.date && row.date < from) return false;
       if (to && row.date && row.date > to) return false;
@@ -152,6 +158,7 @@ export function ReportExplorer({ initialKind = "all", initialFrom = "", initialT
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pnl=useMemo(()=>financeSummary(data,from||undefined,to||undefined),[data,from,to]);
 
   function changeKind(v: string) { setKind(v as ReportKind); setParty("all"); setStatus("all"); setPage(1); }
   function applyPreset(v: string) { const [a, b] = presetRange(v); setFrom(a); setTo(b); setPage(1); }
@@ -169,7 +176,7 @@ export function ReportExplorer({ initialKind = "all", initialFrom = "", initialT
     printHtml(`<!doctype html><html><head><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px}h1{font-size:20px}p{color:#555}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#f4f4f4}.r{text-align:right}</style></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(`${from || "All dates"} → ${to || "All dates"} · ${filtered.length} records`)}</p><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Party</th><th>Details</th><th>Amount</th><th>Profit</th></tr></thead><tbody>${body}</tbody></table></body></html>`);
   }
 
-  return <div className="grid gap-4">
+  return <div className="grid gap-4">{kind==="p&l"&&<section className="surface-card p-5"><div className="flex items-center justify-between"><div><h2 className="font-display text-lg font-semibold">Profit & Loss</h2><p className="text-xs text-muted-foreground">Revenue minus COGS and operating expenses for the selected period.</p></div><div className="text-right"><p className="text-xs text-muted-foreground">Net profit</p><p className="text-2xl font-bold">{money(pnl.netProfit,sym)}</p></div></div><div className="mt-4 grid gap-3 sm:grid-cols-5"><Metric label="Revenue" value={money(pnl.revenue,sym)}/><Metric label="COGS" value={money(pnl.cogs,sym)}/><Metric label="Gross profit" value={money(pnl.grossProfit,sym)}/><Metric label="Expenses" value={money(pnl.expenses,sym)}/><Metric label="Returns" value={money(pnl.returns,sym)}/></div></section>}
     <section className="surface-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><div className="flex items-center gap-2"><Filter className="h-4 w-4 text-primary" /><h2 className="font-display text-base font-semibold">Report explorer</h2></div><p className="mt-1 max-w-3xl text-xs text-muted-foreground">Search the complete pharmacy history. Use a year, exact date range, party, status or free-text search to find old records without scrolling through months of data.</p></div>
