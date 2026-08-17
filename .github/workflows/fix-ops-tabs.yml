@@ -1,0 +1,32 @@
+name: fix-ops-tabs
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: operations tab navigation') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix controlled tab state
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("src/routes/app.operations.tsx")
+          s=p.read_text()
+          old='const activeTab=["barcode","batches","returns","customers","suppliers"].includes(tab)&&({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab]?tab:firstTab;'
+          new='const activeTab=["barcode","batches","returns","customers","suppliers","units","finance","controls","p2"].includes(tab)&&(["units","finance","controls","p2"].includes(tab)||({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab])?tab:firstTab;'
+          if old not in s:
+            raise SystemExit("expected tab-state line not found")
+          p.write_text(s.replace(old,new,1))
+          PY
+          rm -f .github/workflows/fix-ops-tabs.yml
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/app.operations.tsx .github/workflows/fix-ops-tabs.yml
+          git commit -m "fix: operations tab navigation"
+          git push
