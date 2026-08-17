@@ -33,6 +33,18 @@ jobs:
             '{ key: "operations", label: "Pharmacy operations", actions: [{ key: "operationsBarcode", label: "Barcode" }, { key: "operationsBatches", label: "Batch + FEFO" }, { key: "operationsReturns", label: "Returns" }, { key: "operationsCustomerLedger", label: "Customer ledger" }, { key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsControls", label: "P1 Controls" }, { key: "operationsP2", label: "P2 Operations" }] },'
           ))
 
+          def ops(s):
+              old='  const p=user?.permissions; const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;'
+              new='  const p=user?.permissions; const isAdmin=user?.role==="admin"; const canBarcode=isAdmin||p?.operationsBarcode===true; const canBatches=isAdmin||p?.operationsBatches===true; const canReturns=isAdmin||p?.operationsReturns===true; const canCustomers=isAdmin||p?.operationsCustomerLedger===true; const canSuppliers=isAdmin||p?.operationsSupplierLedger===true; const canUnits=isAdmin||p?.operationsUnits===true; const canFinance=isAdmin||p?.operationsFinance===true; const canControls=isAdmin||p?.operationsControls===true; const canP2=isAdmin||p?.operationsP2===true;'
+              if old not in s: raise SystemExit('Operations permission line not found')
+              s=s.replace(old,new,1)
+              old_content='<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>'
+              new_content='{canUnits&&<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance&&<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canControls&&<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2&&<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}'
+              if old_content not in s: raise SystemExit('Operations tab content line not found')
+              s=s.replace(old_content,new_content,1)
+              return s
+          edit('src/routes/app.operations.tsx', ops)
+
           def help(s):
               marker='  { title: "Prescriptions", items: ['
               section='''  { title: "Pharmacy operations", items: [\n    ["Barcode", "Use a USB barcode scanner as keyboard input. Scan and press Enter to find a medicine quickly."],\n    ["Batch + FEFO", "Manage inventory batches and review expiry order. FEFO lists the earliest-expiring stock first."],\n    ["Returns", "Record customer sales returns or supplier purchase returns against the original transaction."],\n    ["Customer Ledger", "Record and review customer payments and outstanding balances."],\n    ["Supplier Ledger", "Record supplier payments and review outstanding supplier payables."],\n    ["Units", "Manage strip / tablet / box unit conversions and the unit settings used for pharmacy sales."],\n    ["Finance", "Review pharmacy cash, expenses and profit-related finance information."],\n    ["P1 Controls", "Use the purchase, inventory and compliance controls introduced in the P1 workflow."],\n    ["P2 Operations", "Use stock transfer, branch and purchasing operations introduced in the P2 workflow."],\n    ["User access", "Admins can grant each operations tab separately under Settings → Users → Pharmacy operations."],\n  ]},\n'''
@@ -50,12 +62,13 @@ jobs:
           grep -q 'operationsControls' src/lib/users.ts
           grep -q 'operationsP2' src/lib/users.ts
           grep -q 'User access' src/components/AppTopbar.tsx
+          grep -q 'canUnits' src/routes/app.operations.tsx
           npm ci
           npm run build
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/users.ts src/routes/app.settings.tsx src/components/AppTopbar.tsx
+          git add src/lib/users.ts src/routes/app.settings.tsx src/routes/app.operations.tsx src/components/AppTopbar.tsx
           git commit -m "feat: add operations tab permissions and help"
           git push origin HEAD:main
