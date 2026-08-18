@@ -1,0 +1,139 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useProjectStore } from "@/store/project-store";
+import { useSession } from "@/store/session-store";
+import { visibleNavItems } from "@/lib/nav";
+
+type Mode = "sidebar" | "page" | null;
+type Target = { el: HTMLElement; key: string; label: string; rect: DOMRect };
+
+const KEY_POOL = ["1","2","3","4","5","6","7","8","9","0",..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
+
+function isVisible(el: HTMLElement) {
+  if (el.closest('[aria-hidden="true"]')) return false;
+  if ((el as HTMLButtonElement).disabled) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function labelFor(el: HTMLElement) {
+  return el.getAttribute("aria-label") || el.getAttribute("title") || el.textContent?.trim().replace(/\s+/g, " ").slice(0, 60) || "Control";
+}
+
+function sidebarTargets(): Target[] {
+  const links = Array.from(document.querySelectorAll<HTMLElement>('aside a[href^="/app/"]')).filter(isVisible);
+  return links.map((el, i) => ({ el, key: KEY_POOL[i] ?? "", label: labelFor(el), rect: el.getBoundingClientRect() })).filter((x) => x.key);
+}
+
+function pageTargets(): Target[] {
+  const selector = [
+    'button:not([data-keyboard-ignore])',
+    'a[href]:not([data-keyboard-ignore])',
+    'input:not([type="hidden"]):not([data-keyboard-ignore])',
+    'textarea:not([data-keyboard-ignore])',
+    'select:not([data-keyboard-ignore])',
+    '[role="button"]:not([data-keyboard-ignore])',
+    '[role="tab"]:not([data-keyboard-ignore])',
+    '[role="checkbox"]:not([data-keyboard-ignore])',
+    '[role="radio"]:not([data-keyboard-ignore])',
+    '[role="combobox"]:not([data-keyboard-ignore])',
+  ].join(",");
+  const els = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter((el) => isVisible(el) && !el.closest("aside"));
+  return els.map((el, i) => ({ el, key: KEY_POOL[i] ?? "", label: labelFor(el), rect: el.getBoundingClientRect() })).filter((x) => x.key);
+}
+
+function activate(target: Target) {
+  const el = target.el;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el.getAttribute("role") === "combobox") {
+    el.focus();
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.select();
+    return;
+  }
+  el.focus();
+  el.click();
+}
+
+export function KeyboardNavigator() {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const data = useProjectStore((s) => s.data);
+  const user = useSession((s) => s.user);
+  const enabled = data?.settings?.keyboardNavigationEnabled !== false;
+  const tabs = useMemo(() => visibleNavItems(data?.settings, user), [data?.settings, user]);
+  const [mode, setMode] = useState<Mode>(null);
+  const [targets, setTargets] = useState<Target[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => {
+      if (mode === "sidebar") setTargets(sidebarTargets());
+      if (mode === "page") setTargets(pageTargets());
+    };
+    refresh();
+    window.addEventListener("resize", refresh);
+    window.addEventListener("scroll", refresh, true);
+    return () => { window.removeEventListener("resize", refresh); window.removeEventListener("scroll", refresh, true); };
+  }, [enabled, mode, pathname]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const openSidebar = () => { setMode("sidebar"); window.setTimeout(() => setTargets(sidebarTargets()), 0); };
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.tagName === "INPUT" || (e.target as HTMLElement | null)?.tagName === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable;
+      if (e.key === "Escape" && mode) { e.preventDefault(); setMode(null); setTargets([]); return; }
+      if (e.key === "Alt" && !e.ctrlKey && !e.metaKey && !e.shiftKey && !typing) {
+        e.preventDefault();
+        if (mode) setMode(null); else openSidebar();
+        return;
+      }
+      if (!mode) return;
+      const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      if (e.key === "Tab" && !e.ctrlKey && !e.metaKey) {
+        // Native Tab/Shift+Tab remains the primary no-mouse focus traversal.
+        setMode(null);
+        return;
+      }
+      const target = targets.find((t) => t.key === key);
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (mode === "sidebar") {
+        const item = tabs.find((t) => t.to === target.el.getAttribute("href"));
+        if (item) {
+          navigate({ to: item.to });
+          window.dispatchEvent(new CustomEvent("medicore:nav-flash", { detail: item.to }));
+          window.setTimeout(() => { setMode("page"); setTargets(pageTargets()); }, 120);
+        } else {
+          activate(target);
+        }
+      } else {
+        activate(target);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [enabled, mode, targets, tabs, navigate]);
+
+  if (!enabled || !mode) return null;
+  return (
+    <>
+      <div className="fixed inset-x-0 top-0 z-[9998] flex items-center justify-center pointer-events-none">
+        <div className="mt-2 rounded-full border bg-background/95 px-4 py-1.5 text-xs font-medium shadow-lg backdrop-blur">
+          {mode === "sidebar" ? "Keyboard navigation · choose a sidebar item" : "Keyboard navigation · choose a control · Tab / Shift+Tab also works · Esc closes"}
+        </div>
+      </div>
+      {targets.map((target) => (
+        <span
+          key={`${target.key}-${target.el.dataset.keyboardId ?? target.label}`}
+          className="pointer-events-none fixed z-[9999] min-w-5 rounded border border-primary bg-primary px-1.5 py-0.5 text-center font-mono text-[11px] font-bold text-primary-foreground shadow-md"
+          style={{ left: Math.max(2, target.rect.left), top: Math.max(2, target.rect.top) }}
+          title={target.label}
+        >
+          {target.key}
+        </span>
+      ))}
+    </>
+  );
+}
