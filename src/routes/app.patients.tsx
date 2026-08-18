@@ -7,7 +7,7 @@ import { useProjectStore } from "@/store/project-store";
 import { money, useCurrencySymbol } from "@/lib/format";
 import { patientMedicineHistory, patientPrescriptions, patientSales, patientSpent } from "@/lib/patient-history";
 
-export const Route = createFileRoute("/app/patients")({ component: () => <PermissionGate perm="customers"><PatientsPage /></PermissionGate> });
+export const Route = createFileRoute("/app/patients")({ component: () => <PermissionGate perm="patients"><PatientsPage /></PermissionGate> });
 
 function PatientsPage() {
   const data = useProjectStore((s) => s.data!);
