@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { beginStockTake, createDisposition, postStockTake, updateStockTakeLine } from "@/lib/stocktake-engine";
 
-export const Route = createFileRoute("/app/stocktake")({ component: () => <PermissionGate perm="inventory"><StockTakePage /></PermissionGate> });
+export const Route = createFileRoute("/app/stocktake")({ component: () => <PermissionGate perm="stocktake"><StockTakePage /></PermissionGate> });
 
 function StockTakePage() {
   const data = useProjectStore(s => s.data!); const mutate = useProjectStore(s => s.mutate); const user = useSession(s => s.user);
