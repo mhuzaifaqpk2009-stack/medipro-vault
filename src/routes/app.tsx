@@ -18,6 +18,7 @@ import { comboFromEvent, normaliseCombo, forceCloseOverlays, defaultHotkeyFor } 
 import { QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickAction, type QuickActionId } from "@/lib/quick-actions";
 import { firePrintAction, hasPrinter } from "@/lib/print-action";
 import { BarcodeScanner, BARCODE_SCAN_EVENT, dispatchBarcodeScan } from "@/components/BarcodeScanner";
+import { KeyboardNavigator } from "@/components/KeyboardNavigator";
 
 export function buildHotkeyMap(tabs: { to: string }[], custom?: Record<string, string>) {
   const map = new Map<string, string>();
@@ -269,6 +270,7 @@ function AppLayout() {
       </div>
       <ItemMenuHost />
       <BarcodeScanner open continuous background onClose={() => undefined} onDetected={dispatchBarcodeScan} />
+      <KeyboardNavigator />
     </SidebarProvider>
   );
 }
