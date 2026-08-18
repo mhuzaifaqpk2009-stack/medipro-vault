@@ -60,7 +60,7 @@ export function KeyboardNavigator() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const data = useProjectStore((s) => s.data);
   const user = useSession((s) => s.user);
-  const enabled = data?.settings?.keyboardNavigationEnabled !== false;
+  const enabled = (data?.settings as any)?.keyboardNavigationEnabled !== false;
   const tabs = useMemo(() => visibleNavItems(data?.settings, user), [data?.settings, user]);
   const [mode, setMode] = useState<Mode>(null);
   const [targets, setTargets] = useState<Target[]>([]);
@@ -91,7 +91,6 @@ export function KeyboardNavigator() {
       if (!mode) return;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
       if (e.key === "Tab" && !e.ctrlKey && !e.metaKey) {
-        // Native Tab/Shift+Tab remains the primary no-mouse focus traversal.
         setMode(null);
         return;
       }
