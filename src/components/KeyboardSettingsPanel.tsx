@@ -8,7 +8,7 @@ export function KeyboardSettingsPanel() {
   if (!data) return null;
   const enabled = (data.settings as any).keyboardNavigationEnabled !== false;
   return (
-    <section className="surface-card mt-4 p-6">
+    <section className="surface-card static relative z-auto mt-4 w-full p-6">
       <div className="flex items-start gap-3">
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Keyboard className="h-4 w-4" /></div>
         <div className="min-w-0 flex-1">
