@@ -45,6 +45,7 @@ const PERMISSION_PANELS: PermissionPanel[] = [
   { key: "patients", label: "Patients panel" },
   { key: "categories", label: "Category panel", actions: [{ key: "categoriesAdd", label: "Add" }, { key: "categoriesEdit", label: "Edit" }, { key: "categoriesDelete", label: "Delete" }] },
   { key: "reports", label: "Report panel", actions: [{ key: "reportsPrint", label: "Print" }, { key: "reportsExport", label: "Export" }] },
+  { key: "messages", label: "Messages panel", actions: [{ key: "messagesToAdmin", label: "Send messages to Admin" }] },
   { key: "notifications", label: "Notifications & pinned panel", actions: [{ key: "viewNotifications", label: "View notifications" }, { key: "viewPinPanel", label: "View pinned" }, { key: "pinPanel", label: "Pin / unpin" }] },
 ];
 
