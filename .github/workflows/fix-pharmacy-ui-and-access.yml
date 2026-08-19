@@ -1,0 +1,186 @@
+name: Apply requested pharmacy fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def read(path):
+              return (root / path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              (root / path).write_text(text, encoding='utf-8')
+
+          # 1) Keyboard help belongs in Settings > Shortcuts, not as a floating overlay.
+          p = 'src/routes/app.tsx'
+          t = read(p)
+          t = t.replace('import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";\n', '')
+          t = t.replace('      {pathname === "/app/settings" && <KeyboardSettingsPanel />}\n', '')
+          write(p, t)
+
+          p = 'src/components/KeyboardSettingsPanel.tsx'
+          t = read(p)
+          t = t.replace('className="fixed bottom-5 right-5 z-40 w-[min(380px,calc(100vw-2rem))] rounded-xl border bg-background/95 p-4 shadow-xl backdrop-blur"', 'className="surface-card mt-4 p-6"')
+          write(p, t)
+
+          p = 'src/routes/app.settings.tsx'
+          t = read(p)
+          if 'import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";' not in t:
+              marker = 'import { NOTIFICATION_TYPES, NOTIFICATION_LABELS, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationType } from "@/lib/notification-types";'
+              t = t.replace(marker, marker + '\nimport { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";')
+          if '<KeyboardSettingsPanel />' not in t:
+              marker = '<TabsContent value="shortcuts">'
+              if marker not in t:
+                  raise SystemExit('Shortcuts tab not found in app.settings.tsx')
+              t = t.replace(marker, marker + '<KeyboardSettingsPanel />', 1)
+          # Make the settings tabs horizontally scrollable so 9 tabs do not squeeze/wrap awkwardly.
+          t = t.replace('className="mb-4 grid h-auto w-full grid-cols-2 gap-1.5 rounded-xl p-1.5 sm:grid-cols-4 lg:grid-cols-8"', 'className="mb-4 flex w-full gap-1.5 overflow-x-auto rounded-xl p-1.5"')
+          t = t.replace('className="min-h-10 px-3 text-sm font-medium"', 'className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium"')
+          # Ensure Rack Access has a visible content margin.
+          t = t.replace('<TabsContent value="rackaccess"><RackAccessSettings /></TabsContent>', '<TabsContent value="rackaccess" className="mt-0"><RackAccessSettings /></TabsContent>')
+          # Add rack creation permission to the granular permission list if not already present.
+          old = '{ key: "inventory", label: "Inventory panel" },\n  { key: "stocktake", label: "Stock Take panel" },'
+          new = '{ key: "inventory", label: "Inventory panel" },\n  { key: "stocktake", label: "Stock Take panel" },\n  { key: "racks", label: "Rack panel", actions: [{ key: "racksAdd", label: "Add racks" }] },'
+          if 'key: "racks", label: "Rack panel"' not in t:
+              t = t.replace(old, new)
+          write(p, t)
+
+          # 2) Messages: everyone can open Messages; only Admin/Manager can message other users.
+          p = 'src/lib/nav.ts'
+          t = read(p)
+          t = t.replace('{ to: "/app/messages", label: "Messages", icon: MessageSquare, perm: "messages", group: "Main" },', '{ to: "/app/messages", label: "Messages", icon: MessageSquare, group: "Main" },')
+          write(p, t)
+
+          p = 'src/routes/app.messages.tsx'
+          t = read(p)
+          t = t.replace('import { PermissionGate } from "@/components/PermissionGate";\n', '')
+          t = t.replace('export const Route = createFileRoute("/app/messages")({ component: () => <PermissionGate perm="messages"><MessagesPage /></PermissionGate> });', 'export const Route = createFileRoute("/app/messages")({ component: MessagesPage });')
+          t = t.replace('  const admins = users.filter((u) => u.role === "admin");\n  const recipients = user.role === "admin" ? users.filter((u) => u.id !== user.id) : admins;', '  const admins = users.filter((u) => u.role === "admin");\n  const canMessageUsers = user.role === "admin" || user.roleTemplate === "manager";\n  const recipients = canMessageUsers ? users.filter((u) => u.id !== user.id) : admins;')
+          t = t.replace('  const canSend = user.role === "admin" || user.permissions.messagesToAdmin === true;', '  const canSend = canMessageUsers || user.permissions.messagesToAdmin === true;')
+          t = t.replace('{user.role === "admin" ? "Admins can message any other user." : "Your account is allowed to send messages to an administrator."}', '{canMessageUsers ? "Admins and Managers can message other users." : "Your account is allowed to send messages to an administrator."}')
+          write(p, t)
+
+          # 3) Add explicit manager/user messaging permission fields without changing the existing role model.
+          p = 'src/lib/users.ts'
+          t = read(p)
+          t = t.replace('messages?: boolean; racks?: boolean; rackSell?: boolean; rackStocktake?: boolean;', 'messages?: boolean; racks?: boolean; racksAdd?: boolean; rackSell?: boolean; rackStocktake?: boolean;')
+          t = t.replace('viewPinPanel?: boolean; viewNotifications?: boolean; messagesToAdmin?: boolean;', 'viewPinPanel?: boolean; viewNotifications?: boolean; messagesToAdmin?: boolean; messagesToUsers?: boolean;')
+          write(p, t)
+
+          # 4) Prevent duplicate usernames, including duplicates of the admin username.
+          p = 'src/lib/install.ts'
+          t = read(p)
+          old_create = 'export async function createUser(input: { username: string; password: string; role: UserRole; permissions?: Partial<import("./users").UserPermissions> }): Promise<StoredUser> { const { saltHex, hashHex } = await hashPassword(input.password); return { id: crypto.randomUUID(), username: input.username.trim(), role: input.role, saltHex, hashHex, permissions: { ...defaultPermissions(input.role), ...(input.permissions ?? {}) } }; }'
+          new_create = 'export async function createUser(input: { username: string; password: string; role: UserRole; permissions?: Partial<import("./users").UserPermissions> }): Promise<StoredUser> { const username = input.username.trim(); if (!username) throw new Error("Username is required"); const duplicate = readInstall()?.users?.some((x) => x.username.trim().toLowerCase() === username.toLowerCase()); if (duplicate) throw new Error(`Username "${username}" is already in use`); const { saltHex, hashHex } = await hashPassword(input.password); return { id: crypto.randomUUID(), username, role: input.role, saltHex, hashHex, permissions: { ...defaultPermissions(input.role), ...(input.permissions ?? {}) } }; }'
+          if old_create not in t:
+              raise SystemExit('createUser implementation not found')
+          t = t.replace(old_create, new_create)
+          old_upsert = 'export function upsertUser(u: StoredUser) { const rec = readInstall(); if (!rec) return; const users = rec.users ?? []; const i = users.findIndex((x) => x.id === u.id); if (i >= 0) users[i] = u; else users.push(u); writeInstall({ ...rec, users }); }'
+          new_upsert = 'export function upsertUser(u: StoredUser) { const rec = readInstall(); if (!rec) return; const users = rec.users ?? []; const username = u.username.trim(); if (!username) throw new Error("Username is required"); const duplicate = users.find((x) => x.id !== u.id && x.username.trim().toLowerCase() === username.toLowerCase()); if (duplicate) throw new Error(`Username "${username}" is already in use`); const next = { ...u, username }; const i = users.findIndex((x) => x.id === u.id); if (i >= 0) users[i] = next; else users.push(next); writeInstall({ ...rec, users }); }'
+          if old_upsert not in t:
+              raise SystemExit('upsertUser implementation not found')
+          t = t.replace(old_upsert, new_upsert)
+          write(p, t)
+
+          # 5) Operations tabs: keep all tabs on one horizontal navigation row.
+          p = 'src/routes/app.operations.tsx'
+          t = read(p)
+          t = t.replace('className="grid w-full grid-cols-9 gap-1 bg-muted p-1"', 'className="flex w-full gap-1 overflow-x-auto bg-muted p-1"')
+          t = t.replace('className="border border-border/40 bg-background/50 hover:bg-background"', 'className="shrink-0 whitespace-nowrap border border-border/40 bg-background/50 hover:bg-background"')
+          write(p, t)
+
+          # 6) Medicines header: allow controls/button to wrap instead of clipping the Add medicine button.
+          p = 'src/routes/app.medicines.tsx'
+          t = read(p)
+          t = t.replace('<header className="mb-5 flex items-center gap-3">', '<header className="mb-5 flex flex-wrap items-center gap-3">')
+          t = t.replace('<div className="ml-auto flex items-center gap-2">', '<div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">')
+          t = t.replace('{canAdd && <Button {...pinContext({id:"action:new-medicine",label:"New medicine",kind:"action",to:"/app/medicines"})} onClick={()=>openNew()}>', '{canAdd && <Button className="shrink-0" {...pinContext({id:"action:new-medicine",label:"New medicine",kind:"action",to:"/app/medicines"})} onClick={()=>openNew()}>')
+          t = t.replace('  }, [meds, q, searchBy]);', '  }, [meds, q, searchBy, rackFilter, allowedRackNames]);')
+          write(p, t)
+
+          # 7) Rack picker for the Medicine editor: select existing racks, or type a new name.
+          picker = '''import { useMemo } from "react";\nimport { toast } from "sonner";\nimport { useProjectStore } from "@/store/project-store";\nimport { currentUser } from "@/store/session-store";\nimport { Input } from "@/components/ui/input";\n\nexport function RackPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {\n  const data = useProjectStore((s) => s.data);\n  const mutate = useProjectStore((s) => s.mutate);\n  const racks = useMemo(() => (data?.settings.racks ?? []).filter((r) => r.active), [data?.settings.racks]);\n  const canAddRack = currentUser()?.role === "admin" || currentUser()?.permissions.racksAdd === true || currentUser()?.roleTemplate === "manager";\n  const listId = "medicine-rack-options";\n  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {\n    if (e.key !== "Enter") return;\n    const name = value.trim();\n    if (!name) return;\n    const exists = racks.some((r) => r.name.trim().toLowerCase() === name.toLowerCase());\n    if (exists) return;\n    e.preventDefault();\n    if (!canAddRack) { toast.error("Rack does not exist. Ask an administrator or manager to add it."); return; }\n    const add = window.confirm(`Rack "${name}" does not exist. Do you want to add the rack?`);\n    if (!add) return;\n    mutate((d) => {\n      const current = d.settings.racks ?? [];\n      if (current.some((r) => r.name.trim().toLowerCase() === name.toLowerCase())) return;\n      d.settings.racks = [...current, { id: crypto.randomUUID(), name, active: true, createdAt: new Date().toISOString() }];\n    });\n    toast.success(`Rack "${name}" added`);\n  }\n  return <div className="space-y-1.5"><Input list={listId} value={value ?? ""} onChange={(e) => onChange(e.target.value)} onKeyDown={handleKeyDown} placeholder={racks.length ? "Select or type a rack…" : "No racks — type a rack name"} /><datalist id={listId}>{racks.map((r) => <option key={r.id} value={r.name}>{r.description ?? ""}</option>)}</datalist>{racks.length === 0 && <p className="text-[11px] text-muted-foreground">No racks have been added yet. Type a rack name and press Enter.</p>}</div>;\n}\n'''
+          rp = root / 'src/components/RackPicker.tsx'
+          if not rp.exists(): rp.write_text(picker, encoding='utf-8')
+
+          p = 'src/routes/app.medicines.tsx'
+          t = read(p)
+          if 'import { RackPicker } from "@/components/RackPicker";' not in t:
+              marker = 'import { canAddMedicine, canEditMedicine, canDeleteMedicine } from "@/lib/granular-permissions";'
+              t = t.replace(marker, marker + '\nimport { RackPicker } from "@/components/RackPicker";')
+          # Replace the existing rack input in the editor, regardless of the exact surrounding formatting.
+          if 'RackPicker' not in t or 'value={value.rackNumber' not in t:
+              pattern = re.compile(r'<Input\b(?=[^>]*rackNumber)(?:(?!/?>).)*?/?>', re.S)
+              match = pattern.search(t)
+              if not match:
+                  # Some versions use a draft variable. Detect it and search a rackNumber input again.
+                  pattern = re.compile(r'<Input\b(?=[\s\S]{0,600}rackNumber)(?:(?!/?>).)*?/?>', re.S)
+                  match = pattern.search(t)
+              if not match:
+                  raise SystemExit('Medicine editor rack input not found; refusing to guess')
+              state_match = re.search(r'const \[(\w+),\s*(\w+)\]\s*=\s*useState(?:<[^>]+>)?\(', t)
+              state = state_match.group(1) if state_match else 'draft'
+              setter = state_match.group(2) if state_match else 'setDraft'
+              replacement = f'<RackPicker value={{{state}.rackNumber ?? ""}} onChange={{(rackNumber) => {setter}((v) => ({{ ...v, rackNumber }}))}} />'
+              t = t[:match.start()] + replacement + t[match.end():]
+          write(p, t)
+
+          # 8) Rack management itself respects the Add Rack permission.
+          p = 'src/routes/app.racks.tsx'
+          if (Path(p).exists():
+              t = read(p)
+              if 'const canAddRack' not in t:
+                  t = t.replace('  const data=useProjectStore(s=>s.data)!; const mutate=useProjectStore(s=>s.mutate); const racks=data.settings.racks ?? [];', '  const data=useProjectStore(s=>s.data)!; const mutate=useProjectStore(s=>s.mutate); const racks=data.settings.racks ?? []; const user=currentUser(); const canAddRack=user?.role==="admin"||user?.permissions.racksAdd===true||user?.roleTemplate==="manager";')
+                  t = t.replace('import { PermissionGate } from "@/components/PermissionGate";', 'import { PermissionGate } from "@/components/PermissionGate";\nimport { currentUser } from "@/store/session-store";')
+              t = t.replace('<Button onClick={()=>setEditing(emptyRack())}><Plus', '<Button disabled={!canAddRack} onClick={()=>setEditing(emptyRack())}><Plus')
+              write(p, t)
+
+          # 9) Give all role templates the intended messaging/rack defaults.
+          p = 'src/lib/users.ts'
+          t = read(p)
+          t = t.replace('messagesToAdmin: true, applyDiscount:', 'messagesToAdmin: true, messagesToUsers: true, applyDiscount:')
+          t = t.replace('messagesToAdmin: false, applyDiscount:', 'messagesToAdmin: false, messagesToUsers: false, applyDiscount:')
+          # Regular users can always open Messages; sending remains controlled by messagesToAdmin.
+          t = t.replace('notifications: false, prescriptions: false, messages: false, messagesToAdmin: false,', 'notifications: false, prescriptions: false, messages: true, messagesToAdmin: false, messagesToUsers: false,')
+          # Admins/managers can add racks; sellers may use their assigned racks but cannot create new rack definitions.
+          t = t.replace('racks: true, rackSell: true, rackStocktake: true, operations:', 'racks: true, racksAdd: true, rackSell: true, rackStocktake: true, operations:')
+          t = t.replace('racks: true, rackSell: true, rackStocktake: false, operations:', 'racks: true, racksAdd: false, rackSell: true, rackStocktake: false, operations:')
+          t = t.replace('racks: false, rackSell: false, rackStocktake: false, operations:', 'racks: false, racksAdd: false, rackSell: false, rackStocktake: false, operations:')
+          write(p, t)
+
+          print('All requested fixes applied.')
+
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows/fix-pharmacy-ui-and-access.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: repair pharmacy access, messaging, rack picker and layout"
+          git push
+
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          git rm .github/workflows/fix-pharmacy-ui-and-access.yml || true
+          git commit -m "chore: remove temporary fix workflow" || true
+          git push || true
