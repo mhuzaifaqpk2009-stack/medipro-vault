@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, ClipboardCheck, PackageCheck, RotateCcw, ShoppingCart, WalletCards, Workflow } from "lucide-react";
+import { ArrowRight, CheckCircle2, ClipboardCheck, PackageCheck, RotateCcw, ShoppingCart, WalletCards, Workflow, Sparkles, ListTodo, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/store/session-store";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -8,6 +8,7 @@ import type { UserPermissions } from "@/lib/users";
 
 type Step = { label: string; to?: "/app/sales" | "/app/purchases" | "/app/stocktake" | "/app/operations" | "/app/bills" };
 type Flow = { id: string; title: string; description: string; icon: typeof ShoppingCart; permission: keyof UserPermissions; steps: Step[] };
+type Intent = { id: string; title: string; description: string; priority: "urgent" | "high" | "normal"; to: "/app/sales" | "/app/purchases" | "/app/stocktake" | "/app/operations" | "/app/reports"; permission?: keyof UserPermissions };
 
 const FLOWS: Flow[] = [
   { id: "sale", title: "Fast Sale", description: "Keep the sale moving from medicine selection through checkout and receipt.", icon: ShoppingCart, permission: "sales", steps: [{ label: "Open POS", to: "/app/sales" }, { label: "Add medicines", to: "/app/sales" }, { label: "Customer / payment", to: "/app/sales" }, { label: "Finish and receipt", to: "/app/sales" }] },
@@ -17,22 +18,63 @@ const FLOWS: Flow[] = [
   { id: "closing", title: "Daily Closing", description: "Walk through cash, finance and outstanding work before closing the pharmacy day.", icon: WalletCards, permission: "operations", steps: [{ label: "Open Finance", to: "/app/operations" }, { label: "Check expected cash", to: "/app/operations" }, { label: "Review expenses / ledgers", to: "/app/operations" }, { label: "Confirm daily close", to: "/app/operations" }] },
 ];
 
+const INTENTS: Intent[] = [
+  { id: "stocktake", title: "Review physical stock", description: "Start a stock take when inventory needs a physical reconciliation.", priority: "high", to: "/app/stocktake", permission: "stocktake" },
+  { id: "receiving", title: "Finish receiving work", description: "Continue purchase receiving and confirm quantities and batches.", priority: "high", to: "/app/purchases", permission: "purchases" },
+  { id: "returns", title: "Review returns", description: "Check pending return work and keep stock and transactions synchronized.", priority: "normal", to: "/app/operations", permission: "operations" },
+  { id: "closing", title: "Prepare daily closing", description: "Review finance, cash and outstanding operational work before closing.", priority: "normal", to: "/app/operations", permission: "operations" },
+  { id: "sales", title: "Open the sales desk", description: "Continue customer sales using the fastest POS workflow.", priority: "normal", to: "/app/sales", permission: "sales" },
+  { id: "reports", title: "Review today's performance", description: "Open reports when you need to inspect sales, purchases or profit.", priority: "normal", to: "/app/reports", permission: "reports" },
+];
+
 export const Route = createFileRoute("/app/workflows")({ component: () => <PermissionGate perm="sales"><WorkflowCenter /></PermissionGate> });
 
 function WorkflowCenter() {
   const user = useSession((s) => s.user);
+  const location = useLocation();
+  const [mode, setMode] = useState<"suggested" | "queue">("suggested");
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const available = useMemo(() => FLOWS.filter((f) => user?.role === "admin" || Boolean(user?.permissions?.[f.permission])), [user]);
   const [activeId, setActiveId] = useState(available[0]?.id ?? "");
   const [completed, setCompleted] = useState<Record<string, number>>({});
   const active = available.find((f) => f.id === activeId) ?? available[0];
   const step = active ? completed[active.id] ?? 0 : 0;
+
+  const allowed = (intent: Intent) => user?.role === "admin" || !intent.permission || Boolean(user?.permissions?.[intent.permission]);
+  const queue = useMemo(() => {
+    const current = location.pathname;
+    const visible = INTENTS.filter((i) => allowed(i) && !dismissed.includes(i.id));
+    return [...visible].sort((a, b) => {
+      const context = (id: string) => (current.includes(id) ? -10 : 0);
+      const rank = (p: Intent["priority"]) => p === "urgent" ? 0 : p === "high" ? 1 : 2;
+      return context(a.id) - context(b.id) || rank(a.priority) - rank(b.priority);
+    });
+  }, [location.pathname, user, dismissed]);
+
+  const suggestion = useMemo(() => {
+    if (!active) return null;
+    const currentStep = active.steps[step];
+    if (currentStep) return { title: currentStep.label, description: `Continue ${active.title} from the current step.`, to: currentStep.to };
+    return { title: `Start ${active.title}`, description: active.description, to: active.steps[0]?.to };
+  }, [active, step]);
+
   if (!active) return null;
   const Icon = active.icon;
   const next = () => setCompleted((v) => ({ ...v, [active.id]: Math.min(step + 1, active.steps.length) }));
   const reset = () => setCompleted((v) => ({ ...v, [active.id]: 0 }));
 
   return <div className="mx-auto max-w-7xl p-6 md:p-8">
-    <div className="mb-6 flex items-start gap-3"><Workflow className="mt-1 h-7 w-7 text-primary" /><div><p className="text-xs uppercase tracking-widest text-muted-foreground">Phase 2</p><h1 className="font-display text-3xl font-bold">Workflow Engine</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Start a pharmacy workflow once, follow its steps, and jump directly to the screen needed for the current step. Permissions are respected at every destination.</p></div></div>
+    <div className="mb-6 flex items-start gap-3"><Workflow className="mt-1 h-7 w-7 text-primary" /><div><p className="text-xs uppercase tracking-widest text-muted-foreground">Phases 2–4</p><h1 className="font-display text-3xl font-bold">Workflow Engine</h1><p className="mt-1 max-w-2xl text-sm text-muted-foreground">Follow workflows, get a context-aware next action, and keep important pharmacy work in one prioritized queue.</p></div></div>
+
+    <div className="mb-5 flex gap-2 rounded-lg border bg-muted/30 p-1 w-fit">
+      <Button variant={mode === "suggested" ? "default" : "ghost"} size="sm" onClick={() => setMode("suggested")}><Sparkles className="mr-2 h-4 w-4" />Suggested next</Button>
+      <Button variant={mode === "queue" ? "default" : "ghost"} size="sm" onClick={() => setMode("queue")}><ListTodo className="mr-2 h-4 w-4" />Intent Queue ({queue.length})</Button>
+    </div>
+
+    {mode === "suggested" && suggestion && <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><div className="flex-1"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Suggested next action</p><p className="mt-1 font-semibold">{suggestion.title}</p><p className="text-sm text-muted-foreground">{suggestion.description}</p></div>{suggestion.to && <Link to={suggestion.to}><Button size="sm">Continue <ArrowRight className="ml-1 h-4 w-4" /></Button></Link>}</div></div>}
+
+    {mode === "queue" && <div className="mb-6 space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-display text-xl font-semibold">Intent Queue</h2><p className="text-sm text-muted-foreground">Work is ordered by urgency and current context. Dismiss items that are not relevant right now.</p></div><Button variant="outline" size="sm" onClick={() => setDismissed([])}>Restore all</Button></div>{queue.length === 0 ? <div className="surface-card p-8 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-primary" /><p className="mt-2 font-medium">Nothing needs your attention.</p><p className="text-sm text-muted-foreground">Your accessible intent queue is clear.</p></div> : queue.map((intent) => <div key={intent.id} className="surface-card flex items-center gap-4 p-4"><div className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${intent.priority === "high" ? "bg-amber-100 text-amber-800" : intent.priority === "urgent" ? "bg-red-100 text-red-800" : "bg-muted text-muted-foreground"}`}>{intent.priority}</div><div className="min-w-0 flex-1"><p className="font-medium">{intent.title}</p><p className="text-sm text-muted-foreground">{intent.description}</p></div><Link to={intent.to}><Button size="sm">Open <ArrowRight className="ml-1 h-4 w-4" /></Button></Link><Button variant="ghost" size="icon" aria-label="Dismiss intent" onClick={() => setDismissed((v) => [...v, intent.id])}><X className="h-4 w-4" /></Button></div>)}</div>}
+
     <div className="grid gap-5 lg:grid-cols-[300px,1fr]">
       <div className="surface-card p-3"><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workflows</p>{available.map((f) => { const I=f.icon; return <button key={f.id} onClick={() => setActiveId(f.id)} className={`flex w-full items-center gap-3 rounded-lg p-3 text-left ${f.id===active.id?"bg-primary/10 text-primary":"hover:bg-muted"}`}><I className="h-5 w-5" /><span className="min-w-0"><b className="block text-sm">{f.title}</b><span className="text-xs text-muted-foreground">{completed[f.id] ?? 0}/{f.steps.length} steps</span></span></button>; })}</div>
       <div className="surface-card p-6">
