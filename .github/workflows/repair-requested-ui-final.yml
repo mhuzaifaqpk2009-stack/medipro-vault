@@ -1,0 +1,60 @@
+name: Repair final requested UI regression
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair exact regressions
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # The previous automated rack insertion left a malformed JSX fragment.
+          p=Path('src/routes/app.medicines.tsx')
+          t=p.read_text(encoding='utf-8')
+          bad='<RackPicker value={scanTarget.rackNumber ?? ""} onChange={(rackNumber) => setScanTarget((v) => ({ ...v, rackNumber }))} />upd("rackNumber",e.target.value)} placeholder="Rack / shelf" />'
+          good='<RackPicker value={cur.rackNumber ?? ""} onChange={(rackNumber) => upd("rackNumber", rackNumber)} />'
+          if bad not in t:
+              raise SystemExit('Expected malformed rack JSX was not found')
+          t=t.replace(bad,good,1)
+          p.write_text(t,encoding='utf-8')
+
+          # Duplicate usernames should show a normal form error instead of bubbling an exception.
+          p=Path('src/routes/app.settings.tsx')
+          t=p.read_text(encoding='utf-8')
+          start=t.find('  async function submit(){', t.find('function UserDialog'))
+          end=t.find('  const showTemplate=', start)
+          if start < 0 or end < 0: raise SystemExit('UserDialog submit function not found')
+          fn=t[start:end]
+          if 'try {' not in fn:
+              fn2=fn.replace('  async function submit(){', '  async function submit(){ try {', 1)
+              # Close the try/catch around the existing submit body.
+              fn2=fn2.rstrip() + ' catch (e: any) { toast.error(e?.message ?? "Could not save user"); } }\n'
+              t=t[:start]+fn2+t[end:]
+          p.write_text(t,encoding='utf-8')
+
+          # Remove temporary repair workflows; keep the repository's permanent workflows untouched.
+          for f in [Path('.github/workflows/fix-pharmacy-ui-and-access.yml'), Path('.github/workflows/apply-requested-fixes.yml'), Path('.github/workflows/repair-requested-ui-final.yml')]:
+              if f.exists() and f.name != 'repair-requested-ui-final.yml': f.unlink()
+
+          print('Final requested UI regressions repaired.')
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows
+          git commit -m "fix: repair rack picker and duplicate-user form errors" || true
+          git push
