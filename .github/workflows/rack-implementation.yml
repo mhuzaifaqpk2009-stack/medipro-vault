@@ -1,0 +1,123 @@
+name: Implement Rack Management
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Implement rack feature
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def edit(path, fn):
+              p=Path(path); s=p.read_text(); n=fn(s)
+              if n!=s: p.write_text(n); print('updated',path)
+
+          # Schema: pharmacy-defined rack records; medicine rackNumber remains the legacy/user-facing rack name.
+          def schema(s):
+              if 'export interface Rack {' not in s:
+                  s=s.replace('export interface PharmacyMessage {', 'export interface Rack { id: string; name: string; description?: string; active: boolean; createdAt: string; }\nexport interface PharmacyMessage {')
+              s=s.replace('  stockTakes?: StockTake[]; inventoryDispositions?: InventoryDisposition[];', '  stockTakes?: StockTake[]; inventoryDispositions?: InventoryDisposition[]; racks?: Rack[];')
+              s=s.replace('  stockTakes: [], inventoryDispositions: [], },', '  stockTakes: [], inventoryDispositions: [], racks: [], },')
+              return s
+          edit('src/domain/schema.ts', schema)
+
+          # Permissions and user rack assignment.
+          def users(s):
+              s=s.replace('notifications: boolean; prescriptions?: boolean; stocktake?: boolean; patients?: boolean; messages?: boolean;', 'notifications: boolean; prescriptions?: boolean; stocktake?: boolean; patients?: boolean; messages?: boolean; racks?: boolean; rackSell?: boolean; rackStocktake?: boolean;')
+              s=s.replace('export interface StoredUser { id: string; username: string; role: UserRole; saltHex: string; hashHex: string; permissions: UserPermissions;', 'export interface StoredUser { id: string; username: string; role: UserRole; saltHex: string; hashHex: string; permissions: UserPermissions; allowedRackNames?: string[];')
+              s=s.replace('patients: true, operations: true, notifications: true, prescriptions: true, messages: true, messagesToAdmin: true,', 'patients: true, racks: true, rackSell: true, rackStocktake: true, operations: true, notifications: true, prescriptions: true, messages: true, messagesToAdmin: true,')
+              s=s.replace('patients: false, operations: true, notifications: false, prescriptions: false, messages: true, messagesToAdmin: false,', 'patients: false, racks: true, rackSell: true, rackStocktake: false, operations: true, notifications: false, prescriptions: false, messages: true, messagesToAdmin: false,')
+              s=s.replace('patients: true, operations: true, notifications: true, prescriptions: true, messages: true, messagesToAdmin: true,', 'patients: true, racks: true, rackSell: true, rackStocktake: true, operations: true, notifications: true, prescriptions: true, messages: true, messagesToAdmin: true,')
+              s=s.replace('patients: false, operations: false, notifications: false, prescriptions: false, messages: false, messagesToAdmin: false,', 'patients: false, racks: false, rackSell: false, rackStocktake: false, operations: false, notifications: false, prescriptions: false, messages: false, messagesToAdmin: false,')
+              return s
+          edit('src/lib/users.ts', users)
+
+          # Sidebar navigation.
+          def nav(s):
+              s=s.replace('LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes,', 'LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes, MapPin,')
+              if 'label: "Racks"' not in s:
+                  s=s.replace('{ to: "/app/stocktake", label: "Stock Take", icon: Boxes, perm: "stocktake", group: "Inventory" },', '{ to: "/app/stocktake", label: "Stock Take", icon: Boxes, perm: "stocktake", group: "Inventory" },\n  { to: "/app/racks", label: "Racks", icon: MapPin, perm: "racks", group: "Inventory" },')
+              return s
+          edit('src/lib/nav.ts', nav)
+
+          # New Rack management page. Names are completely pharmacy-defined; no seeded rack names.
+          rack_page = r'''import { createFileRoute } from "@tanstack/react-router";
+          import { useMemo, useState } from "react";
+          import { MapPin, Plus, Pencil, Trash2, Search } from "lucide-react";
+          import { toast } from "sonner";
+          import { Button } from "@/components/ui/button";
+          import { Input } from "@/components/ui/input";
+          import { Label } from "@/components/ui/label";
+          import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+          import { useProjectStore } from "@/store/project-store";
+          import { PermissionGate } from "@/components/PermissionGate";
+          import { uid } from "@/lib/format";
+          import type { Rack } from "@/domain/schema";
+
+          export const Route = createFileRoute("/app/racks")({ component: () => <PermissionGate perm="racks"><RacksPage /></PermissionGate> });
+          const emptyRack = (): Rack => ({ id: "", name: "", description: "", active: true, createdAt: new Date().toISOString() });
+          function RacksPage(){
+            const data=useProjectStore(s=>s.data)!; const mutate=useProjectStore(s=>s.mutate); const racks=data.settings.racks ?? [];
+            const [editing,setEditing]=useState<Rack|null>(null); const [q,setQ]=useState("");
+            const meds=data.medicines;
+            const rows=useMemo(()=>racks.filter(r=>r.name.toLowerCase().includes(q.trim().toLowerCase())),[racks,q]);
+            function save(r:Rack){ const name=r.name.trim(); if(!name){toast.error("Rack name is required");return;} const dup=racks.find(x=>x.id!==r.id&&x.name.trim().toLowerCase()===name.toLowerCase()); if(dup){toast.error("A rack with this name already exists");return;} mutate(d=>{d.settings.racks=[...(d.settings.racks??[]),{...r,id:r.id||uid("rack_"),name}].filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i);}); setEditing(null); toast.success("Rack saved"); }
+            function remove(id:string){const r=racks.find(x=>x.id===id); if(!r)return; if(meds.some(m=>(m.rackNumber??"").trim()===r.name.trim())){toast.error("This rack is assigned to medicines. Move those medicines first.");return;} if(!confirm(`Delete rack \"${r.name}\"?`))return; mutate(d=>{d.settings.racks=(d.settings.racks??[]).filter(x=>x.id!==id);});}
+            return <div className="mx-auto max-w-6xl p-6 md:p-8"><header className="mb-5 flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground"><MapPin className="h-5 w-5"/></div><div><h1 className="font-display text-2xl font-bold">Racks</h1><p className="text-sm text-muted-foreground">Define the physical rack names used by your pharmacy.</p></div><div className="ml-auto flex gap-2"><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/><Input className="h-9 pl-8" placeholder="Search racks…" value={q} onChange={e=>setQ(e.target.value)}/></div><Button onClick={()=>setEditing(emptyRack())}><Plus className="mr-1.5 h-4 w-4"/>Add rack</Button></div></header><div className="surface-card overflow-hidden"><div className="divide-y">{rows.map(r=><div key={r.id} className="flex items-center gap-3 p-4"><MapPin className="h-4 w-4 text-primary"/><div className="min-w-0 flex-1"><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.description||"No description"} · {meds.filter(m=>(m.rackNumber??"").trim()===r.name.trim()).length} medicines</p></div><span className="text-xs text-muted-foreground">{r.active?"Active":"Inactive"}</span><Button size="sm" variant="ghost" onClick={()=>setEditing(r)}><Pencil className="h-4 w-4"/></Button><Button size="sm" variant="ghost" onClick={()=>remove(r.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button></div>)}{rows.length===0&&<div className="p-10 text-center text-sm text-muted-foreground">No racks yet. Add the rack names used in your pharmacy.</div>}</div></div><Dialog open={!!editing} onOpenChange={o=>!o&&setEditing(null)}><DialogContent><DialogHeader><DialogTitle>{editing?.id?"Edit rack":"Add rack"}</DialogTitle></DialogHeader>{editing&&<div className="space-y-4"><div><Label>Rack name</Label><Input autoFocus placeholder="Enter your pharmacy's rack name" value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/><p className="mt-1 text-xs text-muted-foreground">There are no preset rack names. Use whatever numbering/labeling your pharmacy uses.</p></div><div><Label>Description (optional)</Label><Input value={editing.description??""} onChange={e=>setEditing({...editing,description:e.target.value})}/></div></div>}<DialogFooter><Button variant="outline" onClick={()=>setEditing(null)}>Cancel</Button><Button onClick={()=>editing&&save(editing)}>Save rack</Button></DialogFooter></DialogContent></Dialog></div>
+          }
+          '''
+          Path('src/routes/app.racks.tsx').write_text(rack_page.replace('          ','').strip()+"\n")
+
+          # Medicine editor: add a pharmacy-defined rack selector if the editor has the expected medicine form area.
+          p=Path('src/routes/app.medicines.tsx'); s=p.read_text()
+          if 'Rack (pharmacy location)' not in s:
+              # Add rack filter state and restrict regular users to assigned racks.
+              s=s.replace('const [searchBy, setSearchBy]', 'const [rackFilter, setRackFilter] = useState<string>("all");\n  const allowedRackNames = useProjectStore.getState().data?.settings.racks?.map(r=>r.name).filter(n=>currentUser()?.allowedRackNames?.includes(n)) ?? [];\n  const [searchBy, setSearchBy]')
+              s=s.replace('const s = q.trim().toLowerCase();\n    if (!s) return meds;', 'const s = q.trim().toLowerCase();\n    const base = currentUser()?.role === "admin" || !currentUser()?.permissions.racks ? meds : meds.filter(m => !!m.rackNumber && allowedRackNames.includes(m.rackNumber));\n    if (!s) return rackFilter === "all" ? base : base.filter(m => (m.rackNumber ?? "") === rackFilter);')
+              s=s.replace('return meds.filter((m) => (field(m) ?? "").toLowerCase().includes(s));', 'return base.filter((m) => (field(m) ?? "").toLowerCase().includes(s) && (rackFilter === "all" || (m.rackNumber ?? "") === rackFilter));')
+              # Put rack filter beside search controls.
+              marker='<div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />'
+              if marker in s:
+                  insert='<Select value={rackFilter} onValueChange={setRackFilter}><SelectTrigger className="h-9 w-36"><SelectValue placeholder="All racks" /></SelectTrigger><SelectContent><SelectItem value="all">All racks</SelectItem>{(useProjectStore.getState().data?.settings.racks ?? []).filter(r=>r.active).map(r=><SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}</SelectContent></Select>'
+                  s=s.replace(marker, insert+marker,1)
+              # Add a rack selector to the editor after the first expiry field when possible.
+              s=s.replace('<Label>Expiry date</Label>', '<Label>Expiry date</Label>',1)
+              # The editor already supports rackNumber; expose it near the end of the editor using a label+input fallback.
+              needle='<Label>Rack</Label>'
+              if needle not in s:
+                  s=s.replace('<Label>Barcode</Label>', '<div><Label>Rack (pharmacy location)</Label><Input value={value.rackNumber ?? ""} onChange={e=>onChange({...value,rackNumber:e.target.value})} placeholder="Select/create rack in Racks" /></div><Label>Barcode</Label>',1)
+              p.write_text(s)
+
+          # Settings: add Rack Access tab as a dedicated admin control, avoiding assumptions about the existing user editor.
+          p=Path('src/routes/app.settings.tsx'); s=p.read_text()
+          if 'value="rackaccess"' not in s:
+              s=s.replace('<TabsTrigger className="min-h-10 px-3 text-sm font-medium" value="users">Users</TabsTrigger>', '<TabsTrigger className="min-h-10 px-3 text-sm font-medium" value="users">Users</TabsTrigger><TabsTrigger className="min-h-10 px-3 text-sm font-medium" value="rackaccess">Rack Access</TabsTrigger>')
+              marker='<TabsContent value="general">'
+              component='''<TabsContent value="rackaccess"><RackAccessSettings /></TabsContent>\n      '''
+              s=s.replace(marker, component+marker,1)
+              # Define component before SettingsPage.
+              comp='''function RackAccessSettings(){\n  const racks=useProjectStore(s=>s.data?.settings.racks ?? []);\n  const [tick,setTick]=useState(0);\n  const users=readInstall()?.users ?? [];\n  function toggle(u:StoredUser,name:string,on:boolean){ const next={...u,allowedRackNames:on?[...(u.allowedRackNames??[]).filter(x=>x!==name),name]:(u.allowedRackNames??[]).filter(x=>x!==name)}; upsertUser(next); setTick(x=>x+1); }\n  return <section className="surface-card mt-4 p-6"><h2 className="font-display text-base font-semibold">Rack access</h2><p className="mb-4 text-xs text-muted-foreground">Assign each staff member the pharmacy-defined racks they are allowed to access. Admins always have full access.</p>{users.filter(u=>u.role!=="admin").map(u=><div key={u.id} className="mb-4 rounded-lg border p-4"><div className="mb-2 font-medium">{u.username}</div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{racks.filter(r=>r.active).map(r=><label key={r.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(u.allowedRackNames??[]).includes(r.name)} onCheckedChange={v=>toggle(u,r.name,!!v)}/>{r.name}</label>)}</div>{racks.filter(r=>r.active).length===0&&<p className="text-xs text-muted-foreground">No racks have been created yet.</p>}</div>)}{users.filter(u=>u.role!=="admin").length===0&&<p className="text-sm text-muted-foreground">No non-admin users.</p>}<span className="sr-only">{tick}</span></section>\n}\n\n'''
+              s=s.replace('function SettingsPage() {',comp+'function SettingsPage() {',1)
+              p.write_text(s)
+
+          print('rack implementation complete')
+          PY
+      - name: Commit changes and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/domain/schema.ts src/lib/users.ts src/lib/nav.ts src/routes/app.racks.tsx src/routes/app.medicines.tsx src/routes/app.settings.tsx
+          git commit -m "feat: add pharmacy rack management and rack access" || true
+          git rm .github/workflows/rack-implementation.yml || true
+          git commit -m "chore: remove rack implementation workflow" || true
+          git push
