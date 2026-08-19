@@ -7,7 +7,7 @@ export const NAV: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true, adminOnly: true, group: "Main" },
   { to: "/app/sales", label: "Sales (POS)", icon: ShoppingCart, perm: "sales", group: "Main" },
   { to: "/app/bills", label: "Bills", icon: Receipt, perm: "bills", group: "Main" },
-  { to: "/app/messages", label: "Messages", icon: MessageSquare, perm: "messages", group: "Main" },
+  { to: "/app/messages", label: "Messages", icon: MessageSquare, group: "Main" },
   { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines", group: "Inventory" },
   { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory", group: "Inventory" },
   { to: "/app/stocktake", label: "Stock Take", icon: Boxes, perm: "stocktake", group: "Inventory" },

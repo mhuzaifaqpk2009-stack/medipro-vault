@@ -19,7 +19,6 @@ import { QUICK_ACTIONS, PANEL_ONLY_ACTIONS, effectiveActionHotkey, runQuickActio
 import { firePrintAction, hasPrinter } from "@/lib/print-action";
 import { BarcodeScanner, BARCODE_SCAN_EVENT, dispatchBarcodeScan } from "@/components/BarcodeScanner";
 import { KeyboardNavigator } from "@/components/KeyboardNavigator";
-import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";
 import { CommandBar } from "@/components/CommandBar";
 
 export function buildHotkeyMap(tabs: { to: string }[], custom?: Record<string, string>) {
@@ -274,7 +273,6 @@ function AppLayout() {
       <BarcodeScanner open continuous background onClose={() => undefined} onDetected={dispatchBarcodeScan} />
       <KeyboardNavigator />
       <CommandBar />
-      {pathname === "/app/settings" && <KeyboardSettingsPanel />}
     </SidebarProvider>
   );
 }
