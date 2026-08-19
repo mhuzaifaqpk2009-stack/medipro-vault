@@ -1,5 +1,5 @@
 /** Single source of truth for workspace navigation. */
-import { LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes, BarChart3, Settings, Receipt, Calculator, Keyboard, Barcode, FileText, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes, MapPin, BarChart3, Settings, Receipt, Calculator, Keyboard, Barcode, FileText, MessageSquare } from "lucide-react";
 import type { UserPermissions, StoredUser } from "@/lib/users";
 import type { PharmacySettings } from "@/domain/schema";
 export type NavItem = { to: string; label: string; icon: any; exact?: boolean; perm?: keyof UserPermissions; adminOnly?: boolean; group: string };
@@ -11,6 +11,7 @@ export const NAV: NavItem[] = [
   { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines", group: "Inventory" },
   { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory", group: "Inventory" },
   { to: "/app/stocktake", label: "Stock Take", icon: Boxes, perm: "stocktake", group: "Inventory" },
+  { to: "/app/racks", label: "Racks", icon: MapPin, perm: "racks", group: "Inventory" },
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
   { to: "/app/operations", label: "Pharmacy Operations", icon: Barcode, perm: "operations", group: "Inventory" },

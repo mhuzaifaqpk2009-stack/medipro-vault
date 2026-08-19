@@ -39,6 +39,8 @@ function MedicinesPage() {
   const sym = useCurrencySymbol();
   const [tab, setTab] = useState<MedicineTab>("catalog");
   const [q, setQ] = useState(() => { const seed = typeof window !== "undefined" ? sessionStorage.getItem("medicore.medsearch") : null; if (seed) sessionStorage.removeItem("medicore.medsearch"); return seed ?? ""; });
+  const [rackFilter, setRackFilter] = useState<string>("all");
+  const allowedRackNames = useProjectStore.getState().data?.settings.racks?.map(r=>r.name).filter(n=>currentUser()?.allowedRackNames?.includes(n)) ?? [];
   const [searchBy, setSearchBy] = useState<MedicineSearchBy>(() => { const saved = useProjectStore.getState().data?.settings.defaultSearchBy; return saved === "generic" || saved === "company" ? saved : "name"; });
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [formKey, setFormKey] = useState(0);
@@ -58,9 +60,10 @@ function MedicinesPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return meds;
+    const base = currentUser()?.role === "admin" || !currentUser()?.permissions.racks ? meds : meds.filter(m => !!m.rackNumber && allowedRackNames.includes(m.rackNumber));
+    if (!s) return rackFilter === "all" ? base : base.filter(m => (m.rackNumber ?? "") === rackFilter);
     const field = (m: Medicine) => searchBy === "generic" ? m.genericName : searchBy === "company" ? m.company : m.name;
-    return meds.filter((m) => (field(m) ?? "").toLowerCase().includes(s));
+    return base.filter((m) => (field(m) ?? "").toLowerCase().includes(s) && (rackFilter === "all" || (m.rackNumber ?? "") === rackFilter));
   }, [meds, q, searchBy]);
 
   type SortBy = "name" | "expiry" | "lowStock" | "topSelling";
@@ -109,7 +112,7 @@ function MedicinesPage() {
     <header className="mb-5 flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-soft"><Pill className="h-5 w-5" /></div><div><h1 className="font-display text-2xl font-bold tracking-tight">Medicines</h1><p className="text-sm text-muted-foreground">{meds.length} SKU{meds.length===1?"":"s"} in catalog</p></div>
       <div className="ml-auto flex items-center gap-2">
         <div className="flex rounded-lg border bg-muted/30 p-0.5"><Button size="sm" variant={tab==="catalog"?"secondary":"ghost"} onClick={()=>setTab("catalog")}>Catalog</Button><Button size="sm" variant={tab==="codes"?"secondary":"ghost"} onClick={()=>setTab("codes")}><ScanLine className="mr-1.5 h-3.5 w-3.5" />Barcode / QR</Button></div>
-        {tab==="catalog" && <><div className="flex items-center gap-1.5"><Select value={searchBy} onValueChange={(v)=>setSearchBy(v as MedicineSearchBy)}><SelectTrigger className="h-9 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="generic">Generic</SelectItem><SelectItem value="company">Company</SelectItem></SelectContent></Select><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input data-search placeholder={searchBy==="name"?"Search medicine name…":searchBy==="generic"?"Search generic name…":"Search company name…"} autoFocus value={q} onChange={(e)=>setQ(e.target.value)} className="h-9 w-56 pl-8" /></div></div><Select value={sortBy} onValueChange={(v)=>setSortBy(v as SortBy)}><SelectTrigger className="h-9 w-40"><ArrowUpDown className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="expiry">Expiry date</SelectItem><SelectItem value="lowStock">Low stock</SelectItem><SelectItem value="topSelling">Top selling</SelectItem></SelectContent></Select></>}
+        {tab==="catalog" && <><div className="flex items-center gap-1.5"><Select value={searchBy} onValueChange={(v)=>setSearchBy(v as MedicineSearchBy)}><SelectTrigger className="h-9 w-[104px] shrink-0 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="generic">Generic</SelectItem><SelectItem value="company">Company</SelectItem></SelectContent></Select><Select value={rackFilter} onValueChange={setRackFilter}><SelectTrigger className="h-9 w-36"><SelectValue placeholder="All racks" /></SelectTrigger><SelectContent><SelectItem value="all">All racks</SelectItem>{(useProjectStore.getState().data?.settings.racks ?? []).filter(r=>r.active).map(r=><SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}</SelectContent></Select><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input data-search placeholder={searchBy==="name"?"Search medicine name…":searchBy==="generic"?"Search generic name…":"Search company name…"} autoFocus value={q} onChange={(e)=>setQ(e.target.value)} className="h-9 w-56 pl-8" /></div></div><Select value={sortBy} onValueChange={(v)=>setSortBy(v as SortBy)}><SelectTrigger className="h-9 w-40"><ArrowUpDown className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">Name</SelectItem><SelectItem value="expiry">Expiry date</SelectItem><SelectItem value="lowStock">Low stock</SelectItem><SelectItem value="topSelling">Top selling</SelectItem></SelectContent></Select></>}
         {canAdd && <Button {...pinContext({id:"action:new-medicine",label:"New medicine",kind:"action",to:"/app/medicines"})} onClick={()=>openNew()}><Plus className="mr-1.5 h-4 w-4" />Add medicine</Button>}
       </div>
     </header>

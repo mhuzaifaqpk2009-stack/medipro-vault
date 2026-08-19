@@ -18,6 +18,7 @@ export type PrescriptionVisibility = "admin" | "all" | "selected"; export type P
 export interface PrescriptionLine { medicineId: string; quantity: number; dosage?: string; frequency?: string; duration?: string; instructions?: string; }
 export interface Prescription { id: string; date: string; patientName: string; patientPhone?: string; doctorName?: string; diagnosis?: string; notes?: string; items: PrescriptionLine[]; createdBy?: string; visibility: PrescriptionVisibility; allowedUserIds?: string[]; nextVisitDate?: string; repeatEvery?: number; repeatUnit?: PrescriptionRepeatUnit; notifyBeforeDays?: number; }
 export interface FbrSettings { enabled: boolean; ntn?: string; strn?: string; posId?: string; invoicePrefix: string; nextInvoiceNumber: number; }
+export interface Rack { id: string; name: string; description?: string; active: boolean; createdAt: string; }
 export interface PharmacyMessage { id: string; fromUserId: string; fromUsername: string; toUserId: string; toUsername: string; body: string; priority: "normal" | "important" | "urgent"; createdAt: string; deliveredAt?: string; readAt?: string; }
 export interface PharmacySettings {
   pharmacyName: string; ownerName: string; phone: string; email: string; address: string; taxPercent: number; maxDiscount?: number; singleSessionOnly?: boolean;
@@ -26,7 +27,7 @@ export interface PharmacySettings {
   notificationPreferences?: Record<string, boolean>; notificationRetentionDays?: number; inventoryBatches?: InventoryBatch[]; inventoryBatchMigrationVersion?: number; saleReturns?: SaleReturn[]; purchaseReturns?: PurchaseReturn[]; customerLedger?: CustomerLedgerEntry[]; supplierLedger?: SupplierLedgerEntry[]; prescriptions?: Prescription[]; expenses?: Expense[]; cashDrawer?: CashDrawerSession;
   purchaseOrders?: PurchaseOrder[]; goodsReceipts?: GoodsReceipt[]; purchaseInvoices?: PurchaseInvoice[]; supplierPayments?: SupplierPayment[];
   fbr?: FbrSettings;
-  stockTakes?: StockTake[]; inventoryDispositions?: InventoryDisposition[];
+  stockTakes?: StockTake[]; inventoryDispositions?: InventoryDisposition[]; racks?: Rack[];
 }
 export type PinKind = "nav" | "action" | "cmd" | "counter"; export interface PinnedItem { id: string; label: string; kind: PinKind; to?: string; }
 export interface Category { id: string; name: string; description?: string; }
