@@ -21,9 +21,9 @@ export function RackPicker({ value, onChange }: { value: string; onChange: (valu
     if (!window.confirm(`Rack "${name}" does not exist. Do you want to add the rack?`)) return;
     mutate((d) => {
       const list = d.settings.racks ?? [];
-      if (!list.some((r) => r.name.trim().toLowerCase() === name.toLowerCase())) d.settings.racks = [...list, { id: crypto.randomUUID(), name, active: true, createdAt: new Date().toISOString() }];
+      if (!list.some((r) => r.name.trim().toLowerCase() === name.toLowerCase())) d.settings.racks = [...list, { id: crypto.randomUUID(), name, description: "", active: true, createdAt: new Date().toISOString() }];
     });
     toast.success(`Rack "${name}" added`);
   }
-  return <div className="space-y-1.5"><Input list={listId} value={value ?? ""} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={racks.length ? "Select or type a rack…" : "No racks — type a rack name"} /><datalist id={listId}>{racks.map((r) => <option key={r.id} value={r.name}>{r.description ?? ""}</option>)}</datalist>{racks.length === 0 && <p className="text-[11px] text-muted-foreground">No racks have been added yet. Type a rack name and press Enter.</p>}</div>;
+  return <div className="space-y-1.5"><div className="relative"><Input list={listId} value={value ?? ""} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={racks.length ? "Select or type a rack…" : "No rack — type a rack name"} aria-label="Rack" className="pr-8" /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">▾</span></div><datalist id={listId}>{racks.map((r) => <option key={r.id} value={r.name}>{r.description ?? ""}</option>)}</datalist>{racks.length === 0 && <p className="text-[11px] text-muted-foreground">No rack available. Type a rack name and press Enter to add it if your account has rack-add permission.</p>}</div>;
 }
