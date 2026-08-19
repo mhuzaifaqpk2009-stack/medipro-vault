@@ -4,9 +4,10 @@ import { ArrowRight, CheckCircle2, ClipboardCheck, PackageCheck, RotateCcw, Shop
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/store/session-store";
 import { PermissionGate } from "@/components/PermissionGate";
+import type { UserPermissions } from "@/lib/users";
 
 type Step = { label: string; to?: "/app/sales" | "/app/purchases" | "/app/stocktake" | "/app/operations" | "/app/bills" };
-type Flow = { id: string; title: string; description: string; icon: typeof ShoppingCart; permission: keyof NonNullable<ReturnType<typeof useSession.getState>["user"]>["permissions"]; steps: Step[] };
+type Flow = { id: string; title: string; description: string; icon: typeof ShoppingCart; permission: keyof UserPermissions; steps: Step[] };
 
 const FLOWS: Flow[] = [
   { id: "sale", title: "Fast Sale", description: "Keep the sale moving from medicine selection through checkout and receipt.", icon: ShoppingCart, permission: "sales", steps: [{ label: "Open POS", to: "/app/sales" }, { label: "Add medicines", to: "/app/sales" }, { label: "Customer / payment", to: "/app/sales" }, { label: "Finish and receipt", to: "/app/sales" }] },
