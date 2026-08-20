@@ -1,7 +1,7 @@
 /** Canonical in-memory project schema. */
 export interface InventoryBatch { id: string; medicineId: string; sourceKey?: string; purchaseId?: string; purchaseItemIndex?: number; batchNumber?: string; barcode?: string; quantity: number; initialQuantity?: number; purchasePrice: number; expiryDate?: string; manufactureDate?: string; receivedDate?: string; }
 export interface SaleReturn { id: string; saleId: string; date: string; customerId?: string; items: { medicineId: string; quantity: number; salePrice: number; batchId?: string }[]; reason?: string; createdBy?: string; }
-export interface PurchaseReturn { id: string; purchaseId: string; supplierId?: string; date: string; items: { medicineId: string; quantity: number; salePrice?: number; purchasePrice?: number; batchId?: string }[]; reason?: string; createdBy?: string; }
+export interface PurchaseReturn { id: string; purchaseId: string; supplierId?: string; date: string; items: { medicineId: string; quantity: number; purchasePrice: number; batchId?: string }[]; reason?: string; createdBy?: string; }
 export interface CustomerLedgerEntry { id: string; customerId: string; date: string; type: "sale" | "payment" | "return" | "adjustment"; amount: number; reference?: string; note?: string; }
 export interface SupplierLedgerEntry { id: string; supplierId: string; date: string; type: "purchase" | "payment" | "return" | "adjustment"; amount: number; reference?: string; note?: string; }
 export type PurchaseOrderStatus = "draft" | "ordered" | "partial" | "received" | "cancelled";
