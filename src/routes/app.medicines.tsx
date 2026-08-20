@@ -101,6 +101,14 @@ function MedicinesPage() {
   }
   function save(m: Medicine, keepOpen=false) {
     if(!m.name.trim()){toast.error("Name is required");return;}
+    const rack=(m.rackNumber??"").trim();
+    if(rack && !(useProjectStore.getState().data?.settings.racks ?? []).some(r=>r.active && r.name.trim().toLowerCase()===rack.toLowerCase())){
+      const canCreateRack = currentUser()?.role === "admin" || currentUser()?.permissions.racksAdd === true;
+      if(!canCreateRack){ toast.error(`Rack "${rack}" does not exist and you do not have permission to add racks.`); return; }
+      const addIt = window.confirm(`Rack "${rack}" does not exist. Do you want to add a new rack with this name?`);
+      if(!addIt) return;
+      mutate(d=>{ d.settings.racks=[...(d.settings.racks??[]), {id:uid("rack_"),name:rack,description:"",active:true,createdAt:new Date().toISOString()}]; });
+    }
     const code = normalizeCode(m.barcode), qr = normalizeCode(m.qrCode);
     const existingCode = meds.find((x) => x.id !== m.id && ((code && normalizeCode(x.barcode) === code) || (qr && normalizeCode(x.qrCode) === qr)));
     if(existingCode){toast.error(`This ${code && normalizeCode(existingCode.barcode) === code ? "barcode" : "QR code"} is already assigned to ${existingCode.name}`);return;}

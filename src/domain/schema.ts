@@ -22,7 +22,7 @@ export interface Rack { id: string; name: string; description?: string; active: 
 export interface PharmacyMessage { id: string; fromUserId: string; fromUsername: string; toUserId: string; toUsername: string; body: string; priority: "normal" | "important" | "urgent"; createdAt: string; deliveredAt?: string; readAt?: string; }
 export type MacroRoute = "/app/sales" | "/app/medicines" | "/app/purchases" | "/app/stocktake" | "/app/operations" | "/app/reports" | "/app/messages" | "/app/workflows" | "/app/customers" | "/app/suppliers";
 export interface MacroStep { id: string; label: string; to: MacroRoute; }
-export interface PharmacyMacro { id: string; name: string; description?: string; shortcut: string; enabled: boolean; steps: MacroStep[]; }
+export interface PharmacyMacro { id: string; name: string; description?: string; shortcut: string; enabled: boolean; steps: MacroStep[]; workflowId?: string; }
 export interface PharmacySettings {
   pharmacyName: string; ownerName: string; phone: string; email: string; address: string; taxPercent: number; maxDiscount?: number; singleSessionOnly?: boolean;
   defaultSearchBy?: "name" | "generic" | "company" | "all"; notifyOnDeleteMedicine?: boolean; notifyOnAddMedicine?: boolean; notifyOnAddCustomer?: boolean; notifyOnLargeSale?: boolean; notifyOnForceSale?: boolean; largeSaleThreshold?: number; invoiceCounter?: number; currency: string; currencySymbol: string;

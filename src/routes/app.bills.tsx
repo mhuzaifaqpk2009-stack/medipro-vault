@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Receipt, Printer, Trash2 } from "lucide-react";
+import { Search, Receipt, Printer, Trash2, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
@@ -158,7 +158,7 @@ function BillsPage() {
                 <p className="text-xs text-muted-foreground">Bill code</p>
                 <p className="font-mono font-semibold">{selected.invoiceNumber}</p>
               </div>
-              <Button size="sm" onClick={() => void reprint(selected)}>
+              <Button size="sm" variant="outline" onClick={() => { const cust=data.customers.find(c=>c.id===selected.customerId); const phone=(cust?.phone??"").replace(/[^0-9]/g,""); if(!phone){toast.error("This customer has no phone number");return;} const text=`${data.settings.pharmacyName || data.meta.name}\nBill ${selected.invoiceNumber}\nDate: ${new Date(selected.date).toLocaleString()}\nTotal: ${money(totalOf(selected), sym)}\nThank you for your purchase.`; window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer"); }}><MessageCircle className="mr-1.5 h-4 w-4" />WhatsApp</Button><Button size="sm" onClick={() => void reprint(selected)}>
                 <Printer className="mr-1.5 h-4 w-4" /> Reprint
               </Button>
             </div>

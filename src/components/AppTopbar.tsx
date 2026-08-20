@@ -15,6 +15,7 @@ import { confirmUnsaved } from "@/hooks/use-unsaved-guard";
 import { useAdminNotifications } from "@/hooks/use-admin-notifications";
 import { useSession } from "@/store/session-store";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useExpiryAlerts } from "@/hooks/use-expiry-alerts";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const HELP_SECTIONS = [
@@ -112,6 +113,7 @@ const HELP_SECTIONS = [
 export function AppTopbar() {
   const navigate = useNavigate(); const data = useProjectStore((s) => s.data); const dirty = useProjectStore((s) => s.dirty); const save = useProjectStore((s) => s.save); const mutate = useProjectStore((s) => s.mutate); const user = useSession((s) => s.user); const isAdmin = user?.role === "admin"; const canViewNotifications = isAdmin || user?.permissions.viewNotifications === true; const [isDark, setIsDark] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpQuery, setHelpQuery] = useState("");
   useAdminNotifications();
+  useExpiryAlerts();
   useEffect(() => { setIsDark(document.documentElement.classList.contains("dark")); }, []);
   useEffect(() => { const onKey = async (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s") return; e.preventDefault(); const ok = await save(); if (ok) toast.success("Saved"); else toast.error("Save failed"); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [save]);
   const timerRef = useRef<number | null>(null); useEffect(() => { if (isAdmin || !dirty) return; if (timerRef.current) window.clearTimeout(timerRef.current); timerRef.current = window.setTimeout(() => { void useProjectStore.getState().save(); }, 800); return () => { if (timerRef.current) window.clearTimeout(timerRef.current); }; }, [dirty, isAdmin]);

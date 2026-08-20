@@ -12,6 +12,7 @@ import { dateKeyLocal, daysUntil, money } from "@/lib/format";
 import { pinContext } from "@/lib/pins";
 import { saleTotal as saleTotalOf, saleProfit as saleProfitOf } from "@/lib/sale-math";
 import { AdminGate } from "@/components/PermissionGate";
+import { getExpiryAlerts } from "@/lib/expiry-alerts";
 import { TrendChart, type TrendBucket } from "@/components/TrendChart";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -21,6 +22,8 @@ function Dashboard() {
   const data = useProjectStore((s) => s.data)!;
   const sym = data.settings.currencySymbol || "$";
   const navigate = useNavigate({ from: "/app/" });
+
+  const expiryAlerts = useMemo(() => getExpiryAlerts(data, 30), [data]);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -136,6 +139,8 @@ function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k, i) => { const Icon = k.icon; return <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: i * 0.04 }} {...pinContext({ id: `counter:${k.id}`, label: k.label, kind: "counter" })} className="surface-card group relative overflow-hidden p-5"><div className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${toneMap[k.tone]} opacity-60 blur-2xl`} /><div className="relative flex items-start justify-between"><div><p className="text-xs font-medium text-muted-foreground">{k.label}</p><p className="mt-2 font-display text-3xl font-bold tabular-nums">{hidden[k.id] ? mask : k.value}</p></div><div className="flex items-center gap-1"><button onClick={() => toggle(k.id)} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted" title={hidden[k.id] ? "Show" : "Hide"}>{hidden[k.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button><div className={`grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br ${toneMap[k.tone]}`}><Icon className="h-5 w-5" /></div></div></div><div className="relative mt-4 flex items-center gap-1 text-[11px] text-muted-foreground"><ArrowUpRight className="h-3 w-3" /> live figures update after each sale</div></motion.div>; })}
       </div>
+
+      {expiryAlerts.length > 0 && <div className="mt-6 surface-card p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-base font-semibold">Expiry alerts</h2><p className="text-xs text-muted-foreground">{expiryAlerts.filter(a=>a.days<0).length} expired · {expiryAlerts.filter(a=>a.days>=0 && a.days<=7).length} urgent · {expiryAlerts.filter(a=>a.days>7).length} within 30 days</p></div><button className="text-xs text-primary hover:underline" onClick={()=>navigate({to:"/app/operations"})}>Review batches</button></div><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{expiryAlerts.slice(0,6).map(a=><div key={a.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-2"><span className="truncate text-sm font-medium">{a.medicineName}</span><span className="text-xs font-semibold">{a.days<0?`${Math.abs(a.days)}d expired`:`${a.days}d left`}</span></div><p className="mt-1 text-[11px] text-muted-foreground">Batch {a.batchNumber || "—"} · Qty {a.quantity} · {new Date(a.expiryDate).toLocaleDateString()}</p></div>)}</div></div>}
 
       {(showTrend || showMostSold) && <div className="mt-6 grid gap-4 lg:grid-cols-3">
         {showTrend && <div className="surface-card cursor-pointer p-6 lg:col-span-2" onClick={(e) => { if ((e.target as HTMLElement).closest("button")) return; setExpanded(true); }} title="Click to expand">

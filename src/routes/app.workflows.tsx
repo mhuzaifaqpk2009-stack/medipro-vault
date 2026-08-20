@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, ClipboardCheck, PackageCheck, RotateCcw, ShoppingCart, WalletCards, Workflow, Sparkles, ListTodo, X, AlertTriangle, Clock3, Pencil, Plus, Trash2, Save, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,8 +67,10 @@ function WorkflowCenter() {
   const flows = useMemo(() => readFlows(project?.settings), [project]);
   const available = useMemo(() => flows.filter((f) => isAdmin || Boolean(user?.permissions?.[f.permission])), [flows, isAdmin, user]);
   const [mode, setMode] = useState<"suggested" | "queue" | "history" | "builder">("suggested");
+  const macroRun = useMemo(() => { try { return JSON.parse(sessionStorage.getItem("medipro:macro") ?? "null") as { id?: string; index?: number; workflowId?: string | null } | null; } catch { return null; } }, []);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [activeId, setActiveId] = useState(available[0]?.id ?? "");
+  useEffect(() => { if (macroRun?.workflowId && available.some((f) => f.id === macroRun.workflowId)) { setActiveId(macroRun.workflowId); setMode("suggested"); } }, [macroRun?.workflowId, available]);
   const [editingFlow, setEditingFlow] = useState<Flow | null>(null);
   const active = available.find((f) => f.id === activeId) ?? available[0];
   const progress = readProgress(project?.settings);
@@ -106,7 +108,7 @@ function WorkflowCenter() {
     });
   }
   function resetFlow(flow: Flow) { persistProgress(flow, 0); toast.success("Workflow progress reset"); }
-  function markNext() { if (!active) return; const next = Math.min(current + 1, active.steps.length); persistProgress(active, next, next >= active.steps.length); if (next >= active.steps.length) toast.success(`${active.title} completed and recorded in workflow history`); }
+  function markNext() { if (!active) return; const next = Math.min(current + 1, active.steps.length); persistProgress(active, next, next >= active.steps.length); if (next >= active.steps.length) { sessionStorage.removeItem("medipro:macro"); toast.success(`${active.title} completed and recorded in workflow history`); } else { const raw = sessionStorage.getItem("medipro:macro"); if (raw) { try { const m=JSON.parse(raw); sessionStorage.setItem("medipro:macro", JSON.stringify({ ...m, index: next })); } catch {} } } }
   function openStep(step: Step) { if (step.action) { runQuickAction(step.action, navigate as any); return; } window.location.href = step.to; }
   function saveFlow(flow: Flow) { const cleaned = { ...flow, title: flow.title.trim() || "Untitled workflow", description: flow.description.trim(), steps: flow.steps.filter((s) => s.label.trim()).map((s, i) => ({ ...s, id: s.id || `${flow.id}-${i}-${Date.now()}` })) }; if (!cleaned.steps.length) { toast.error("A workflow needs at least one step"); return; } mutate((d) => { const s: any = d.settings; const existing = readFlows(s).filter((f) => f.id !== cleaned.id); s.workflowDefinitions = [...existing, { ...cleaned, custom: true }]; }); setEditingFlow(null); toast.success("Workflow saved"); }
   function newFlow() { setEditingFlow({ id: `custom-${Date.now()}`, title: "", description: "", permission: "operations", steps: [{ id: `step-${Date.now()}`, label: "", to: "/app/operations" }], custom: true }); }
