@@ -14,7 +14,7 @@ import { beginStockTake, createDisposition, postStockTake, updateStockTakeLine }
 
 export const Route = createFileRoute("/app/stocktake")({ component: () => <PermissionGate perm="stocktake"><StockTakePage /></PermissionGate> });
 
-function StockTakePage() {
+export function StockTakePage() {
   const data = useProjectStore(s => s.data!); const mutate = useProjectStore(s => s.mutate); const user = useSession(s => s.user);
   const [takeId, setTakeId] = useState(""); const [dispositionKind, setDispositionKind] = useState<"expired"|"damaged"|"supplier_return">("expired"); const [batchId, setBatchId] = useState(""); const [qty, setQty] = useState(1); const [supplierId, setSupplierId] = useState(data.suppliers[0]?.id ?? ""); const [reason, setReason] = useState("");
   const takes = data.settings.stockTakes ?? []; const take = takes.find(x => x.id === takeId);
