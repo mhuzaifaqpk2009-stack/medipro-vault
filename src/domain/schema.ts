@@ -20,7 +20,7 @@ export interface Prescription { id: string; date: string; patientName: string; p
 export interface FbrSettings { enabled: boolean; ntn?: string; strn?: string; posId?: string; invoicePrefix: string; nextInvoiceNumber: number; }
 export interface Rack { id: string; name: string; description?: string; active: boolean; createdAt: string; }
 export interface PharmacyMessage { id: string; fromUserId: string; fromUsername: string; toUserId: string; toUsername: string; body: string; priority: "normal" | "important" | "urgent"; createdAt: string; deliveredAt?: string; readAt?: string; }
-export type MacroRoute = "/app/sales" | "/app/medicines" | "/app/purchases" | "/app/stocktake" | "/app/operations" | "/app/reports" | "/app/messages" | "/app/workflows" | "/app/customers" | "/app/suppliers";
+export type MacroRoute = "/app" | "/app/sales" | "/app/bills" | "/app/medicines" | "/app/inventory" | "/app/stocktake" | "/app/racks" | "/app/purchases" | "/app/categories" | "/app/operations" | "/app/reports" | "/app/messages" | "/app/workflows" | "/app/customers" | "/app/suppliers" | "/app/prescriptions" | "/app/calculator" | "/app/shortcuts" | "/app/macros" | "/app/settings";
 export interface MacroStep { id: string; label: string; to: MacroRoute; }
 export interface PharmacyMacro { id: string; name: string; description?: string; shortcut: string; enabled: boolean; steps: MacroStep[]; workflowId?: string; }
 export interface PharmacySettings {
