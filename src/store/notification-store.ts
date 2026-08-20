@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { NotificationType } from "@/lib/notification-types";
 export type { NotificationType } from "@/lib/notification-types";
-export interface NotificationItem { id: string; type: NotificationType; username: string; timestamp: string; read: boolean; entityId: string; recipientUserId?: string; medicineName?: string; quantity?: number; price?: number; details?: string; }
+export type NotificationPriority = "normal" | "important" | "urgent";
+export interface NotificationItem { id: string; type: NotificationType; username: string; timestamp: string; read: boolean; entityId: string; recipientUserId?: string; medicineName?: string; quantity?: number; price?: number; details?: string; priority?: NotificationPriority; }
 interface NotificationState { items: NotificationItem[]; add: (item: Omit<NotificationItem, "read">) => void; remove: (id: string) => void; clearAll: (recipientUserId?: string) => void; markRead: (id: string) => void; markAllRead: (recipientUserId?: string) => void; }
 export const useNotificationStore = create<NotificationState>()(persist((set) => ({
   items: [],
