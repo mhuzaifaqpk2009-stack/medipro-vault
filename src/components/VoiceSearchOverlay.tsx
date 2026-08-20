@@ -1,0 +1,12 @@
+import { Mic, MicOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+
+const VOICE_LOCALES: Record<string,string>={en:"en-US",ur:"ur-PK",ar:"ar-SA",hi:"hi-IN",bn:"bn-BD",pa:"pa-IN",fa:"fa-IR",tr:"tr-TR",id:"id-ID",ms:"ms-MY",es:"es-ES",fr:"fr-FR",de:"de-DE",it:"it-IT",pt:"pt-PT",ru:"ru-RU",zh:"zh-CN",ja:"ja-JP",ko:"ko-KR"};
+export function VoiceSearchOverlay(){
+ const [target,setTarget]=useState<HTMLInputElement|HTMLTextAreaElement|null>(null); const [listening,setListening]=useState(false); const [pos,setPos]=useState({left:0,top:0});
+ useEffect(()=>{const update=()=>{const el=document.activeElement as HTMLInputElement|HTMLTextAreaElement|null;if(!(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement)){setTarget(null);return}const hint=`${el.placeholder||""} ${el.getAttribute("aria-label")||""} ${el.name||""}`.toLowerCase();if(!hint.includes("search")&&!hint.includes("scan")){setTarget(null);return}const r=el.getBoundingClientRect();setTarget(el);setPos({left:Math.max(8,r.right-38),top:r.top+(r.height-32)/2})};window.addEventListener("focusin",update);window.addEventListener("scroll",update,true);window.addEventListener("resize",update);update();return()=>{window.removeEventListener("focusin",update);window.removeEventListener("scroll",update,true);window.removeEventListener("resize",update)}},[]);
+ if(!target)return null;
+ const start=()=>{const Speech=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;if(!Speech){alert("Voice search is not supported by this Windows installation.");return}const r=new Speech();const code=localStorage.getItem("medicore.language")||"en";r.lang=VOICE_LOCALES[code]||"en-US";r.interimResults=false;r.continuous=false;r.onstart=()=>setListening(true);r.onerror=()=>setListening(false);r.onend=()=>setListening(false);r.onresult=(e:any)=>{const value=e.results?.[0]?.[0]?.transcript||"";const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target),"value")?.set;setter?.call(target,value);target.dispatchEvent(new Event("input",{bubbles:true}));target.dispatchEvent(new Event("change",{bubbles:true}));target.focus()};r.start()};
+ return <Button type="button" size="icon" variant={listening?"default":"ghost"} className="fixed z-[200] h-8 w-8 rounded-full shadow-sm" style={{left:pos.left,top:pos.top}} title="Voice search" aria-label="Voice search" onMouseDown={e=>e.preventDefault()} onClick={start}>{listening?<MicOff className="h-4 w-4"/>:<Mic className="h-4 w-4"/>}</Button>;
+}
