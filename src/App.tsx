@@ -6,6 +6,7 @@ import { bridge } from "./lib/electron-bridge";
 import { useProjectStore } from "./store/project-store";
 import { PasswordPromptHost } from "./components/PasswordPromptDialog";
 import { VoiceSearchOverlay } from "./components/VoiceSearchOverlay";
+import { ActivityBadgeOverlay } from "./components/ActivityBadgeOverlay";
 import { installLanguageObserver } from "./lib/language";
 
 export default function App() {
@@ -22,7 +23,6 @@ export default function App() {
     if (saved === "dark") document.documentElement.classList.add("dark");
   }, []);
 
-  // Wire native "Save then quit" handler once.
   useEffect(() => {
     const api = bridge();
     if (!api) return;
@@ -38,6 +38,7 @@ export default function App() {
       <RouterProvider router={router} />
       <PasswordPromptHost />
       <VoiceSearchOverlay />
+      <ActivityBadgeOverlay />
     </QueryClientProvider>
   );
 }
