@@ -1,4 +1,3 @@
-import type { UserPermissions } from "@/lib/users";
 import type { CatalogCommand } from "@/lib/command-catalog";
 
 /** Additional commands kept separate so the main catalog stays maintainable. */
