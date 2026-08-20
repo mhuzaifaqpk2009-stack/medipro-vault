@@ -1,133 +1,41 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Pencil, Check, RotateCcw, GripVertical } from "lucide-react";
+import { Pencil, Check, RotateCcw, GripVertical, MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/store/session-store";
 import { useProjectStore } from "@/store/project-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { pinContext } from "@/lib/pins";
+import { openItemMenu, pinContext } from "@/lib/pins";
 import { unreadMessages } from "@/lib/messages";
 import { useMessageNotifications } from "@/hooks/use-message-notifications";
 import { NAV, GROUPS, orderNav, visibleNavItems, type NavItem } from "@/lib/nav";
-import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 
 type DropPosition = "before" | "after";
 
 export function AppSidebar() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const user = useSession((s) => s.user);
-  const isAdmin = user?.role === "admin";
-  useMessageNotifications();
-  const settings = useProjectStore((s) => s.data?.settings);
-  const groupOverrides = settings?.tabGroups;
-  const renames = settings?.tabRenames;
-  const projectData = useProjectStore((s) => s.data);
-  const mutate = useProjectStore((s) => s.mutate);
-  const unreadMessageCount = unreadMessages(projectData, user?.id).length;
-  const [editing, setEditing] = useState(false);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ to: string; position: DropPosition } | null>(null);
-  const [dropGroup, setDropGroup] = useState<string | null>(null);
-  const [editingGroup, setEditingGroup] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onFlash = (e: Event) => {
-      const to = (e as CustomEvent).detail as string;
-      setFlash(to);
-      window.setTimeout(() => setFlash((f) => (f === to ? null : f)), 600);
-    };
-    window.addEventListener("medicore:nav-flash", onFlash);
-    return () => window.removeEventListener("medicore:nav-flash", onFlash);
-  }, []);
-
-  const groupOf = (item: NavItem) => groupOverrides?.[item.to] || item.group;
-  const items = useMemo(() => visibleNavItems(settings, user), [settings, user]);
-  const labelOf = (to: string, fallback: string) => renames?.[to] || fallback;
-  const groupNameOf = (g: string) => settings?.groupRenames?.[g] || g;
-  const isActive = (to: string, exact?: boolean) => exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
-
-  function reorder(fromPath: string, toPath: string, position: DropPosition) {
-    if (fromPath === toPath) return;
-    const full = orderNav(settings?.tabOrder).map((i) => i.to);
-    const next = full.filter((p) => p !== fromPath);
-    const targetIndex = next.indexOf(toPath);
-    if (targetIndex < 0) next.push(fromPath);
-    else next.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, fromPath);
-    const targetItem = NAV.find((n) => n.to === toPath);
-    const targetGroup = groupOverrides?.[toPath] || targetItem?.group;
-    mutate((d) => {
-      d.settings.tabOrder = next;
-      if (targetGroup) d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: targetGroup };
-    });
-  }
-
-  function moveToGroup(fromPath: string, group: string) {
-    mutate((d) => { d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: group }; });
-  }
-
-  function resetOrder() {
-    mutate((d) => { d.settings.tabOrder = []; d.settings.tabGroups = {}; d.settings.groupRenames = {}; });
-  }
-
+  const { state } = useSidebar(); const collapsed = state === "collapsed"; const pathname = useRouterState({ select: (s) => s.location.pathname }); const user = useSession((s) => s.user); const isAdmin = user?.role === "admin";
+  useMessageNotifications(); const settings = useProjectStore((s) => s.data?.settings); const groupOverrides = settings?.tabGroups; const renames = settings?.tabRenames; const projectData = useProjectStore((s) => s.data); const mutate = useProjectStore((s) => s.mutate); const unreadMessageCount = unreadMessages(projectData, user?.id).length;
+  const [editing, setEditing] = useState(false); const [dragging, setDragging] = useState<string | null>(null); const [dropTarget, setDropTarget] = useState<{ to: string; position: DropPosition } | null>(null); const [dropGroup, setDropGroup] = useState<string | null>(null); const [editingGroup, setEditingGroup] = useState<string | null>(null); const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => { const onFlash = (e: Event) => { const to = (e as CustomEvent).detail as string; setFlash(to); window.setTimeout(() => setFlash((f) => (f === to ? null : f)), 600); }; window.addEventListener("medicore:nav-flash", onFlash); return () => window.removeEventListener("medicore:nav-flash", onFlash); }, []);
+  const groupOf = (item: NavItem) => groupOverrides?.[item.to] || item.group; const items = useMemo(() => visibleNavItems(settings, user), [settings, user]); const labelOf = (to: string, fallback: string) => renames?.[to] || fallback; const groupNameOf = (g: string) => settings?.groupRenames?.[g] || g; const isActive = (to: string, exact?: boolean) => exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
+  function reorder(fromPath: string, toPath: string, position: DropPosition) { if (fromPath === toPath) return; const full = orderNav(settings?.tabOrder).map((i) => i.to); const next = full.filter((p) => p !== fromPath); const targetIndex = next.indexOf(toPath); if (targetIndex < 0) next.push(fromPath); else next.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, fromPath); const targetItem = NAV.find((n) => n.to === toPath); const targetGroup = groupOverrides?.[toPath] || targetItem?.group; mutate((d) => { d.settings.tabOrder = next; if (targetGroup) d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: targetGroup }; }); }
+  function moveToGroup(fromPath: string, group: string) { mutate((d) => { d.settings.tabGroups = { ...(d.settings.tabGroups ?? {}), [fromPath]: group }; }); }
+  function resetOrder() { mutate((d) => { d.settings.tabOrder = []; d.settings.tabGroups = {}; d.settings.groupRenames = {}; }); }
   const groupsToRender = editing && !collapsed ? GROUPS : GROUPS.filter((g) => items.some((i) => groupOf(i) === g));
-
-  return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="border-b px-3 py-4">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-white shadow-soft">
-            <img src="./logo.png" alt="Huzaifa Software" className="h-8 w-8 object-contain" draggable={false} />
-          </div>
-          {!collapsed && <div className="flex min-w-0 flex-col leading-tight"><span className="truncate font-display text-sm font-semibold">Huzaifa Software</span><span className="text-[10px] uppercase tracking-widest text-muted-foreground">{user ? `${user.username} · ${user.role}` : "Pharmacy Suite"}</span></div>}
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        {groupsToRender.map((group, gi) => (
-          <SidebarGroup key={group} className={gi === 0 ? "pt-1" : undefined}>
-            {!collapsed && (
-              <SidebarGroupLabel
-                onDragOver={(e) => { if (editing) { e.preventDefault(); setDropGroup(group); } }}
-                onDragLeave={() => setDropGroup((g) => (g === group ? null : g))}
-                onDrop={() => { if (editing && dragging) moveToGroup(dragging, group); setDragging(null); setDropGroup(null); }}
-                className={cn("flex items-center", editing && "rounded outline-dashed outline-1 outline-border", dropGroup === group && "outline-solid bg-sidebar-accent outline-primary")}
-              >
-                {editing && editingGroup === group ? <Input autoFocus defaultValue={groupNameOf(group)} className="h-6 flex-1 px-1 text-xs" onBlur={(e) => { const v = e.target.value.trim(); mutate((d) => { d.settings.groupRenames = { ...(d.settings.groupRenames ?? {}) }; if (v && v !== group) d.settings.groupRenames[group] = v; else delete d.settings.groupRenames[group]; }); setEditingGroup(null); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /> : <span className={cn("flex-1 truncate", editing && "cursor-text underline decoration-dotted")} onClick={() => { if (editing) setEditingGroup(group); }} title={editing ? "Click to rename category" : undefined}>{groupNameOf(group)}</span>}
-                {gi === 0 && isAdmin && <span className="flex items-center gap-0.5">{editing && <Button size="icon" variant="ghost" className="h-5 w-5" title="Reset to default layout" onClick={resetOrder}><RotateCcw className="h-3 w-3" /></Button>}<Button size="icon" variant="ghost" className="h-5 w-5" title={editing ? "Done" : "Edit tab layout"} onClick={() => { setEditing((v) => !v); setEditingGroup(null); }}>{editing ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}</Button></span>}
-              </SidebarGroupLabel>
-            )}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {items.filter((i) => groupOf(i) === group).map((i) => {
-                  const active = isActive(i.to, i.exact);
-                  const Icon = i.icon;
-                  const label = labelOf(i.to, i.label);
-                  const menu = pinContext({ id: i.to, label, kind: "nav", to: i.to, canRename: true });
-                  if (editing && !collapsed) {
-                    const indicatorBefore = dropTarget?.to === i.to && dropTarget.position === "before" && dragging !== i.to;
-                    const indicatorAfter = dropTarget?.to === i.to && dropTarget.position === "after" && dragging !== i.to;
-                    return <SidebarMenuItem key={i.to} className="relative py-0.5">
-                      {indicatorBefore && <span className="pointer-events-none absolute -top-0.5 left-1 right-1 z-10 h-0.5 rounded bg-primary" />}
-                      <div draggable onDragStart={() => setDragging(i.to)} onDragEnd={() => { setDragging(null); setDropTarget(null); }} onDragOver={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); setDropTarget({ to: i.to, position: e.clientY < rect.top + rect.height / 2 ? "before" : "after" }); }} onDragLeave={() => setDropTarget((t) => t?.to === i.to ? null : t)} onDrop={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); const position = e.clientY < rect.top + rect.height / 2 ? "before" : "after"; if (dragging) reorder(dragging, i.to, position); setDragging(null); setDropTarget(null); }} className={cn("flex cursor-grab items-center gap-2 rounded-md px-2 py-1.5 text-sm active:cursor-grabbing", dragging === i.to ? "opacity-40" : "hover:bg-sidebar-accent")}>
-                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><Icon className="h-4 w-4 shrink-0" /><span className="flex-1 truncate">{label}</span>
-                      </div>
-                      {indicatorAfter && <span className="pointer-events-none absolute -bottom-0.5 left-1 right-1 z-10 h-0.5 rounded bg-primary" />}
-                    </SidebarMenuItem>;
-                  }
-                  return <SidebarMenuItem key={i.to}><SidebarMenuButton asChild isActive={active} tooltip={label}><Link to={i.to} draggable={false} {...menu} className={cn("group relative flex items-center gap-3 rounded-md transition-colors", active && "bg-sidebar-accent text-sidebar-accent-foreground", flash === i.to && "ring-2 ring-primary")}>{active && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />}<Icon className="h-4 w-4" />{!collapsed && <span className="truncate">{label}</span>}{i.to === "/app/messages" && unreadMessageCount > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground" title={`${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`}>{unreadMessageCount > 99 ? "99+" : unreadMessageCount}</span>}</Link></SidebarMenuButton></SidebarMenuItem>;
-                })}
-                {editing && !collapsed && items.filter((i) => groupOf(i) === group).length === 0 && <p className="px-2 py-1 text-[11px] text-muted-foreground">Drop a tab here</p>}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
-      </SidebarContent>
-    </Sidebar>
-  );
+  return <Sidebar collapsible="icon" className="border-r">
+    <SidebarHeader className="border-b px-3 py-4"><div className="flex items-center gap-2"><div className="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-white shadow-soft"><img src="./logo.png" alt="Huzaifa Software" className="h-8 w-8 object-contain" draggable={false} /></div>{!collapsed && <div className="flex min-w-0 flex-col leading-tight"><span className="truncate font-display text-sm font-semibold">Huzaifa Software</span><span className="text-[10px] uppercase tracking-widest text-muted-foreground">{user ? `${user.username} · ${user.role}` : "Pharmacy Suite"}</span></div>}</div></SidebarHeader>
+    <SidebarContent>{groupsToRender.map((group, gi) => <SidebarGroup key={group} className={gi === 0 ? "pt-1" : undefined}>
+      {!collapsed && <SidebarGroupLabel onDragOver={(e) => { if (editing) { e.preventDefault(); setDropGroup(group); } }} onDragLeave={() => setDropGroup((g) => (g === group ? null : g))} onDrop={() => { if (editing && dragging) moveToGroup(dragging, group); setDragging(null); setDropGroup(null); }} className={cn("flex items-center", editing && "rounded outline-dashed outline-1 outline-border", dropGroup === group && "outline-solid bg-sidebar-accent outline-primary")}>
+        {editing && editingGroup === group ? <Input autoFocus defaultValue={groupNameOf(group)} className="h-6 flex-1 px-1 text-xs" onBlur={(e) => { const v = e.target.value.trim(); mutate((d) => { d.settings.groupRenames = { ...(d.settings.groupRenames ?? {}) }; if (v && v !== group) d.settings.groupRenames[group] = v; else delete d.settings.groupRenames[group]; }); setEditingGroup(null); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /> : <span className={cn("flex-1 truncate", editing && "cursor-text underline decoration-dotted")} onClick={() => { if (editing) setEditingGroup(group); }} title={editing ? "Click to rename category" : undefined}>{groupNameOf(group)}</span>}
+        {gi === 0 && isAdmin && <span className="flex items-center gap-0.5">{editing && <Button size="icon" variant="ghost" className="h-5 w-5" title="Reset to default layout" onClick={() => resetOrder()}><RotateCcw className="h-3 w-3" /></Button>}<Button size="icon" variant="ghost" className="h-5 w-5" title={editing ? "Done" : "Edit tab layout"} onClick={() => { setEditing((v) => !v); setEditingGroup(null); }}>{editing ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}</Button></span>}
+      </SidebarGroupLabel>}
+      <SidebarGroupContent><SidebarMenu>{items.filter((i) => groupOf(i) === group).map((i) => {
+        const active = isActive(i.to, i.exact); const Icon = i.icon; const label = labelOf(i.to, i.label); const menu = pinContext({ id: i.to, label, kind: "nav", to: i.to, canRename: true });
+        if (editing && !collapsed) { const indicatorBefore = dropTarget?.to === i.to && dropTarget.position === "before" && dragging !== i.to; const indicatorAfter = dropTarget?.to === i.to && dropTarget.position === "after" && dragging !== i.to; return <SidebarMenuItem key={i.to} className="relative py-0.5">{indicatorBefore && <span className="pointer-events-none absolute -top-0.5 left-1 right-1 z-10 h-0.5 rounded bg-primary" />}<div draggable onDragStart={() => setDragging(i.to)} onDragEnd={() => { setDragging(null); setDropTarget(null); }} onDragOver={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); setDropTarget({ to: i.to, position: e.clientY < rect.top + rect.height / 2 ? "before" : "after" }); }} onDragLeave={() => setDropTarget((t) => t?.to === i.to ? null : t)} onDrop={(e) => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); const position = e.clientY < rect.top + rect.height / 2 ? "before" : "after"; if (dragging) reorder(dragging, i.to, position); setDragging(null); setDropTarget(null); }} className={cn("flex cursor-grab items-center gap-2 rounded-md px-2 py-1.5 text-sm active:cursor-grabbing", dragging === i.to ? "opacity-40" : "hover:bg-sidebar-accent")}><GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><Icon className="h-4 w-4 shrink-0" /><span className="flex-1 truncate">{label}</span></div>{indicatorAfter && <span className="pointer-events-none absolute -bottom-0.5 left-1 right-1 z-10 h-0.5 rounded bg-primary" />}</SidebarMenuItem>; }
+        return <SidebarMenuItem key={i.to}><div className="group relative"><SidebarMenuButton asChild isActive={active} tooltip={label}><Link to={i.to} draggable={false} {...menu} className={cn("group relative flex items-center gap-3 rounded-md pr-8 transition-colors", active && "bg-sidebar-accent text-sidebar-accent-foreground", flash === i.to && "ring-2 ring-primary")}>{active && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />}<Icon className="h-4 w-4" />{!collapsed && <span className="truncate">{label}</span>}{i.to === "/app/messages" && unreadMessageCount > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground" title={`${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`}>{unreadMessageCount > 99 ? "99+" : unreadMessageCount}</span>}</Link></SidebarMenuButton>{!collapsed && <button type="button" title={`Manage ${label}`} aria-label={`Manage ${label}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); openItemMenu({ id: i.to, label, kind: "nav", to: i.to, canRename: true }, { x: e.clientX, y: e.clientY }); }} className="absolute right-1 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 focus:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>}</div></SidebarMenuItem>;
+      })}{editing && !collapsed && items.filter((i) => groupOf(i) === group).length === 0 && <p className="px-2 py-1 text-[11px] text-muted-foreground">Drop a tab here</p>}</SidebarMenu></SidebarGroupContent>
+    </SidebarGroup>)}</SidebarContent>
+  </Sidebar>;
 }
