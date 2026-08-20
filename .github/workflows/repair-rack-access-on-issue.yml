@@ -1,0 +1,59 @@
+name: Repair Rack Access
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  repair:
+    if: github.event.issue.title == 'REPAIR-RACK-ACCESS-REACT-LOOP'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch Rack Access selector and tab class
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/routes/app.settings.tsx')
+          text = p.read_text()
+          old = 'function RackAccessSettings(){\n  const racks=useProjectStore(s=>s.data?.settings.racks ?? []);'
+          new = 'const EMPTY_RACKS: Array<{id: string; name: string; active: boolean}> = [];\n\nfunction RackAccessSettings(){\n  const racks=useProjectStore(s=>s.data?.settings.racks ?? EMPTY_RACKS);'
+          if old not in text:
+              raise SystemExit('Rack Access selector pattern not found')
+          text = text.replace(old, new, 1)
+          old_tab = '<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="rackaccess" className="min-w-[110px]">Rack Access</TabsTrigger>'
+          new_tab = '<TabsTrigger className="min-h-10 min-w-[110px] shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="rackaccess">Rack Access</TabsTrigger>'
+          if old_tab not in text:
+              raise SystemExit('Rack Access tab pattern not found')
+          text = text.replace(old_tab, new_tab, 1)
+          p.write_text(text)
+          PY
+
+      - name: Commit source repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/app.settings.tsx
+          git diff --cached --quiet || git commit -m "fix: prevent rack access React update loop"
+          git push
+
+      - name: Remove temporary workflows
+        if: always()
+        run: |
+          rm -f .github/workflows/repair-rack-access-on-issue.yml .github/workflows/fix-rack-access-react-loop.yml
+          git add -u .github/workflows/repair-rack-access-on-issue.yml .github/workflows/fix-rack-access-react-loop.yml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: remove temporary rack repair workflows"
+            git push
+          fi
+
+      - name: Close trigger issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }} --comment "Rack Access React loop repair applied."
