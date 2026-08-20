@@ -1,0 +1,42 @@
+name: Fix v1.0.4 help tabs
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'fix v1.0.4 help tabs') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fix help tab content
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/AppTopbar.tsx')
+          s=p.read_text()
+          old='const filteredHelp = HELP_SECTIONS.map((section) => ({ ...section, items: section.items.filter(([title, text]) => !query || `${title} ${text}`.toLowerCase().includes(query)) })).filter((section) => section.items.length > 0); const displayedHelp = filteredHelp.filter((section) => section.title === helpSection);'
+          new='const filteredHelp = HELP_SECTIONS.map((section) => ({ ...section, items: section.items.filter(([title, text]) => !query || `${title} ${text}`.toLowerCase().includes(query)) })).filter((section) => section.items.length > 0); const helpSections = helpTab === "new" ? filteredHelp.filter((section) => section.title === "What\'s New") : filteredHelp.filter((section) => section.title !== "What\'s New"); const displayedHelp = helpTab === "new" ? helpSections : helpSections.filter((section) => section.title === helpSection);'
+          if old not in s: raise SystemExit('help filter anchor not found')
+          s=s.replace(old,new)
+          old2='<div className="flex gap-2 overflow-x-auto pt-3">{HELP_SECTIONS.map(section => <Button key={section.title} size="sm" variant={helpSection===section.title?"default":"outline"} onClick={()=>setHelpSection(section.title)} className="shrink-0">{section.title}</Button>)}</div>'
+          new2='<div className="flex gap-2 overflow-x-auto pt-3">{HELP_SECTIONS.filter(section => helpTab === "new" ? section.title === "What\'s New" : section.title !== "What\'s New").map(section => <Button key={section.title} size="sm" variant={helpSection===section.title?"default":"outline"} onClick={()=>setHelpSection(section.title)} className="shrink-0">{section.title}</Button>)}</div>'
+          if old2 not in s: raise SystemExit('help nav anchor not found')
+          s=s.replace(old2,new2)
+          p.write_text(s)
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/AppTopbar.tsx
+          git commit -m "fix v1.0.4 help tabs" || true
+          git push
+          git rm -f .github/workflows/fix-v104-help-tabs.yml || true
+          git commit -m "chore: remove help tabs workflow" || true
+          git push
