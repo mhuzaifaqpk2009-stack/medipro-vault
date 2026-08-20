@@ -1,7 +1,7 @@
 /** Canonical in-memory project schema. */
 export interface InventoryBatch { id: string; medicineId: string; sourceKey?: string; purchaseId?: string; purchaseItemIndex?: number; batchNumber?: string; barcode?: string; quantity: number; initialQuantity?: number; purchasePrice: number; expiryDate?: string; manufactureDate?: string; receivedDate?: string; }
 export interface SaleReturn { id: string; saleId: string; date: string; customerId?: string; items: { medicineId: string; quantity: number; salePrice: number; batchId?: string }[]; reason?: string; createdBy?: string; }
-export interface PurchaseReturn { id: string; purchaseId: string; supplierId?: string; date: string; items: { medicineId: string; quantity: number; purchasePrice: number; batchId?: string }[]; reason?: string; createdBy?: string; }
+export interface PurchaseReturn { id: string; purchaseId: string; supplierId?: string; date: string; items: { medicineId: string; quantity: number; salePrice?: number; purchasePrice?: number; batchId?: string }[]; reason?: string; createdBy?: string; }
 export interface CustomerLedgerEntry { id: string; customerId: string; date: string; type: "sale" | "payment" | "return" | "adjustment"; amount: number; reference?: string; note?: string; }
 export interface SupplierLedgerEntry { id: string; supplierId: string; date: string; type: "purchase" | "payment" | "return" | "adjustment"; amount: number; reference?: string; note?: string; }
 export type PurchaseOrderStatus = "draft" | "ordered" | "partial" | "received" | "cancelled";
@@ -32,7 +32,7 @@ export interface PharmacySettings {
   fbr?: FbrSettings;
   stockTakes?: StockTake[]; inventoryDispositions?: InventoryDisposition[]; racks?: Rack[];
 }
-export type PinKind = "nav" | "action" | "cmd" | "counter"; export interface PinnedItem { id: string; label: string; kind: PinKind; to?: string; }
+export type PinKind = "nav" | "nav-tab" | "action" | "cmd" | "counter"; export interface PinnedItem { id: string; label: string; kind: PinKind; to?: string; }
 export interface Category { id: string; name: string; description?: string; }
 export interface Supplier { id: string; name: string; phone?: string; email?: string; address?: string; company?: string; balance: number; }
 export interface Customer { id: string; name: string; phone?: string; email?: string; address?: string; balance: number; loyaltyPoints: number; specialDiscountPercent?: number; priceTier?: "retail" | "wholesale"; }
