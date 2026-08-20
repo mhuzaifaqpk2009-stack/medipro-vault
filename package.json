@@ -94,20 +94,50 @@
     "vite-tsconfig-paths": "^5.1.4",
     "wait-on": "^8.0.1"
   },
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Huzaifa Pharmacy Management Software",
   "author": "Muhammad Huzaifa Qureshi",
   "main": "electron/secure-main.cjs",
   "build": {
     "appId": "com.huzaifa.pharmacy",
     "productName": "Huzaifa Pharmacy",
-    "directories": { "output": "release", "buildResources": "build" },
-    "files": ["dist/**/*", "electron/**/*", "package.json"],
-    "extraMetadata": { "main": "electron/secure-main.cjs" },
-    "publish": { "provider": "github", "owner": "mhuzaifaqpk2009-stack", "repo": "medipro-vault", "releaseType": "release" },
-    "win": { "target": "nsis", "icon": "build/icon.ico" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico", "installerHeaderIcon": "build/icon.ico", "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Huzaifa Pharmacy" },
-    "asarUnpack": ["**/node_modules/better-sqlite3/**"]
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/secure-main.cjs"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mhuzaifaqpk2009-stack",
+      "repo": "medipro-vault",
+      "releaseType": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Huzaifa Pharmacy"
+    },
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ]
   },
-  "optionalDependencies": { "better-sqlite3": "^11.7.0" }
+  "optionalDependencies": {
+    "better-sqlite3": "^11.7.0"
+  }
 }

@@ -47,10 +47,10 @@ export function ItemMenuHost() {
   useEffect(() => {
     openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.id] ?? ""); };
     const onTabContext = (e: MouseEvent) => {
-      const el = (e.target as HTMLElement)?.closest?.("[role=tab]") as HTMLElement | null;
+      const el = (e.target as HTMLElement)?.closest?.("[role=tab], [data-tab-navigation]") as HTMLElement | null;
       if (!el || el.closest("aside")) return;
       const label = (el.textContent || el.getAttribute("aria-label") || "Tab").trim();
-      const value = el.getAttribute("data-value") || el.getAttribute("value") || label;
+      const value = el.getAttribute("data-value") || el.getAttribute("value") || el.getAttribute("data-tab-navigation") || label;
       e.preventDefault(); e.stopPropagation();
       openFn?.({ id: `tab:${pathname}:${value}`, label, kind: "nav-tab", to: pathname, canRename: true } as MenuTarget, { x: e.clientX, y: e.clientY });
     };
@@ -63,10 +63,10 @@ export function ItemMenuHost() {
   function close() { setTarget(null); setRenaming(false); }
   function doRename() { renameTab(target!.id, name); toast.success("Renamed"); close(); }
   function move(direction: "forward" | "backward" | "top" | "bottom") { if (!isAdmin || !target.to || !isNav) return; moveNavItem(target.to, direction); toast.success(direction === "top" ? "Moved to top" : direction === "bottom" ? "Moved to bottom" : direction === "forward" ? "Moved forward" : "Moved backward"); close(); }
-  function addToMacro() { if (!target.to) return; sessionStorage.setItem("medipro:macro-prefill-route", target.to); navigate({ to: "/app/macros" as any }); close(); }
+  function addToMacro() { if (!target.to) return; try { sessionStorage.setItem("medipro:macro-prefill-route", target.to); } catch {} close(); requestAnimationFrame(() => { void navigate({ to: "/app/macros" as any }).catch(() => window.location.assign("/app/macros")); }); }
   return <div className="fixed inset-0 z-[100]" onMouseDown={() => close()} onContextMenu={(e) => { e.preventDefault(); close(); }}><div role="menu" style={{ left, top, width: MENU_W }} onMouseDown={(e) => e.stopPropagation()} className="absolute rounded-md border bg-popover p-1 text-popover-foreground shadow-elevated">
     <div className="truncate px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">{target.label}</div>
-    {target.to && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { navigate({ to: target.to! as any }); close(); }}><ExternalLink className="h-4 w-4" /> Open</button>}
+    {target.to && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { const to=target.to!; close(); requestAnimationFrame(() => { void navigate({ to: to as any }).catch(() => window.location.assign(to)); }); }}><ExternalLink className="h-4 w-4" /> Open</button>}
     {canPin && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { const nowPinned = togglePin(target); toast.success(nowPinned ? "Pinned to bottom panel" : "Unpinned"); close(); }}>{pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}{pinned ? "Unpin" : "Pin to bottom panel"}</button>}
     {target.canRename && isAdmin && !renaming && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => setRenaming(true)}><Pencil className="h-4 w-4" /> Rename</button>}
     {renaming && <div className="border-t p-2"><Input value={name} autoFocus placeholder={target.label} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doRename(); }} className="h-8 text-sm" /><div className="mt-2 flex gap-2"><Button size="sm" className="h-7 flex-1 text-xs" onClick={doRename}>Save</Button><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRenaming(false)}><X className="h-3.5 w-3.5" /></Button></div><p className="mt-1 text-[10px] text-muted-foreground">Blank restores the original name.</p></div>}
