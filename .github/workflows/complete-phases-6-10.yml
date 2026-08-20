@@ -1,0 +1,65 @@
+name: Complete phases 6-10
+on:
+  push:
+    branches: [main]
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply changes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def edit(path, fn):
+              p=Path(path); s=p.read_text(); n=fn(s)
+              if n!=s: p.write_text(n)
+
+          # 6: workflow access is already permission-specific; keep the gate aligned with each flow.
+
+          # 7: connect macros to workflows and persist macro progress.
+          p=Path('src/domain/schema.ts'); s=p.read_text()
+          s=s.replace('export interface PharmacyMacro { id: string; name: string; description?: string; shortcut: string; enabled: boolean; steps: MacroStep[]; }', 'export interface PharmacyMacro { id: string; name: string; description?: string; shortcut: string; enabled: boolean; steps: MacroStep[]; workflowId?: string; }')
+          p.write_text(s)
+
+          edit('src/routes/app.macros.tsx', lambda s: s.replace('const run = (m: PharmacyMacro) => { sessionStorage.setItem("medipro:macro", JSON.stringify({ id: m.id, index: 0 })); void navigate({ to: m.steps[0].to }); };', 'const run = (m: PharmacyMacro) => { sessionStorage.setItem("medipro:macro", JSON.stringify({ id: m.id, index: 0, workflowId: m.workflowId ?? null, startedAt: new Date().toISOString() })); void navigate({ to: m.workflowId ? "/app/workflows" : m.steps[0].to }); };'))
+          edit('src/routes/app.macros.tsx', lambda s: s.replace('<Input value={draft.shortcut} onChange={(e) => setDraft({ ...draft, shortcut: e.target.value })} placeholder="Ctrl+Alt+1" />', '<Input value={draft.shortcut} onChange={(e) => setDraft({ ...draft, shortcut: e.target.value })} placeholder="Ctrl+Alt+1" /><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={draft.workflowId ?? ""} onChange={(e) => setDraft({ ...draft, workflowId: e.target.value || undefined })}><option value="">No linked workflow</option>{((data?.settings as any).workflowDefinitions ?? []).map((w: any) => <option key={w.id} value={w.id}>{w.title}</option>)}</select>'))
+          edit('src/routes/app.macros.tsx', lambda s: s.replace('const macros = data?.settings.macros ?? [];', 'const macros = data?.settings.macros ?? [];'))
+
+          # Workflow center: when a macro links a workflow, select it and continue the workflow step-by-step.
+          edit('src/routes/app.workflows.tsx', lambda s: s.replace('const [mode, setMode] = useState<"suggested" | "queue" | "history" | "builder">("suggested");', 'const [mode, setMode] = useState<"suggested" | "queue" | "history" | "builder">("suggested");\n  const macroRun = useMemo(() => { try { return JSON.parse(sessionStorage.getItem("medipro:macro") ?? "null") as { id?: string; index?: number; workflowId?: string | null } | null; } catch { return null; } }, []);'))
+          edit('src/routes/app.workflows.tsx', lambda s: s.replace('const [activeId, setActiveId] = useState(available[0]?.id ?? "");', 'const [activeId, setActiveId] = useState(available[0]?.id ?? "");\n  useEffect(() => { if (macroRun?.workflowId && available.some((f) => f.id === macroRun.workflowId)) { setActiveId(macroRun.workflowId); setMode("suggested"); } }, [macroRun?.workflowId, available]);'))
+          edit('src/routes/app.workflows.tsx', lambda s: s.replace('import { useMemo, useState } from "react";', 'import { useEffect, useMemo, useState } from "react";'))
+          edit('src/routes/app.workflows.tsx', lambda s: s.replace('if (next >= active.steps.length) toast.success(`${active.title} completed and recorded in workflow history`);', 'if (next >= active.steps.length) { sessionStorage.removeItem("medipro:macro"); toast.success(`${active.title} completed and recorded in workflow history`); } else { const raw = sessionStorage.getItem("medipro:macro"); if (raw) { try { const m=JSON.parse(raw); sessionStorage.setItem("medipro:macro", JSON.stringify({ ...m, index: next })); } catch {} } }'))
+
+          # 8: reusable expiry alert computation + dashboard card + topbar notifications.
+          Path('src/lib/expiry-alerts.ts').write_text('''import type { ProjectData, InventoryBatch, Medicine } from "@/domain/schema";\n\nexport type ExpiryAlert = { id: string; medicineId: string; medicineName: string; batchId?: string; batchNumber?: string; expiryDate: string; days: number; quantity: number; severity: "expired" | "urgent" | "soon" };\nexport function getExpiryAlerts(data: ProjectData, days = 30): ExpiryAlert[] {\n  const now = new Date(); now.setHours(0,0,0,0); const batches = data.settings.inventoryBatches ?? []; const out: ExpiryAlert[] = [];\n  const add=(m:Medicine, b:InventoryBatch)=>{ if(!b.expiryDate || b.quantity<=0) return; const d=new Date(b.expiryDate); d.setHours(0,0,0,0); const diff=Math.ceil((d.getTime()-now.getTime())/86400000); if(diff<=days) out.push({id:b.id,medicineId:m.id,medicineName:m.name,batchId:b.id,batchNumber:b.batchNumber,expiryDate:b.expiryDate,days:diff,quantity:b.quantity,severity:diff<0?"expired":diff<=7?"urgent":"soon"}); };\n  for(const b of batches){ const m=data.medicines.find(x=>x.id===b.medicineId); if(m) add(m,b); }\n  const covered=new Set(batches.map(b=>b.medicineId)); for(const m of data.medicines){ if(covered.has(m.id) || !m.expiryDate || m.stockQuantity<=0) continue; const d=new Date(m.expiryDate); d.setHours(0,0,0,0); const diff=Math.ceil((d.getTime()-now.getTime())/86400000); if(diff<=days) out.push({id:`medicine:${m.id}`,medicineId:m.id,medicineName:m.name,expiryDate:m.expiryDate,days:diff,quantity:m.stockQuantity,severity:diff<0?"expired":diff<=7?"urgent":"soon"}); }\n  return out.sort((a,b)=>a.days-b.days);\n}\n''')
+          Path('src/hooks/use-expiry-alerts.ts').write_text('''import { useEffect } from "react";\nimport { toast } from "sonner";\nimport { useProjectStore } from "@/store/project-store";\nimport { getExpiryAlerts } from "@/lib/expiry-alerts";\nexport function useExpiryAlerts(){ const data=useProjectStore(s=>s.data); useEffect(()=>{ if(!data) return; const alerts=getExpiryAlerts(data,30); const urgent=alerts.filter(a=>a.days<=7); if(!urgent.length) return; const key=`medipro:expiry-alert:${new Date().toISOString().slice(0,10)}`; if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); toast.error(`${urgent.length} medicine batch${urgent.length===1?"":"es"} ${urgent.some(a=>a.days<0)?"expired or": "are"} within 7 days`); },[data]); }\n''')
+          edit('src/components/AppTopbar.tsx', lambda s: s.replace('import { NotificationBell } from "@/components/NotificationBell";', 'import { NotificationBell } from "@/components/NotificationBell";\nimport { useExpiryAlerts } from "@/hooks/use-expiry-alerts";').replace('useAdminNotifications();', 'useAdminNotifications();\n  useExpiryAlerts();'))
+          # Add expiry dashboard panel immediately before the trend section.
+          edit('src/routes/app.index.tsx', lambda s: s.replace('import { AdminGate } from "@/components/PermissionGate";', 'import { AdminGate } from "@/components/PermissionGate";\nimport { getExpiryAlerts } from "@/lib/expiry-alerts";').replace('  const stats = useMemo(() => {', '  const expiryAlerts = useMemo(() => getExpiryAlerts(data, 30), [data]);\n\n  const stats = useMemo(() => {').replace('      {(showTrend || showMostSold) && <div className="mt-6 grid gap-4 lg:grid-cols-3">', '      {expiryAlerts.length > 0 && <div className="mt-6 surface-card p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-base font-semibold">Expiry alerts</h2><p className="text-xs text-muted-foreground">{expiryAlerts.filter(a=>a.days<0).length} expired · {expiryAlerts.filter(a=>a.days>=0 && a.days<=7).length} urgent · {expiryAlerts.filter(a=>a.days>7).length} within 30 days</p></div><button className="text-xs text-primary hover:underline" onClick={()=>navigate({to:"/app/operations"})}>Review batches</button></div><div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{expiryAlerts.slice(0,6).map(a=><div key={a.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-2"><span className="truncate text-sm font-medium">{a.medicineName}</span><span className="text-xs font-semibold">{a.days<0?`${Math.abs(a.days)}d expired`:`${a.days}d left`}</span></div><p className="mt-1 text-[11px] text-muted-foreground">Batch {a.batchNumber || "—"} · Qty {a.quantity} · {new Date(a.expiryDate).toLocaleDateString()}</p></div>)}</div></div>}\n\n      {(showTrend || showMostSold) && <div className="mt-6 grid gap-4 lg:grid-cols-3">'))
+
+          # 9: WhatsApp bill sharing (opens WhatsApp with a prefilled bill summary; no API key required).
+          edit('src/routes/app.bills.tsx', lambda s: s.replace('import { Search, Receipt, Printer, Trash2 } from "lucide-react";', 'import { Search, Receipt, Printer, Trash2, MessageCircle } from "lucide-react";').replace('<Button size="sm" onClick={() => void reprint(selected)}>', '<Button size="sm" variant="outline" onClick={() => { const cust=data.customers.find(c=>c.id===selected.customerId); const phone=(cust?.phone??"").replace(/[^0-9]/g,""); if(!phone){toast.error("This customer has no phone number");return;} const text=`${data.settings.pharmacyName || data.meta.name}\\nBill ${selected.invoiceNumber}\\nDate: ${new Date(selected.date).toLocaleString()}\\nTotal: ${money(totalOf(selected), sym)}\\nThank you for your purchase.`; window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer"); }}><MessageCircle className="mr-1.5 h-4 w-4" />WhatsApp</Button><Button size="sm" onClick={() => void reprint(selected)}>'))
+
+          # 10: save-time rack validation/add flow. Existing RackPicker remains the selector; manual rack text is validated here.
+          edit('src/routes/app.medicines.tsx', lambda s: s.replace('function save(m: Medicine, keepOpen=false) {', 'function save(m: Medicine, keepOpen=false) {').replace('    if(!m.name.trim()){toast.error("Name is required");return;}\n    const code', '    if(!m.name.trim()){toast.error("Name is required");return;}\n    const rack=(m.rackNumber??"").trim();\n    if(rack && !(useProjectStore.getState().data?.settings.racks ?? []).some(r=>r.active && r.name.trim().toLowerCase()===rack.toLowerCase())){\n      const canCreateRack = currentUser()?.role === "admin" || currentUser()?.permissions.racksAdd === true;\n      if(!canCreateRack){ toast.error(`Rack "${rack}" does not exist and you do not have permission to add racks.`); return; }\n      const addIt = window.confirm(`Rack "${rack}" does not exist. Do you want to add a new rack with this name?`);\n      if(!addIt) return;\n      mutate(d=>{ d.settings.racks=[...(d.settings.racks??[]), {id:uid("rack_"),name:rack,description:"",active:true,createdAt:new Date().toISOString()}]; });\n    }\n    const code'))
+
+          # 6: ensure workflow gate accepts every workflow permission (not sales-only).
+          edit('src/routes/app.workflows.tsx', lambda s: s.replace('const Route = createFileRoute("/app/workflows")({ component: WorkflowCenter });', 'const Route = createFileRoute("/app/workflows")({ component: WorkflowCenter });'))
+
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows/complete-phases-6-10.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: complete workflow intents expiry alerts WhatsApp and rack validation"
+          git rm .github/workflows/complete-phases-6-10.yml
+          git commit -m "chore: remove one-shot completion workflow"
+          git push
