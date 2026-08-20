@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -54,6 +55,7 @@ function PurchasesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Purchase | null>(null);
   const [q, setQ] = useState("");
+  const [purchaseTab, setPurchaseTab] = useState("simple");
   useQuickAction("new-purchase", () => { if (canAdd) setOpen(true); });
 
   const filtered = useMemo(() => {
@@ -116,8 +118,12 @@ function PurchasesPage() {
         {canAdd && <Button {...pinContext({ id: "action:new-purchase", label: "New purchase", kind: "action", to: "/app/purchases" })} onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" />New purchase</Button>}
       </header>
 
-      <PurchaseLifecyclePanel />
-
+      <Tabs value={purchaseTab} onValueChange={setPurchaseTab} className="w-full">
+        <TabsList className="mb-5 grid w-full max-w-xl grid-cols-2">
+          <TabsTrigger value="simple">Simple Purchase</TabsTrigger>
+          <TabsTrigger value="lifecycle">Purchase Cycle</TabsTrigger>
+        </TabsList>
+        <TabsContent value="simple" className="mt-0">
       <div className="surface-card overflow-hidden">
         <Table><TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Items</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="w-28"></TableHead></TableRow></TableHeader>
           <TableBody>
@@ -129,6 +135,11 @@ function PurchasesPage() {
           </TableBody>
         </Table>
       </div>
+        </TabsContent>
+        <TabsContent value="lifecycle" className="mt-0">
+          <PurchaseLifecyclePanel />
+        </TabsContent>
+      </Tabs>
 
       {(open || editing) && <NewPurchase existing={editing ?? undefined} onClose={() => { setOpen(false); setEditing(null); }} onSave={(supplierId, invoice, items, printAfterSave, id) => savePurchase(supplierId, invoice, items, printAfterSave, id)} />}
     </div>
