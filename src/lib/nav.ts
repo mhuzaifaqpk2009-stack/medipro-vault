@@ -19,7 +19,6 @@ export const NAV: NavItem[] = [
   { to: "/app/prescriptions", label: "Prescriptions", icon: FileText, perm: "prescriptions", group: "People" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
-  { to: "/app/patients", label: "Patients", icon: Users, perm: "patients", group: "People" },
   { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
   { to: "/app/shortcuts", label: "Shortcuts", icon: Keyboard, group: "Insights" },
   { to: "/app/macros", label: "Custom Macros", icon: Zap, adminOnly: true, group: "Insights" },
