@@ -1,0 +1,65 @@
+name: Organize purchases and inventory
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  organize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Organize pages
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('src/routes/app.purchases.tsx')
+          s=p.read_text()
+          if 'Tabs, TabsContent, TabsList, TabsTrigger' not in s:
+              s=s.replace('import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";', 'import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";')
+          if 'const [purchaseTab, setPurchaseTab]' not in s:
+              s=s.replace('const [q, setQ] = useState("");', 'const [q, setQ] = useState("");\n  const [purchaseTab, setPurchaseTab] = useState("simple");')
+          old='''      <PurchaseLifecyclePanel />\n\n      <div className="surface-card overflow-hidden">'''
+          new='''      <Tabs value={purchaseTab} onValueChange={setPurchaseTab} className="w-full">\n        <TabsList className="mb-5 grid w-full max-w-xl grid-cols-2">\n          <TabsTrigger value="simple">Simple Purchase</TabsTrigger>\n          <TabsTrigger value="lifecycle">Purchase Cycle</TabsTrigger>\n        </TabsList>\n        <TabsContent value="simple" className="mt-0">\n      <div className="surface-card overflow-hidden">'''
+          if old in s: s=s.replace(old,new)
+          old2='''      </div>\n\n      {(open || editing) && <NewPurchase'''
+          new2='''      </div>\n        </TabsContent>\n        <TabsContent value="lifecycle" className="mt-0">\n          <PurchaseLifecyclePanel />\n        </TabsContent>\n      </Tabs>\n\n      {(open || editing) && <NewPurchase'''
+          if old2 in s: s=s.replace(old2,new2,1)
+          p.write_text(s)
+
+          p=Path('src/routes/app.inventory.tsx')
+          s=p.read_text()
+          if 'Tabs, TabsContent, TabsList, TabsTrigger' not in s:
+              s=s.replace('import { Button } from "@/components/ui/button";', 'import { Button } from "@/components/ui/button";\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";')
+          if 'const [inventoryTab, setInventoryTab]' not in s:
+              s=s.replace('const [deadThreshold, setDeadThreshold] = useState(90);', 'const [deadThreshold, setDeadThreshold] = useState(90);\n  const [inventoryTab, setInventoryTab] = useState("overview");')
+          marker='''    <section className="surface-card mt-5 overflow-hidden"><div className="flex flex-wrap items-center gap-3 border-b px-4 py-3"><div className="mr-auto"><div className="text-sm font-semibold">Smart reorder</div>'''
+          if marker in s and '<Tabs value={inventoryTab}' not in s:
+              s=s.replace(marker, '''    <Tabs value={inventoryTab} onValueChange={setInventoryTab} className="mt-5 w-full">\n      <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-5">\n        <TabsTrigger value="overview">Overview</TabsTrigger>\n        <TabsTrigger value="reorder">Reorder</TabsTrigger>\n        <TabsTrigger value="expiry">Expiry & Batches</TabsTrigger>\n        <TabsTrigger value="dead">Dead Stock</TabsTrigger>\n        <TabsTrigger value="reconcile">Reconciliation</TabsTrigger>\n      </TabsList>\n      <TabsContent value="overview" className="mt-4">\n        <div className="grid gap-4 md:grid-cols-2">\n          <div className="surface-card p-5"><div className="text-sm font-semibold">Stock overview</div><p className="mt-1 text-xs text-muted-foreground">Use the tabs above to manage purchasing, expiry, dead stock and reconciliation separately.</p></div>\n          <div className="surface-card p-5"><div className="text-sm font-semibold">Quick health summary</div><div className="mt-3 grid grid-cols-2 gap-2 text-sm"><span>Out of stock: <b>{groups.out.length}</b></span><span>Low stock: <b>{groups.low.length}</b></span><span>Expired: <b>{groups.exp.length}</b></span><span>Near expiry: <b>{groups.nearExp.length}</b></span></div></div>\n        </div>\n      </TabsContent>\n      <TabsContent value="reorder" className="mt-4">\n''' + marker.replace('    ','',1))
+              # Close reorder after its section: use the dead-stock section marker.
+              s=s.replace('''    <section className="surface-card mt-5 overflow-hidden"><div className="flex flex-wrap items-center gap-3 border-b px-4 py-3"><div className="mr-auto"><div className="text-sm font-semibold">Dead / slow-moving stock</div>''', '''      </TabsContent>\n      <TabsContent value="dead" className="mt-4">\n    <section className="surface-card mt-0 overflow-hidden"><div className="flex flex-wrap items-center gap-3 border-b px-4 py-3"><div className="mr-auto"><div className="text-sm font-semibold">Dead / slow-moving stock</div>''',1)
+              # Remove the old dead section's margin only; then organize remaining sections into expiry/reconcile tabs.
+              s=s.replace('''    <Section title="Expired batches — not sellable"''', '''      </TabsContent>\n      <TabsContent value="expiry" className="mt-4">\n    <Section title="Expired batches — not sellable"''',1)
+              s=s.replace('''    <section className="surface-card mt-5 overflow-hidden"><div className="flex items-center justify-between border-b px-4 py-3"><div><div className="text-sm font-semibold">Batch reconciliation</div>''', '''      </TabsContent>\n      <TabsContent value="reconcile" className="mt-4">\n    <section className="surface-card mt-0 overflow-hidden"><div className="flex items-center justify-between border-b px-4 py-3"><div><div className="text-sm font-semibold">Batch reconciliation</div>''',1)
+              # The remaining reconciliation and summary sections belong to expiry/reconcile; move summaries into expiry by wrapping before reconciliation.
+              s=s.replace('''    <section className="surface-card mt-0 overflow-hidden"><div className="flex items-center justify-between border-b px-4 py-3"><div><div className="text-sm font-semibold">Batch reconciliation</div>''', '''      </TabsContent>\n      <TabsContent value="reconcile" className="mt-4">\n    <section className="surface-card mt-0 overflow-hidden"><div className="flex items-center justify-between border-b px-4 py-3"><div><div className="text-sm font-semibold">Batch reconciliation</div>''',1)
+              # Ensure all tab content closes before component close. This is intentionally idempotent.
+              if s.count('TabsContent value="reorder"')==1 and s.count('</Tabs>')==0:
+                  s=s.replace('''    <Section title="Out of stock" medicines={groups.out}/><Section title="Low stock" medicines={groups.low}/><Section title="Expired medicine summary" medicines={groups.exp} expiryCol/><Section title="Near expiry (30 days)" medicines={groups.nearExp} expiryCol/>\n  </div>''', '''    <Section title="Out of stock" medicines={groups.out}/><Section title="Low stock" medicines={groups.low}/><Section title="Expired medicine summary" medicines={groups.exp} expiryCol/><Section title="Near expiry (30 days)" medicines={groups.nearExp} expiryCol/>\n      </TabsContent>\n    </Tabs>\n  </div>''')
+          p.write_text(s)
+          PY
+      - name: Commit organization
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/routes/app.purchases.tsx src/routes/app.inventory.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'Organize purchases and inventory into clear tabs'
+          git push
+      - name: Remove one-time workflow
+        if: success()
+        run: |
+          git rm .github/workflows/organize-purchases-inventory.yml
+          git commit -m 'Remove one-time organization workflow'
+          git push
