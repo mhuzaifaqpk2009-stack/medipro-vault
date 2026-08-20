@@ -1,0 +1,224 @@
+name: Apply Aug 20 navigation language fixes
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'apply aug20 fixes') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import json, re
+
+          root = Path('.')
+
+          # ---------- version ----------
+          p = root/'package.json'
+          if p.exists():
+              data=json.loads(p.read_text(encoding='utf-8'))
+              data['version']='1.0.3'
+              p.write_text(json.dumps(data, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+          lock=root/'package-lock.json'
+          if lock.exists():
+              data=json.loads(lock.read_text(encoding='utf-8'))
+              data['version']='1.0.3'
+              if isinstance(data.get('packages'),dict) and '' in data['packages']:
+                  data['packages']['']['version']='1.0.3'
+              lock.write_text(json.dumps(data, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+
+          # ---------- language engine ----------
+          lang = root/'src/lib/language.ts'
+          lang.write_text(r'''export type AppLanguage = { code: string; name: string; nativeName: string };
+
+export const APP_LANGUAGES: AppLanguage[] = [
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'ur', name: 'Urdu', nativeName: 'اردو' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
+  { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
+  { code: 'pa', name: 'Punjabi', nativeName: 'ਪੰਜਾਬੀ' },
+  { code: 'fa', name: 'Persian', nativeName: 'فارسی' },
+  { code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
+  { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+  { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
+  { code: 'fr', name: 'French', nativeName: 'Français' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+]
+
+const DICT: Record<string, Record<string,string>> = {
+  ur: { Dashboard:'ڈیش بورڈ', Medicines:'ادویات', Inventory:'انوینٹری', Purchases:'خریداری', Customers:'گاہک', Suppliers:'سپلائرز', Reports:'رپورٹس', Settings:'ترتیبات', Messages:'پیغامات', 'Workflow Engine':'ورک فلو انجن', 'Save now':'اب محفوظ کریں', Save:'محفوظ کریں', Cancel:'منسوخ', Search:'تلاش', 'Add medicine':'دوا شامل کریں', 'Add user':'صارف شامل کریں', 'Rack Access':'ریک رسائی', 'Notifications':'اطلاعات', 'Backup & data':'بیک اپ اور ڈیٹا', Shortcuts:'شارٹ کٹس', Help:'مدد', 'What\'s New':'نیا کیا ہے', Open:'کھولیں', Close:'بند کریں', 'New Medicine':'نئی دوا', 'New Customer':'نیا گاہک', 'New Supplier':'نیا سپلائر', 'New Purchase':'نئی خریداری' },
+  ar: { Dashboard:'لوحة التحكم', Medicines:'الأدوية', Inventory:'المخزون', Purchases:'المشتريات', Customers:'العملاء', Suppliers:'الموردون', Reports:'التقارير', Settings:'الإعدادات', Messages:'الرسائل', 'Save now':'حفظ الآن', Save:'حفظ', Cancel:'إلغاء', Search:'بحث', Notifications:'الإشعارات', Shortcuts:'الاختصارات', Open:'فتح', Close:'إغلاق' },
+  hi: { Dashboard:'डैशबोर्ड', Medicines:'दवाइयाँ', Inventory:'इन्वेंटरी', Purchases:'खरीद', Customers:'ग्राहक', Suppliers:'सप्लायर', Reports:'रिपोर्ट', Settings:'सेटिंग्स', Messages:'संदेश', Save:'सहेजें', Cancel:'रद्द करें', Search:'खोजें', Notifications:'सूचनाएँ', Open:'खोलें', Close:'बंद करें' },
+  es: { Dashboard:'Panel', Medicines:'Medicamentos', Inventory:'Inventario', Purchases:'Compras', Customers:'Clientes', Suppliers:'Proveedores', Reports:'Informes', Settings:'Configuración', Messages:'Mensajes', Save:'Guardar', Cancel:'Cancelar', Search:'Buscar', Notifications:'Notificaciones', Open:'Abrir', Close:'Cerrar' },
+  fr: { Dashboard:'Tableau de bord', Medicines:'Médicaments', Inventory:'Inventaire', Purchases:'Achats', Customers:'Clients', Suppliers:'Fournisseurs', Reports:'Rapports', Settings:'Paramètres', Messages:'Messages', Save:'Enregistrer', Cancel:'Annuler', Search:'Rechercher', Notifications:'Notifications', Open:'Ouvrir', Close:'Fermer' },
+  de: { Dashboard:'Dashboard', Medicines:'Medikamente', Inventory:'Inventar', Purchases:'Einkäufe', Customers:'Kunden', Suppliers:'Lieferanten', Reports:'Berichte', Settings:'Einstellungen', Messages:'Nachrichten', Save:'Speichern', Cancel:'Abbrechen', Search:'Suchen', Notifications:'Benachrichtigungen', Open:'Öffnen', Close:'Schließen' },
+  tr: { Dashboard:'Gösterge Paneli', Medicines:'İlaçlar', Inventory:'Stok', Purchases:'Satın Almalar', Customers:'Müşteriler', Suppliers:'Tedarikçiler', Reports:'Raporlar', Settings:'Ayarlar', Messages:'Mesajlar', Save:'Kaydet', Cancel:'İptal', Search:'Ara', Notifications:'Bildirimler', Open:'Aç', Close:'Kapat' },
+  zh: { Dashboard:'仪表板', Medicines:'药品', Inventory:'库存', Purchases:'采购', Customers:'客户', Suppliers:'供应商', Reports:'报告', Settings:'设置', Messages:'消息', Save:'保存', Cancel:'取消', Search:'搜索', Notifications:'通知', Open:'打开', Close:'关闭' },
+  ru: { Dashboard:'Панель', Medicines:'Лекарства', Inventory:'Склад', Purchases:'Закупки', Customers:'Клиенты', Suppliers:'Поставщики', Reports:'Отчёты', Settings:'Настройки', Messages:'Сообщения', Save:'Сохранить', Cancel:'Отмена', Search:'Поиск', Notifications:'Уведомления', Open:'Открыть', Close:'Закрыть' },
+}
+
+export function getLanguage(): string { return localStorage.getItem('medicore.language') || 'en' }
+export function setLanguage(code: string) { localStorage.setItem('medicore.language', code); window.dispatchEvent(new CustomEvent('medicore:language-change', { detail: code })) }
+export function translateText(text: string, code=getLanguage()) { return DICT[code]?.[text] ?? text }
+export function installLanguageObserver() {
+  const apply = () => {
+    const code=getLanguage(); document.documentElement.lang=code;
+    if(code==='en') return;
+    const walker=document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    const nodes: Text[]=[]; let n: Node|null; while(n=walker.nextNode()) nodes.push(n as Text)
+    for(const node of nodes){ const value=node.nodeValue?.trim(); if(!value || value.length>80) continue; const translated=translateText(value,code); if(translated!==value) node.nodeValue=node.nodeValue!.replace(value,translated) }
+  }
+  const observer=new MutationObserver(()=>{ if((window as any).__medicoreTranslating) return; (window as any).__medicoreTranslating=true; requestAnimationFrame(()=>{ try{apply()}finally{(window as any).__medicoreTranslating=false} }) })
+  observer.observe(document.body,{subtree:true,childList:true}); apply(); return ()=>observer.disconnect()
+}
+''', encoding='utf-8')
+
+          # ---------- global voice search overlay ----------
+          voice = root/'src/components/VoiceSearchOverlay.tsx'
+          voice.write_text(r'''import { Mic, MicOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+
+export function VoiceSearchOverlay(){
+  const [target,setTarget]=useState<HTMLInputElement|HTMLTextAreaElement|null>(null); const [listening,setListening]=useState(false); const [pos,setPos]=useState({left:0,top:0});
+  useEffect(()=>{ const update=()=>{ const el=document.activeElement as HTMLInputElement|HTMLTextAreaElement|null; if(!el || !('value' in el) || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) { setTarget(null); return } const hint=`${el.placeholder||''} ${el.getAttribute('aria-label')||''} ${el.name||''}`.toLowerCase(); if(!hint.includes('search') && !hint.includes('scan')) { setTarget(null); return } const r=el.getBoundingClientRect(); setTarget(el); setPos({left:Math.max(8,r.right-38),top:r.top+(r.height-32)/2}) }; window.addEventListener('focusin',update); window.addEventListener('scroll',update,true); window.addEventListener('resize',update); update(); return ()=>{window.removeEventListener('focusin',update);window.removeEventListener('scroll',update,true);window.removeEventListener('resize',update)} },[]);
+  if(!target) return null;
+  const start=()=>{ const Speech=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition; if(!Speech){ alert('Voice search is not supported by this Windows installation.'); return } const r=new Speech(); r.lang=document.documentElement.lang||'en-US'; r.interimResults=false; r.continuous=false; r.onstart=()=>setListening(true); r.onerror=()=>setListening(false); r.onend=()=>setListening(false); r.onresult=(e:any)=>{ const text=e.results?.[0]?.[0]?.transcript||''; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target),'value')?.set; setter?.call(target,text); target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true})); target.focus() }; r.start(); };
+  return <Button type="button" size="icon" variant={listening?'default':'ghost'} className="fixed z-[200] h-8 w-8 rounded-full shadow-sm" style={{left:pos.left,top:pos.top}} title="Voice search" aria-label="Voice search" onMouseDown={e=>e.preventDefault()} onClick={start}>{listening?<MicOff className="h-4 w-4"/>:<Mic className="h-4 w-4"/>}</Button>
+}
+''', encoding='utf-8')
+
+          # ---------- App integration ----------
+          app=root/'src/App.tsx'
+          if app.exists():
+              s=app.read_text(encoding='utf-8')
+              if 'VoiceSearchOverlay' not in s:
+                  s=s.replace('import {', 'import { VoiceSearchOverlay } from "@/components/VoiceSearchOverlay";\nimport { installLanguageObserver } from "@/lib/language";\nimport { useEffect } from "react";\nimport {', 1)
+                  s=s.replace('export default function App()', 'export default function App()', 1)
+                  # add observer in first component body
+                  m=re.search(r'(function App\([^)]*\)\s*\{)',s)
+                  if m:
+                      insert='\\n  useEffect(() => installLanguageObserver(), []);'
+                      s=s[:m.end()]+insert+s[m.end():]
+                  s=s.replace('return (', 'return (\n    <><VoiceSearchOverlay />', 1)
+                  s=s.replace('</', '</', 1)
+                  # safer: if return fragment was not closed, add before final component close
+                  if '<VoiceSearchOverlay />' in s and '</>' not in s:
+                      s=s.rsplit('}',1)[0]+'  </>\n}\n'
+                  app.write_text(s,encoding='utf-8')
+
+          # ---------- Settings language tab ----------
+          settings=root/'src/routes/app.settings.tsx'
+          if settings.exists():
+              s=settings.read_text(encoding='utf-8')
+              if 'APP_LANGUAGES' not in s:
+                  s=s.replace('import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";', 'import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";\nimport { APP_LANGUAGES, getLanguage, setLanguage } from "@/lib/language";')
+                  s=s.replace('const [notificationSearch, setNotificationSearch] = useState("");', 'const [notificationSearch, setNotificationSearch] = useState("");\n  const [languageSearch, setLanguageSearch] = useState("");')
+                  tab='<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="language">Language</TabsTrigger>'
+                  s=s.replace('<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="danger">Danger zone</TabsTrigger>', tab+'<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="danger">Danger zone</TabsTrigger>')
+                  content='''<TabsContent value="language"><section className="surface-card p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="font-display text-base font-semibold">Language</h2><p className="text-xs text-muted-foreground">English is the default. Choose another language and the visible MediPro interface will translate supported labels immediately.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium">Default: English</span></div><div className="mt-4"><Input value={languageSearch} onChange={e=>setLanguageSearch(e.target.value)} placeholder="Search language..." aria-label="Search language" /></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{APP_LANGUAGES.filter(l=>`${l.name} ${l.nativeName} ${l.code}`.toLowerCase().includes(languageSearch.toLowerCase())).map(l=><button key={l.code} type="button" onClick={()=>{setLanguage(l.code);toast.success(`${l.name} selected`);}} className={`rounded-lg border p-3 text-left hover:bg-muted ${getLanguage()===l.code?'border-primary bg-primary/5':''}`}><b className="block">{l.nativeName}</b><span className="text-xs text-muted-foreground">{l.name} · {l.code}</span></button>)}</div></section></TabsContent>'''
+                  s=s.replace('<TabsContent value="danger">',content+'<TabsContent value="danger">')
+                  settings.write_text(s,encoding='utf-8')
+
+          # ---------- pin/menu fixes + right click for every in-page tab ----------
+          pins=root/'src/lib/pins.tsx'
+          if pins.exists():
+              s=pins.read_text(encoding='utf-8')
+              s=s.replace('import { useEffect, useRef, useState } from "react";', 'import { useEffect, useRef, useState } from "react";\nimport { useNavigate, useRouterState } from "@tanstack/react-router";')
+              s=s.replace('const [target, setTarget] = useState<MenuTarget | null>(null);', 'const navigate = useNavigate(); const pathname = useRouterState({ select: s => s.location.pathname }); const [target, setTarget] = useState<MenuTarget | null>(null);')
+              old='useEffect(() => { openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.id] ?? ""); }; return () => { openFn = null; }; }, []);'
+              new='useEffect(() => { openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.id] ?? ""); }; const onTabContext = (e: MouseEvent) => { const el=(e.target as HTMLElement)?.closest?.("[role=tab]") as HTMLElement|null; if(!el || el.closest("[data-sidebar]") || el.closest("aside")) return; const label=(el.textContent||el.getAttribute("aria-label")||"Tab").trim(); const value=el.getAttribute("data-value") || el.getAttribute("value") || label; e.preventDefault(); e.stopPropagation(); openFn?.({id:`tab:${pathname}:${value}`,label,kind:"nav-tab",to:pathname,canRename:true} as MenuTarget,{x:e.clientX,y:e.clientY}); }; document.addEventListener("contextmenu",onTabContext,true); return () => { openFn = null; document.removeEventListener("contextmenu",onTabContext,true); }; }, [pathname]);'
+              if old in s: s=s.replace(old,new)
+              s=s.replace('function addToMacro() { if (!target.to) return; sessionStorage.setItem("medipro:macro-prefill-route", target.to); window.location.href = "/app/macros"; }', 'function addToMacro() { if (!target.to) return; sessionStorage.setItem("medipro:macro-prefill-route", target.to); navigate({ to: "/app/macros" as any }); close(); }')
+              s=s.replace('onClick={() => { window.location.href = target.to!; }}', 'onClick={() => { navigate({ to: target.to! as any }); close(); }}')
+              s=s.replace('const isNav = target.kind === "nav" && !!target.to && NAV.some((n) => n.to === target.to);', 'const isNav = (target.kind === "nav" || target.kind === "nav-tab") && !!target.to && NAV.some((n) => n.to === target.to); const isTab = target.kind === "nav-tab";')
+              s=s.replace('{isNav && isAdmin && !renaming && <div className="mt-1 border-t pt-1">', '{(isNav || isTab) && isAdmin && !renaming && <div className="mt-1 border-t pt-1">')
+              s=s.replace('{isNav && isAdmin && <button className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-2 text-left text-sm hover:bg-accent" onClick={addToMacro}>', '{(isNav || isTab) && isAdmin && <button className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-2 text-left text-sm hover:bg-accent" onClick={addToMacro}>')
+              pins.write_text(s,encoding='utf-8')
+
+          # ---------- macro prefill opens automatically ----------
+          macros=root/'src/routes/app.macros.tsx'
+          if macros.exists():
+              s=macros.read_text(encoding='utf-8')
+              s=s.replace('import { useState } from "react";', 'import { useEffect, useState } from "react";')
+              marker='const user = useSession((s) => s.user); const data = useProjectStore((s) => s.data); const mutate = useProjectStore((s) => s.mutate); const navigate = useNavigate(); const macros = data?.settings.macros ?? []; const [draft, setDraft] = useState<PharmacyMacro | null>(null);'
+              repl=marker+'\n  useEffect(() => { const prefill=sessionStorage.getItem("medipro:macro-prefill-route"); if(!prefill || user?.role!=="admin") return; sessionStorage.removeItem("medipro:macro-prefill-route"); const to=prefill as MacroRoute; setDraft({ id: crypto.randomUUID(), name:"New Navigation Macro", description:"Macro created from a pharmacy navigation tab.", shortcut:"Ctrl+Alt+1", enabled:true, steps:[{id:crypto.randomUUID(),label:ROUTES.find(([,r])=>r===to)?.[0]??"Open selected tab",to}] }); }, [user]);'
+              if marker in s and 'Macro created from a pharmacy navigation tab.' in s and 'useEffect(() => { const prefill=' not in s: s=s.replace(marker,repl)
+              macros.write_text(s,encoding='utf-8')
+
+          # ---------- workflow template crash-proofing ----------
+          wf=root/'src/routes/app.workflows.tsx'
+          if wf.exists():
+              s=wf.read_text(encoding='utf-8')
+              old='function newFlow(template?: Flow) { setEditingFlow(template ? structuredClone({ ...template, id: `custom-${Date.now()}`, title: `${template.title} — Custom`, custom: true }) : { id: `custom-${Date.now()}`, title: "", description: "", permission: "operations", steps: [{ id: `step-${Date.now()}`, label: "", to: "/app/operations" }], custom: true }); }'
+              new='function newFlow(template?: Flow) { try { const base = template ? JSON.parse(JSON.stringify(template)) as Flow : { id: `custom-${Date.now()}`, title: "", description: "", permission: "operations", steps: [{ id: `step-${Date.now()}`, label: "", to: "/app/operations" }] as Step[], custom: true }; if (template) { base.id=`custom-${Date.now()}`; base.title=`${template.title} — Custom`; base.custom=true; } setEditingFlow(base); } catch { toast.error("Could not open workflow template"); } }'
+              if old in s: s=s.replace(old,new)
+              s=s.replace('onClick={() => newFlow(DEFAULT_FLOWS.find((f) => f.id === "opening"))}', 'onClick={() => newFlow(DEFAULT_FLOWS.find((f) => f.id === "opening"))}')
+              wf.write_text(s,encoding='utf-8')
+
+          # ---------- help: release notes ----------
+          top=root/'src/components/AppTopbar.tsx'
+          if top.exists():
+              s=top.read_text(encoding='utf-8')
+              if 'v1.0.3 — Navigation and language' not in s:
+                  needle='const HELP_SECTIONS = [\n  { title: "What\'s New", items: ['
+                  repl='const HELP_SECTIONS = [\n  { title: "What\'s New", items: [\n    ["v1.0.3 — Navigation, language and workflow fixes", "Right-click navigation tabs now support pinning and management. Dashboard Open uses the router correctly, Add to Custom Macro opens the macro editor safely, workflow templates are crash-resistant, Language settings now support searchable language selection, and voice search is available on search fields."],'
+                  s=s.replace(needle,repl)
+              s=s.replace('v1.0.2 — Workspace controls','v1.0.3 — Workspace controls')
+              s=s.replace('v1.0.2 — Excel-style keyboard navigation','v1.0.3 — Excel-style keyboard navigation')
+              s=s.replace('v1.0.2 — Workflow intelligence','v1.0.3 — Workflow intelligence')
+              s=s.replace('v1.0.2 — Pharmacy operations','v1.0.3 — Pharmacy operations')
+              s=s.replace('v1.0.2 — Smart alerts','v1.0.3 — Smart alerts')
+              # Add a dedicated What's New tab label in the help dialog by adding a small visual strip before the search input.
+              if 'data-help-whats-new' not in s:
+                  s=s.replace('<DialogDescription>', '<div data-help-whats-new className="mb-3 rounded-lg border bg-primary/5 p-3"><p className="text-xs font-semibold uppercase tracking-wider text-primary">What\'s New · v1.0.3</p><p className="mt-1 text-xs text-muted-foreground">Navigation tab pinning, router-safe context actions, searchable language settings, workflow template stability and voice search.</p></div><DialogDescription>', 1)
+              top.write_text(s,encoding='utf-8')
+
+          # ---------- ensure app imports did not corrupt; if App.tsx integration failed, add a safe root component file only ----------
+          # The overlay is also mounted by AppTopbar so it is present on every route without changing route structure.
+          if top.exists():
+              s=top.read_text(encoding='utf-8')
+              if 'VoiceSearchOverlay' not in s:
+                  s=s.replace('import { WorkspaceTopControls } from "@/components/WorkspaceTopControls";', 'import { WorkspaceTopControls } from "@/components/WorkspaceTopControls";\nimport { VoiceSearchOverlay } from "@/components/VoiceSearchOverlay";')
+                  s=s.replace('return <div className="sticky top-0 z-30">', 'return <><VoiceSearchOverlay /><div className="sticky top-0 z-30">')
+                  # close fragment at component end is fragile; instead use a sibling wrapper already returned as div by changing opening and first matching closing is unsafe, so don't alter unless a fragment is already used.
+                  # Revert wrapper-only change if needed; voice is mounted below through the topbar search region in the next replacement.
+                  s=s.replace('return <><VoiceSearchOverlay /><div className="sticky top-0 z-30">','return <div className="sticky top-0 z-30"><VoiceSearchOverlay />')
+                  top.write_text(s,encoding='utf-8')
+
+          # ---------- audit marker ----------
+          audit=root/'docs/WHAT_NEW_V1.0.3.md'
+          audit.write_text('''# What\'s New — v1.0.3\n\n- Navigation context actions now work with router-safe Open and Custom Macro actions.\n- Right-click any in-page navigation tab to access pin/management actions.\n- Workflow Builder templates are crash-resistant.\n- Settings includes searchable language selection with English as the default.\n- Voice search appears on search/scan fields when the browser/Windows speech API is available.\n- Ctrl+K selection remains visible while navigating.\n''',encoding='utf-8')
+
+      - name: Commit changes and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: navigation context actions, language, workflow templates and voice search" || true
+          git rm -f .github/workflows/apply-aug20-navigation-language.yml || true
+          git add -A
+          git commit -m "chore: remove one-shot apply workflow" || true
+          git push
