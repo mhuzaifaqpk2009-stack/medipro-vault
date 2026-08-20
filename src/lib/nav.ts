@@ -1,5 +1,5 @@
 /** Single source of truth for workspace navigation. */
-import { LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes, MapPin, BarChart3, Settings, Receipt, Calculator, Keyboard, Barcode, FileText, MessageSquare, Workflow, Zap } from "lucide-react";
+import { LayoutDashboard, Pill, ShoppingCart, Truck, Users, Building2, Tags, Boxes, MapPin, BarChart3, Settings, Receipt, Calculator, Barcode, FileText, MessageSquare, Workflow, Zap } from "lucide-react";
 import type { UserPermissions, StoredUser } from "@/lib/users";
 import type { PharmacySettings } from "@/domain/schema";
 export type NavItem = { to: string; label: string; icon: any; exact?: boolean; perm?: keyof UserPermissions; anyPerm?: (keyof UserPermissions)[]; adminOnly?: boolean; group: string };
@@ -10,7 +10,6 @@ export const NAV: NavItem[] = [
   { to: "/app/messages", label: "Messages", icon: MessageSquare, group: "Main" },
   { to: "/app/medicines", label: "Medicines", icon: Pill, perm: "medicines", group: "Inventory" },
   { to: "/app/inventory", label: "Inventory", icon: Boxes, perm: "inventory", group: "Inventory" },
-  { to: "/app/stocktake", label: "Stock Take", icon: Boxes, perm: "stocktake", group: "Inventory" },
   { to: "/app/racks", label: "Racks", icon: MapPin, perm: "racks", group: "Inventory" },
   { to: "/app/purchases", label: "Purchases", icon: Truck, perm: "purchases", group: "Inventory" },
   { to: "/app/categories", label: "Categories", icon: Tags, perm: "categories", group: "Inventory" },
@@ -19,8 +18,7 @@ export const NAV: NavItem[] = [
   { to: "/app/prescriptions", label: "Prescriptions", icon: FileText, perm: "prescriptions", group: "People" },
   { to: "/app/suppliers", label: "Suppliers", icon: Building2, perm: "suppliers", group: "People" },
   { to: "/app/customers", label: "Customers", icon: Users, perm: "customers", group: "People" },
-  { to: "/app/calculator", label: "Calculator", icon: Calculator, group: "Insights" },
-  { to: "/app/shortcuts", label: "Shortcuts", icon: Keyboard, group: "Insights" },
+  { to: "/app/calculator", label: "Calculator & Shortcuts", icon: Calculator, group: "Insights" },
   { to: "/app/macros", label: "Custom Macros", icon: Zap, adminOnly: true, group: "Insights" },
   { to: "/app/reports", label: "Reports", icon: BarChart3, perm: "reports", group: "Insights" },
   { to: "/app/settings", label: "Settings", icon: Settings, adminOnly: true, group: "Insights" },
