@@ -1,4 +1,4 @@
-name: Apply operations access and help update
+name: Apply current product fixes
 
 on:
   push:
@@ -9,95 +9,147 @@ permissions:
 
 jobs:
   update:
+    if: ${{ !contains(github.event.head_commit.message, 'remove current product fixer') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
-      - name: Apply source updates
+
+      - name: Apply requested fixes
+        shell: python
         run: |
-          python3 <<'PY'
           from pathlib import Path
+          import json
 
+          def text(path): return Path(path).read_text(encoding='utf-8')
+          def write(path, value): Path(path).write_text(value, encoding='utf-8')
           def replace(path, old, new):
-              p = Path(path)
-              s = p.read_text()
-              if old not in s:
-                  raise SystemExit(f"Expected text not found in {path}: {old[:120]}")
-              p.write_text(s.replace(old, new, 1))
+              p=Path(path); s=p.read_text(encoding='utf-8')
+              if old in s: p.write_text(s.replace(old,new,1),encoding='utf-8'); return True
+              return False
 
-          # User permissions model
-          replace('src/lib/users.ts',
-              'operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean;',
-              'operationsBarcode?: boolean; operationsBatches?: boolean; operationsReturns?: boolean; operationsCustomerLedger?: boolean; operationsSupplierLedger?: boolean; operationsUnits?: boolean; operationsFinance?: boolean; operationsP1Controls?: boolean; operationsP2Operations?: boolean;')
-          replace('src/lib/users.ts',
-              'operationsCustomerLedger: true, operationsSupplierLedger: true, prescriptionsAdd:',
-              'operationsCustomerLedger: true, operationsSupplierLedger: true, operationsUnits: true, operationsFinance: true, operationsP1Controls: true, operationsP2Operations: true, prescriptionsAdd:')
-          replace('src/lib/users.ts',
-              'operationsCustomerLedger: false, operationsSupplierLedger: false, prescriptionsAdd:',
-              'operationsCustomerLedger: false, operationsSupplierLedger: false, operationsUnits: false, operationsFinance: false, operationsP1Controls: false, operationsP2Operations: false, prescriptionsAdd:')
-          replace('src/lib/users.ts',
-              'operationsCustomerLedger: false, operationsSupplierLedger: false }',
-              'operationsCustomerLedger: false, operationsSupplierLedger: false, operationsUnits: false, operationsFinance: false, operationsP1Controls: false, operationsP2Operations: false }')
+          # Version / release
+          for name in ['package.json','package-lock.json']:
+              p=Path(name)
+              if p.exists():
+                  d=json.loads(p.read_text(encoding='utf-8')); d['version']='1.0.3'
+                  if name=='package-lock.json' and isinstance(d.get('packages'),dict) and '' in d['packages']: d['packages']['']['version']='1.0.3'
+                  p.write_text(json.dumps(d,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
 
-          # Settings -> Users permission editor
-          replace('src/routes/app.settings.tsx',
-              '{ key: "operationsSupplierLedger", label: "Supplier ledger" }] },',
-              '{ key: "operationsSupplierLedger", label: "Supplier ledger" }, { key: "operationsUnits", label: "Units" }, { key: "operationsFinance", label: "Finance" }, { key: "operationsP1Controls", label: "P1 Controls" }, { key: "operationsP2Operations", label: "P2 Operations" }] },')
+          # Pin kind supports in-page tabs.
+          replace('src/domain/schema.ts','export type PinKind = "nav" | "action" | "cmd" | "counter";','export type PinKind = "nav" | "nav-tab" | "action" | "cmd" | "counter";')
 
-          # Operations tab access is controlled by the same user permissions editor.
-          replace('src/routes/app.operations.tsx',
-              'const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true;',
-              'const canBarcode=user?.role==="admin"||p?.operationsBarcode===true; const canBatches=user?.role==="admin"||p?.operationsBatches===true; const canReturns=user?.role==="admin"||p?.operationsReturns===true; const canCustomers=user?.role==="admin"||p?.operationsCustomerLedger===true; const canSuppliers=user?.role==="admin"||p?.operationsSupplierLedger===true; const canUnits=user?.role==="admin"||p?.operationsUnits===true; const canFinance=user?.role==="admin"||p?.operationsFinance===true; const canP1Controls=user?.role==="admin"||p?.operationsP1Controls===true; const canP2Operations=user?.role==="admin"||p?.operationsP2Operations===true;')
-          replace('src/routes/app.operations.tsx',
-              'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":"suppliers";',
-              'const firstTab=canBarcode?"barcode":canBatches?"batches":canReturns?"returns":canCustomers?"customers":canSuppliers?"suppliers":canUnits?"units":canFinance?"finance":canP1Controls?"controls":"p2";')
-          replace('src/routes/app.operations.tsx',
-              '(["units","finance","controls","p2"].includes(tab)||({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers} as Record<string,boolean>)[tab])?tab:firstTab;',
-              '(({barcode:canBarcode,batches:canBatches,returns:canReturns,customers:canCustomers,suppliers:canSuppliers,units:canUnits,finance:canFinance,controls:canP1Controls,p2:canP2Operations} as Record<string,boolean>)[tab])?tab:firstTab;')
-          replace('src/routes/app.operations.tsx',
-              '<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger><TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger><TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger><TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>',
-              '{canUnits&&<TabsTrigger value="units" className="border border-border/40 bg-background/50 hover:bg-background">Units</TabsTrigger>}{canFinance&&<TabsTrigger value="finance" className="border border-border/40 bg-background/50 hover:bg-background">Finance</TabsTrigger>}{canP1Controls&&<TabsTrigger value="controls" className="border border-border/40 bg-background/50 hover:bg-background">P1 Controls</TabsTrigger>}{canP2Operations&&<TabsTrigger value="p2" className="border border-border/40 bg-background/50 hover:bg-background">P2 Operations</TabsTrigger>}')
-          replace('src/routes/app.operations.tsx',
-              '<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent><TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent><TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent><TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>',
-              '{canUnits&&<TabsContent value="units" className="mt-4"><UnitManager /></TabsContent>}{canFinance&&<TabsContent value="finance" className="mt-4"><FinanceManager /></TabsContent>}{canP1Controls&&<TabsContent value="controls" className="mt-4"><PharmacyControls /></TabsContent>}{canP2Operations&&<TabsContent value="p2" className="mt-4"><P2PharmacyOperations /></TabsContent>}')
-          replace('src/routes/app.operations.tsx',
-              '<h1 className="font-display text-3xl font-bold">Barcode, Batches, Returns & Ledgers</h1>',
-              '<h1 className="font-display text-3xl font-bold">Pharmacy Operations</h1>')
+          # Router-safe sidebar/context actions and right-click for every Radix tab.
+          p=Path('src/lib/pins.tsx'); s=p.read_text(encoding='utf-8')
+          if 'useNavigate, useRouterState' not in s:
+              s=s.replace('import { useEffect, useRef, useState } from "react";','import { useEffect, useRef, useState } from "react";\nimport { useNavigate, useRouterState } from "@tanstack/react-router";',1)
+          s=s.replace('export function ItemMenuHost() {\n  const [target, setTarget] = useState<MenuTarget | null>(null);','export function ItemMenuHost() {\n  const navigate = useNavigate(); const pathname = useRouterState({ select: (s) => s.location.pathname });\n  const [target, setTarget] = useState<MenuTarget | null>(null);',1)
+          old='useEffect(() => { openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.id] ?? ""); }; return () => { openFn = null; }; }, []);'
+          new='useEffect(() => { openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.id] ?? ""); }; const onTabContext = (e: MouseEvent) => { const el=(e.target as HTMLElement)?.closest?.("[role=tab]") as HTMLElement | null; if (!el || el.closest("aside")) return; const label=(el.textContent || el.getAttribute("aria-label") || "Tab").trim(); const value=el.getAttribute("data-value") || el.getAttribute("value") || label; e.preventDefault(); e.stopPropagation(); openFn?.({ id:`tab:${pathname}:${value}`, label, kind:"nav-tab", to:pathname, canRename:true } as MenuTarget, { x:e.clientX, y:e.clientY }); }; document.addEventListener("contextmenu", onTabContext, true); return () => { openFn = null; document.removeEventListener("contextmenu", onTabContext, true); }; }, [pathname]);'
+          if old in s: s=s.replace(old,new,1)
+          s=s.replace('const isNav = target.kind === "nav" && !!target.to && NAV.some((n) => n.to === target.to);','const isNav = target.kind === "nav" && !!target.to && NAV.some((n) => n.to === target.to); const isTab = target.kind === "nav-tab";',1)
+          s=s.replace('function addToMacro() { if (!target.to) return; sessionStorage.setItem("medipro:macro-prefill-route", target.to); window.location.href = "/app/macros"; }','function addToMacro() { if (!target.to) return; sessionStorage.setItem("medipro:macro-prefill-route", target.to); navigate({ to: "/app/macros" as any }); close(); }',1)
+          s=s.replace('onClick={() => { window.location.href = target.to!; }}','onClick={() => { navigate({ to: target.to! as any }); close(); }}',1)
+          s=s.replace('{isNav && isAdmin && !renaming && <div className="mt-1 border-t pt-1">','{(isNav || isTab) && isAdmin && !renaming && <div className="mt-1 border-t pt-1">',1)
+          s=s.replace('{isNav && isAdmin && <button className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-2 text-left text-sm hover:bg-accent" onClick={addToMacro}>','{(isNav || isTab) && isAdmin && <button className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-2 text-left text-sm hover:bg-accent" onClick={addToMacro}>',1)
+          p.write_text(s,encoding='utf-8')
 
-          # Help Center: document the four newly permissioned operations tabs.
-          help_block = '''  { title: "Pharmacy Operations", items: [
-    ["Barcode", "Scan medicine barcodes with a USB scanner or search the barcode field. Barcode access can be granted separately under Settings → Users → Pharmacy operations."],
-    ["Batch + FEFO", "Manage inventory batches and review the earliest-expiry-first queue. Access is controlled by the Batch + FEFO permission."],
-    ["Returns", "Record customer sale returns and supplier purchase returns against the original transaction. Access is controlled by the Returns permission."],
-    ["Customer Ledger", "Review customer balances and record customer payments. Access is controlled by the Customer ledger permission."],
-    ["Supplier Ledger", "Review supplier balances and record supplier payments. Access is controlled by the Supplier ledger permission."],
-    ["Units", "Manage strip / tablet / box unit conversions and medicine unit settings. Access is controlled by the Units permission."],
-    ["Finance", "Review cash, expenses and profit-related operational finance information. Access is controlled by the Finance permission."],
-    ["P1 Controls", "Open pharmacy control and safety workflows from one place. Access is controlled by the P1 Controls permission."],
-    ["P2 Operations", "Open the additional operational tools and workflows from one place. Access is controlled by the P2 Operations permission."],
-    ["User access", "Admins can grant or remove each Pharmacy Operations tab independently under Settings → Users → edit a user → Pharmacy operations. Admin accounts always retain full access."],
-  ]},
-'''
-          p = Path('src/components/AppTopbar.tsx')
-          s = p.read_text()
-          marker = '  { title: "Backup & security", items: ['
-          if '  { title: "Pharmacy Operations", items: [' not in s:
-              if marker not in s:
-                  raise SystemExit('Help insertion marker not found')
-              s = s.replace(marker, help_block + marker, 1)
-              p.write_text(s)
-          PY
+          # Macro context action should open the editor directly instead of requiring another click.
+          p=Path('src/routes/app.macros.tsx'); s=p.read_text(encoding='utf-8')
+          s=s.replace('import { useState } from "react";','import { useEffect, useState } from "react";',1)
+          marker='const user = useSession((s) => s.user); const data = useProjectStore((s) => s.data); const mutate = useProjectStore((s) => s.mutate); const navigate = useNavigate(); const macros = data?.settings.macros ?? []; const [draft, setDraft] = useState<PharmacyMacro | null>(null);'
+          if marker in s and 'const prefill=sessionStorage.getItem("medipro:macro-prefill-route")' not in s:
+              s=s.replace(marker,marker+'\n  useEffect(() => { const prefill=sessionStorage.getItem("medipro:macro-prefill-route"); if(!prefill || user?.role!=="admin") return; sessionStorage.removeItem("medipro:macro-prefill-route"); const to=prefill as MacroRoute; setDraft({ id:crypto.randomUUID(), name:"New Navigation Macro", description:"Macro created from a navigation tab.", shortcut:"Ctrl+Alt+1", enabled:true, steps:[{id:crypto.randomUUID(), label:ROUTES.find(([,r])=>r===to)?.[0] ?? "Open selected tab", to}] }); }, [user]);',1)
+          p.write_text(s,encoding='utf-8')
 
+          # Workflow templates: never throw a blank screen because structuredClone/template data is unavailable.
+          p=Path('src/routes/app.workflows.tsx'); s=p.read_text(encoding='utf-8')
+          old='function newFlow(template?: Flow) { setEditingFlow(template ? structuredClone({ ...template, id: `custom-${Date.now()}`, title: `${template.title} — Custom`, custom: true }) : { id: `custom-${Date.now()}`, title: "", description: "", permission: "operations", steps: [{ id: `step-${Date.now()}`, label: "", to: "/app/operations" }], custom: true }); }'
+          new='function newFlow(template?: Flow) { try { const base = template ? JSON.parse(JSON.stringify(template)) as Flow : { id:`custom-${Date.now()}`, title:"", description:"", permission:"operations", steps:[{ id:`step-${Date.now()}`, label:"", to:"/app/operations" }] as Step[], custom:true }; if (template) { base.id=`custom-${Date.now()}`; base.title=`${template.title} — Custom`; base.custom=true; } setEditingFlow(base); } catch { toast.error("Could not open workflow template"); } }'
+          if old in s: s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+
+          # Search voice button: appears automatically on focused search/scan fields across the app.
+          Path('src/components/VoiceSearchOverlay.tsx').write_text(r'''import { Mic, MicOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+
+const VOICE_LOCALES: Record<string,string> = { en:"en-US", ur:"ur-PK", ar:"ar-SA", hi:"hi-IN", bn:"bn-BD", pa:"pa-IN", fa:"fa-IR", tr:"tr-TR", id:"id-ID", ms:"ms-MY", es:"es-ES", fr:"fr-FR", de:"de-DE", it:"it-IT", pt:"pt-PT", ru:"ru-RU", zh:"zh-CN", ja:"ja-JP", ko:"ko-KR" };
+export function VoiceSearchOverlay(){
+  const [target,setTarget]=useState<HTMLInputElement|HTMLTextAreaElement|null>(null); const [listening,setListening]=useState(false); const [pos,setPos]=useState({left:0,top:0});
+  useEffect(()=>{ const update=()=>{ const el=document.activeElement as HTMLInputElement|HTMLTextAreaElement|null; if(!el || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)){setTarget(null);return} const hint=`${el.placeholder||""} ${el.getAttribute("aria-label")||""} ${el.name||""}`.toLowerCase(); if(!hint.includes("search") && !hint.includes("scan")){setTarget(null);return} const r=el.getBoundingClientRect(); setTarget(el); setPos({left:Math.max(8,r.right-38),top:r.top+(r.height-32)/2}) }; window.addEventListener("focusin",update); window.addEventListener("scroll",update,true); window.addEventListener("resize",update); update(); return()=>{window.removeEventListener("focusin",update);window.removeEventListener("scroll",update,true);window.removeEventListener("resize",update)} },[]);
+  if(!target)return null;
+  const start=()=>{ const Speech=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition; if(!Speech){alert("Voice search is not supported by this Windows installation.");return} const r=new Speech(); const code=localStorage.getItem("medicore.language")||"en"; r.lang=VOICE_LOCALES[code]||"en-US"; r.interimResults=false; r.continuous=false; r.onstart=()=>setListening(true); r.onerror=()=>setListening(false); r.onend=()=>setListening(false); r.onresult=(e:any)=>{const value=e.results?.[0]?.[0]?.transcript||""; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target),"value")?.set; setter?.call(target,value); target.dispatchEvent(new Event("input",{bubbles:true})); target.dispatchEvent(new Event("change",{bubbles:true})); target.focus()}; r.start() };
+  return <Button type="button" size="icon" variant={listening?"default":"ghost"} className="fixed z-[200] h-8 w-8 rounded-full shadow-sm" style={{left:pos.left,top:pos.top}} title="Voice search" aria-label="Voice search" onMouseDown={e=>e.preventDefault()} onClick={start}>{listening?<MicOff className="h-4 w-4"/>:<Mic className="h-4 w-4"/>}</Button>
+}
+''',encoding='utf-8')
+
+          # Language list + safe DOM translation. English is always the default.
+          Path('src/lib/language.ts').write_text(r'''export type AppLanguage={code:string;name:string;nativeName:string};
+export const APP_LANGUAGES:AppLanguage[]=[
+{code:"en",name:"English",nativeName:"English"},{code:"ur",name:"Urdu",nativeName:"اردو"},{code:"ar",name:"Arabic",nativeName:"العربية"},{code:"hi",name:"Hindi",nativeName:"हिन्दी"},{code:"bn",name:"Bengali",nativeName:"বাংলা"},{code:"pa",name:"Punjabi",nativeName:"ਪੰਜਾਬੀ"},{code:"fa",name:"Persian",nativeName:"فارسی"},{code:"tr",name:"Turkish",nativeName:"Türkçe"},{code:"id",name:"Indonesian",nativeName:"Bahasa Indonesia"},{code:"ms",name:"Malay",nativeName:"Bahasa Melayu"},{code:"es",name:"Spanish",nativeName:"Español"},{code:"fr",name:"French",nativeName:"Français"},{code:"de",name:"German",nativeName:"Deutsch"},{code:"it",name:"Italian",nativeName:"Italiano"},{code:"pt",name:"Portuguese",nativeName:"Português"},{code:"ru",name:"Russian",nativeName:"Русский"},{code:"zh",name:"Chinese",nativeName:"中文"},{code:"ja",name:"Japanese",nativeName:"日本語"},{code:"ko",name:"Korean",nativeName:"한국어"}];
+const DICT:Record<string,Record<string,string>>={
+ur:{Dashboard:"ڈیش بورڈ",Medicines:"ادویات",Inventory:"انوینٹری",Purchases:"خریداری",Customers:"گاہک",Suppliers:"سپلائرز",Reports:"رپورٹس",Settings:"ترتیبات",Messages:"پیغامات","Workflow Engine":"ورک فلو انجن",Save:"محفوظ کریں",Cancel:"منسوخ",Search:"تلاش",Notifications:"اطلاعات",Shortcuts:"شارٹ کٹس",Open:"کھولیں",Close:"بند کریں","What's New":"نیا کیا ہے","New Medicine":"نئی دوا","New Customer":"نیا گاہک","New Supplier":"نیا سپلائر","New Purchase":"نئی خریداری"},
+ar:{Dashboard:"لوحة التحكم",Medicines:"الأدوية",Inventory:"المخزون",Purchases:"المشتريات",Customers:"العملاء",Suppliers:"الموردون",Reports:"التقارير",Settings:"الإعدادات",Messages:"الرسائل",Save:"حفظ",Cancel:"إلغاء",Search:"بحث",Notifications:"الإشعارات",Open:"فتح",Close:"إغلاق"},
+hi:{Dashboard:"डैशबोर्ड",Medicines:"दवाइयाँ",Inventory:"इन्वेंटरी",Purchases:"खरीद",Customers:"ग्राहक",Suppliers:"सप्लायर",Reports:"रिपोर्ट",Settings:"सेटिंग्स",Messages:"संदेश",Save:"सहेजें",Cancel:"रद्द करें",Search:"खोजें",Notifications:"सूचनाएँ",Open:"खोलें",Close:"बंद करें"},
+es:{Dashboard:"Panel",Medicines:"Medicamentos",Inventory:"Inventario",Purchases:"Compras",Customers:"Clientes",Suppliers:"Proveedores",Reports:"Informes",Settings:"Configuración",Messages:"Mensajes",Save:"Guardar",Cancel:"Cancelar",Search:"Buscar",Notifications:"Notificaciones",Open:"Abrir",Close:"Cerrar"},
+fr:{Dashboard:"Tableau de bord",Medicines:"Médicaments",Inventory:"Inventaire",Purchases:"Achats",Customers:"Clients",Suppliers:"Fournisseurs",Reports:"Rapports",Settings:"Paramètres",Messages:"Messages",Save:"Enregistrer",Cancel:"Annuler",Search:"Rechercher",Notifications:"Notifications",Open:"Ouvrir",Close:"Fermer"},
+de:{Dashboard:"Dashboard",Medicines:"Medikamente",Inventory:"Inventar",Purchases:"Einkäufe",Customers:"Kunden",Suppliers:"Lieferanten",Reports:"Berichte",Settings:"Einstellungen",Messages:"Nachrichten",Save:"Speichern",Cancel:"Abbrechen",Search:"Suchen",Notifications:"Benachrichtigungen",Open:"Öffnen",Close:"Schließen"},
+tr:{Dashboard:"Gösterge Paneli",Medicines:"İlaçlar",Inventory:"Stok",Purchases:"Satın Almalar",Customers:"Müşteriler",Suppliers:"Tedarikçiler",Reports:"Raporlar",Settings:"Ayarlar",Messages:"Mesajlar",Save:"Kaydet",Cancel:"İptal",Search:"Ara",Notifications:"Bildirimler",Open:"Aç",Close:"Kapat"},
+zh:{Dashboard:"仪表板",Medicines:"药品",Inventory:"库存",Purchases:"采购",Customers:"客户",Suppliers:"供应商",Reports:"报告",Settings:"设置",Messages:"消息",Save:"保存",Cancel:"取消",Search:"搜索",Notifications:"通知",Open:"打开",Close:"关闭"},
+ru:{Dashboard:"Панель",Medicines:"Лекарства",Inventory:"Склад",Purchases:"Закупки",Customers:"Клиенты",Suppliers:"Поставщики",Reports:"Отчёты",Settings:"Настройки",Messages:"Сообщения",Save:"Сохранить",Cancel:"Отмена",Search:"Поиск",Notifications:"Уведомления",Open:"Открыть",Close:"Закрыть"}};
+export function getLanguage(){return localStorage.getItem("medicore.language")||"en"}
+export function setLanguage(code:string){localStorage.setItem("medicore.language",code);window.dispatchEvent(new CustomEvent("medicore:language-change",{detail:code}))}
+export function translateText(text:string,code=getLanguage()){return DICT[code]?.[text]??text}
+const originals=new WeakMap<Text,string>();
+export function installLanguageObserver(){const apply=()=>{const code=getLanguage();document.documentElement.lang=code;const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const nodes:Text[]=[];let n:Node|null;while(n=walker.nextNode())nodes.push(n as Text);for(const node of nodes){if(!originals.has(node))originals.set(node,node.nodeValue||"");const original=originals.get(node)||"";if(!original.trim()||original.length>100)continue;node.nodeValue=code==="en"?original:translateText(original,code)}};const observer=new MutationObserver(()=>{if((window as any).__medicoreLangBusy)return;(window as any).__medicoreLangBusy=true;requestAnimationFrame(()=>{try{apply()}finally{(window as any).__medicoreLangBusy=false}})});observer.observe(document.body,{subtree:true,childList:true});apply();return()=>observer.disconnect()}
+''',encoding='utf-8')
+
+          # Settings language tab.
+          p=Path('src/routes/app.settings.tsx'); s=p.read_text(encoding='utf-8')
+          if 'from "@/lib/language"' not in s:
+              s=s.replace('import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";','import { KeyboardSettingsPanel } from "@/components/KeyboardSettingsPanel";\nimport { APP_LANGUAGES, getLanguage, setLanguage } from "@/lib/language";',1)
+          if 'const [languageSearch, setLanguageSearch]' not in s:
+              s=s.replace('const [notificationSearch, setNotificationSearch] = useState("");','const [notificationSearch, setNotificationSearch] = useState(""); const [languageSearch, setLanguageSearch] = useState("");',1)
+          if 'value="language"' not in s:
+              s=s.replace('<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="danger">Danger zone</TabsTrigger>','<TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="language">Language</TabsTrigger><TabsTrigger className="min-h-10 shrink-0 whitespace-nowrap px-3 text-sm font-medium" value="danger">Danger zone</TabsTrigger>',1)
+          if '<TabsContent value="language">' not in s:
+              content='''<TabsContent value="language"><section className="surface-card p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="font-display text-base font-semibold">Language</h2><p className="text-xs text-muted-foreground">English is the default. Search and select a language to translate supported visible MediPro labels.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium">Default: English</span></div><div className="mt-4"><Input value={languageSearch} onChange={e=>setLanguageSearch(e.target.value)} placeholder="Search language..." aria-label="Search language" /></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{APP_LANGUAGES.filter(l=>`${l.name} ${l.nativeName} ${l.code}`.toLowerCase().includes(languageSearch.toLowerCase())).map(l=><button key={l.code} type="button" onClick={()=>{setLanguage(l.code);toast.success(`${l.name} selected`);}} className={`rounded-lg border p-3 text-left hover:bg-muted ${getLanguage()===l.code?'border-primary bg-primary/5':''}`}><b className="block">{l.nativeName}</b><span className="text-xs text-muted-foreground">{l.name} · {l.code}</span></button>)}</div></section></TabsContent>'''
+              s=s.replace('<TabsContent value="danger">',content+'<TabsContent value="danger">',1)
+          p.write_text(s,encoding='utf-8')
+
+          # Topbar: help opens on What's New, has category tabs, and includes voice search.
+          p=Path('src/components/AppTopbar.tsx'); s=p.read_text(encoding='utf-8')
+          if 'VoiceSearchOverlay' not in s:
+              s=s.replace('import { WorkspaceTopControls } from "@/components/WorkspaceTopControls";','import { WorkspaceTopControls } from "@/components/WorkspaceTopControls";\nimport { VoiceSearchOverlay } from "@/components/VoiceSearchOverlay";\nimport { installLanguageObserver } from "@/lib/language";',1)
+          s=s.replace('const [helpQuery, setHelpQuery] = useState("");','const [helpQuery, setHelpQuery] = useState(""); const [helpSection, setHelpSection] = useState("What\'s New");',1)
+          if 'installLanguageObserver()' not in s:
+              s=s.replace('useExpiryAlerts();','useExpiryAlerts();\n  useEffect(() => installLanguageObserver(), []);',1)
+          s=s.replace('const filteredHelp = HELP_SECTIONS.map((section) => ({ ...section, items: section.items.filter(([title, text]) => !query || `${title} ${text}`.toLowerCase().includes(query)) })).filter((section) => section.items.length > 0);','const filteredHelp = HELP_SECTIONS.map((section) => ({ ...section, items: section.items.filter(([title, text]) => !query || `${title} ${text}`.toLowerCase().includes(query)) })).filter((section) => section.items.length > 0); const displayedHelp = filteredHelp.filter(section => section.title === helpSection);',1)
+          s=s.replace('setHelpQuery(""); setHelpOpen(true);','setHelpQuery(""); setHelpSection("What\'s New"); setHelpOpen(true);',1)
+          s=s.replace('["v1.0.2 — Workspace controls"','["v1.0.3 — Workspace controls"',1).replace('["v1.0.2 — Excel-style keyboard navigation"','["v1.0.3 — Excel-style keyboard navigation"',1).replace('["v1.0.2 — Workflow intelligence"','["v1.0.3 — Workflow intelligence"',1).replace('["v1.0.2 — Pharmacy operations"','["v1.0.3 — Pharmacy operations"',1).replace('["v1.0.2 — Smart alerts"','["v1.0.3 — Smart alerts"',1)
+          if 'v1.0.3 — Navigation, language and workflow fixes' not in s:
+              s=s.replace('{ title: "What\'s New", items: [','{ title: "What\'s New", items: [\n    ["v1.0.3 — Navigation, language and workflow fixes", "Dashboard Open and Add to Custom Macro now use the application router, in-page navigation tabs support right-click pinning, workflow templates are crash-resistant, Settings has searchable language selection, and search fields can use voice input."],',1)
+          old='<div className="relative pt-3"><Search className="pointer-events-none absolute left-3 top-[22px] h-4 w-4 text-muted-foreground" /><input value={helpQuery} onChange={(e) => setHelpQuery(e.target.value)} placeholder="Search help topics, e.g. old sales, barcode, supplier, backup, force sale…" className="h-11 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></div>'
+          new='<div className="flex gap-2 overflow-x-auto pt-3">{HELP_SECTIONS.map(section => <Button key={section.title} size="sm" variant={helpSection===section.title?"default":"outline"} onClick={()=>setHelpSection(section.title)} className="shrink-0">{section.title}</Button>)}</div><div className="relative pt-3"><Search className="pointer-events-none absolute left-3 top-[22px] h-4 w-4 text-muted-foreground" /><input value={helpQuery} onChange={(e) => setHelpQuery(e.target.value)} placeholder="Search help topics, e.g. old sales, barcode, supplier, backup, force sale…" className="h-11 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></div>'
+          if old in s: s=s.replace(old,new,1)
+          s=s.replace('{filteredHelp.length ? filteredHelp.map((section) => <section key={section.title}>','{displayedHelp.length ? displayedHelp.map((section) => <section key={section.title}>',1)
+          s=s.replace('return <div className="sticky top-0 z-30"><header','return <div className="sticky top-0 z-30"><VoiceSearchOverlay /><header',1)
+          p.write_text(s,encoding='utf-8')
+
+          Path('docs/WHAT_NEW_V1.0.3.md').write_text('''# What’s New — v1.0.3\n\n- Router-safe sidebar Open and Add to Custom Macro.\n- Right-click in-page navigation tabs to pin/manage them.\n- Workflow Builder templates no longer rely on fragile structured cloning.\n- Searchable Language settings with English as the default and 19 language choices.\n- Voice search on focused search/scan fields when Windows/browser speech recognition is available.\n- Help Center opens on a dedicated What’s New tab with this release documented.\n''',encoding='utf-8')
+
+      - name: Commit and remove fixer
+        shell: bash
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/users.ts src/routes/app.settings.tsx src/routes/app.operations.tsx src/components/AppTopbar.tsx
+          git add -A
           git diff --cached --check
-          git commit -m "feat: add operations tab access controls and help"
-          git push origin main
-
-          rm .github/workflows/apply-ops-access-help.yml
-          git add .github/workflows/apply-ops-access-help.yml
-          git commit -m "chore: remove operations update workflow"
+          git commit -m "feat: navigation tabs, language, voice search and workflow fixes" || true
+          git rm -f .github/workflows/apply-ops-access-help.yml .github/workflows/apply-aug20-navigation-language.yml 2>/dev/null || true
+          git add -A
+          git commit -m "chore: remove current product fixer" || true
           git push origin main
