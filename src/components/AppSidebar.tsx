@@ -7,6 +7,8 @@ import { useProjectStore } from "@/store/project-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pinContext } from "@/lib/pins";
+import { unreadMessages } from "@/lib/messages";
+import { useMessageNotifications } from "@/hooks/use-message-notifications";
 import { NAV, GROUPS, orderNav, visibleNavItems, type NavItem } from "@/lib/nav";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -21,10 +23,13 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const user = useSession((s) => s.user);
   const isAdmin = user?.role === "admin";
+  useMessageNotifications();
   const settings = useProjectStore((s) => s.data?.settings);
   const groupOverrides = settings?.tabGroups;
   const renames = settings?.tabRenames;
+  const projectData = useProjectStore((s) => s.data);
   const mutate = useProjectStore((s) => s.mutate);
+  const unreadMessageCount = unreadMessages(projectData, user?.id).length;
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ to: string; position: DropPosition } | null>(null);
@@ -48,7 +53,6 @@ export function AppSidebar() {
   const groupNameOf = (g: string) => settings?.groupRenames?.[g] || g;
   const isActive = (to: string, exact?: boolean) => exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
-  /** Move a tab before or after any visible tab, including across group boundaries. */
   function reorder(fromPath: string, toPath: string, position: DropPosition) {
     if (fromPath === toPath) return;
     const full = orderNav(settings?.tabOrder).map((i) => i.to);
@@ -116,7 +120,7 @@ export function AppSidebar() {
                       {indicatorAfter && <span className="pointer-events-none absolute -bottom-0.5 left-1 right-1 z-10 h-0.5 rounded bg-primary" />}
                     </SidebarMenuItem>;
                   }
-                  return <SidebarMenuItem key={i.to}><SidebarMenuButton asChild isActive={active} tooltip={label}><Link to={i.to} draggable={false} {...menu} className={cn("group relative flex items-center gap-3 rounded-md transition-colors", active && "bg-sidebar-accent text-sidebar-accent-foreground", flash === i.to && "ring-2 ring-primary")}>{active && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />}<Icon className="h-4 w-4" />{!collapsed && <span className="truncate">{label}</span>}</Link></SidebarMenuButton></SidebarMenuItem>;
+                  return <SidebarMenuItem key={i.to}><SidebarMenuButton asChild isActive={active} tooltip={label}><Link to={i.to} draggable={false} {...menu} className={cn("group relative flex items-center gap-3 rounded-md transition-colors", active && "bg-sidebar-accent text-sidebar-accent-foreground", flash === i.to && "ring-2 ring-primary")}>{active && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-primary" />}<Icon className="h-4 w-4" />{!collapsed && <span className="truncate">{label}</span>}{i.to === "/app/messages" && unreadMessageCount > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-destructive-foreground" title={`${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`}>{unreadMessageCount > 99 ? "99+" : unreadMessageCount}</span>}</Link></SidebarMenuButton></SidebarMenuItem>;
                 })}
                 {editing && !collapsed && items.filter((i) => groupOf(i) === group).length === 0 && <p className="px-2 py-1 text-[11px] text-muted-foreground">Drop a tab here</p>}
               </SidebarMenu>
