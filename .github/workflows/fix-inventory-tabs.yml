@@ -1,0 +1,36 @@
+name: Fix inventory tabs
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair inventory tab structure
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/routes/app.inventory.tsx')
+          s=p.read_text()
+          start=s.find('      <TabsContent value="expiry"')
+          end=s.find('    </Tabs>\n', start)
+          if start < 0 or end < 0: raise SystemExit('inventory tab markers not found')
+          replacement='''      <TabsContent value="expiry" className="mt-4">\n        <Section title="Expired batches — not sellable" medicines={meds} batches={expiredLots}/>\n        <Section title="Expired medicine summary" medicines={groups.exp} expiryCol/>\n        <Section title="Near expiry (30 days)" medicines={groups.nearExp} expiryCol/>\n      </TabsContent>\n      <TabsContent value="reconcile" className="mt-4">\n        <section className="surface-card mt-0 overflow-hidden"><div className="flex items-center justify-between border-b px-4 py-3"><div><div className="text-sm font-semibold">Batch reconciliation</div><p className="text-xs text-muted-foreground">Compares medicine aggregate stock with its lot quantities.</p></div><span className="rounded-full bg-muted px-2 py-1 text-xs">{reconciliation.length} issue{reconciliation.length===1?"":"s"}</span></div>{reconciliation.length===0?<div className="p-6 text-sm text-muted-foreground">No batch reconciliation differences found.</div>:<Table><TableHeader><TableRow><TableHead>Medicine</TableHead><TableHead className="text-right">Batches</TableHead><TableHead className="text-right">Batch qty</TableHead><TableHead className="text-right">Medicine qty</TableHead><TableHead className="text-right">Difference</TableHead><TableHead className="text-right">Expired qty</TableHead></TableRow></TableHeader><TableBody>{reconciliation.map(r=><TableRow key={r.medicineId}><TableCell className="font-medium">{r.medicineName}</TableCell><TableCell className="text-right">{r.batchCount}</TableCell><TableCell className="text-right tabular-nums">{r.totalBatchQuantity}</TableCell><TableCell className="text-right tabular-nums">{r.medicineQuantity}</TableCell><TableCell className={`text-right tabular-nums ${r.difference!==0?"text-destructive":""}`}>{r.difference>0?`+${r.difference}`:r.difference}</TableCell><TableCell className="text-right tabular-nums">{r.expiredQuantity}</TableCell></TableRow>)}</TableBody></Table>}</section>\n        <div className="mt-4 grid gap-4 md:grid-cols-2"><Section title="Out of stock" medicines={groups.out}/><Section title="Low stock" medicines={groups.low}/></div>\n      </TabsContent>\n'''
+          s=s[:start]+replacement+s[end:]
+          p.write_text(s)
+          PY
+      - name: Commit and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/routes/app.inventory.tsx
+          git commit -m 'Fix inventory tab content organization'
+          git push
+          git rm .github/workflows/fix-inventory-tabs.yml
+          git commit -m 'Remove one-time inventory repair workflow'
+          git push
