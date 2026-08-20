@@ -5,10 +5,17 @@ import { getRouter, getQueryClient } from "./router";
 import { bridge } from "./lib/electron-bridge";
 import { useProjectStore } from "./store/project-store";
 import { PasswordPromptHost } from "./components/PasswordPromptDialog";
+import { VoiceSearchOverlay } from "./components/VoiceSearchOverlay";
+import { installLanguageObserver } from "./lib/language";
 
 export default function App() {
   const [router] = useState(() => getRouter());
   const queryClient = getQueryClient();
+
+  useEffect(() => {
+    const cleanup = installLanguageObserver();
+    return cleanup;
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("medicore.theme");
@@ -30,6 +37,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
       <PasswordPromptHost />
+      <VoiceSearchOverlay />
     </QueryClientProvider>
   );
 }
