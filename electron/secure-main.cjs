@@ -2,7 +2,7 @@
 const http = require("node:http");
 const os = require("node:os");
 const dgram = require("node:dgram");
-const { app, ipcMain } = require("electron");
+const { app, ipcMain, session } = require("electron");
 const sqldb = require("./db.cjs");
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -37,6 +37,23 @@ function corsOrigin(req) {
   if (origin === "null" || origin === "http://localhost:8080" || origin === "http://127.0.0.1:8080") return origin;
   return null;
 }
+
+// Electron's Web Speech implementation requests microphone/media permission.
+// Explicitly grant it only to this application's own renderer so voice search
+// does not get Chromium's generic "not-allowed" error in the desktop build.
+app.whenReady().then(() => {
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (permission !== "media") return callback(false);
+    const url = details?.requestingUrl || webContents.getURL() || "";
+    const allowed = url.startsWith("file://") || url.startsWith("http://localhost:8080") || url.startsWith("http://127.0.0.1:8080");
+    callback(allowed);
+  });
+  ses.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+    if (permission !== "media") return false;
+    return requestingOrigin === "file://" || requestingOrigin === "http://localhost:8080" || requestingOrigin === "http://127.0.0.1:8080";
+  });
+});
 
 const discoverySocket = dgram.createSocket("udp4");
 discoverySocket.on("error", (err) => console.error("[server] discovery socket error:", err));
