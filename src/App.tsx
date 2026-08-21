@@ -8,7 +8,6 @@ import { PasswordPromptHost } from "./components/PasswordPromptDialog";
 import { VoiceSearchOverlay } from "./components/VoiceSearchOverlay";
 import { ActivityBadgeOverlay } from "./components/ActivityBadgeOverlay";
 import { ExternalLinkFixes } from "./components/ExternalLinkFixes";
-import { MedicineInteractionGuard } from "./components/MedicineInteractionGuard";
 import { installLanguageObserver } from "./lib/language";
 
 type ErrorState = { error: Error | null };
@@ -27,5 +26,5 @@ export default function App() {
   useEffect(() => installLanguageObserver(), []);
   useEffect(() => { const saved = localStorage.getItem("medicore.theme"); if (saved === "dark") document.documentElement.classList.add("dark"); }, []);
   useEffect(() => { const api = bridge(); if (!api) return; const off = api.app.onSaveAndQuit(async () => { const ok = await useProjectStore.getState().save(); await api.app.saveCompleted(ok); }); return off; }, []);
-  return <AppErrorBoundary><QueryClientProvider client={queryClient}><RouterProvider router={router} /><PasswordPromptHost /><VoiceSearchOverlay /><ActivityBadgeOverlay /><ExternalLinkFixes /><MedicineInteractionGuard /></QueryClientProvider></AppErrorBoundary>;
+  return <AppErrorBoundary><QueryClientProvider client={queryClient}><RouterProvider router={router} /><PasswordPromptHost /><VoiceSearchOverlay /><ActivityBadgeOverlay /><ExternalLinkFixes /></QueryClientProvider></AppErrorBoundary>;
 }
