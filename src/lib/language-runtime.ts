@@ -22,6 +22,17 @@ const COMMON: Record<string, Record<string, string>> = {
   vi:{"Sign out":"Đăng xuất","Sign in":"Đăng nhập","Add":"Thêm","New":"Mới","Edit":"Chỉnh sửa","Delete":"Xóa","Search":"Tìm kiếm","Save":"Lưu","Cancel":"Hủy","Open":"Mở","Close":"Đóng","Help":"Trợ giúp","Notifications":"Thông báo","Messages":"Tin nhắn","Send":"Gửi","Loading":"Đang tải"},
   th:{"Sign out":"ออกจากระบบ","Sign in":"เข้าสู่ระบบ","Add":"เพิ่ม","New":"ใหม่","Edit":"แก้ไข","Delete":"ลบ","Search":"ค้นหา","Save":"บันทึก","Cancel":"ยกเลิก","Open":"เปิด","Close":"ปิด","Help":"ช่วยเหลือ","Notifications":"การแจ้งเตือน","Messages":"ข้อความ","Send":"ส่ง","Loading":"กำลังโหลด"}
 };
+
+// Navigation labels were previously missing from the runtime dictionary, so
+// some sidebar items stayed in English after changing the application language.
+const NAV_TRANSLATIONS: Record<string, Record<string, string>> = {
+  ur: { Dashboard:"ڈیش بورڈ", "Sales (POS)":"فروخت (POS)", Bills:"بلز", Messages:"پیغامات", Medicines:"ادویات", Inventory:"انوینٹری", Racks:"ریکس", Purchases:"خریداری", Categories:"زمرہ جات", "Pharmacy Operations":"فارمیسی آپریشنز", "Workflow Engine":"ورک فلو انجن", Prescriptions:"نسخے", Suppliers:"سپلائرز", Customers:"گاہک", Calculator:"کیلکولیٹر", "Custom Macros":"حسبِ ضرورت میکروز", Reports:"رپورٹس", Settings:"ترتیبات", Main:"مین", People:"لوگ", Insights:"جائزہ" },
+  ar: { Dashboard:"لوحة التحكم", "Sales (POS)":"المبيعات (POS)", Bills:"الفواتير", Messages:"الرسائل", Medicines:"الأدوية", Inventory:"المخزون", Racks:"الرفوف", Purchases:"المشتريات", Categories:"الفئات", "Pharmacy Operations":"عمليات الصيدلية", "Workflow Engine":"محرك سير العمل", Prescriptions:"الوصفات الطبية", Suppliers:"الموردون", Customers:"العملاء", Calculator:"الحاسبة", "Custom Macros":"وحدات ماكرو مخصصة", Reports:"التقارير", Settings:"الإعدادات", Main:"الرئيسية", People:"الأشخاص", Insights:"الإحصاءات" },
+  hi: { Dashboard:"डैशबोर्ड", "Sales (POS)":"बिक्री (POS)", Bills:"बिल", Messages:"संदेश", Medicines:"दवाइयाँ", Inventory:"इन्वेंटरी", Racks:"रैक", Purchases:"खरीदारी", Categories:"श्रेणियाँ", "Pharmacy Operations":"फार्मेसी संचालन", "Workflow Engine":"वर्कफ़्लो इंजन", Prescriptions:"प्रिस्क्रिप्शन", Suppliers:"सप्लायर", Customers:"ग्राहक", Calculator:"कैलकुलेटर", "Custom Macros":"कस्टम मैक्रोज़", Reports:"रिपोर्ट", Settings:"सेटिंग्स", Main:"मुख्य", People:"लोग", Insights:"अंतर्दृष्टि" },
+  ps: { Dashboard:"ډشبورډ", "Sales (POS)":"پلور (POS)", Bills:"بیلونه", Messages:"پیغامونه", Medicines:"درمل", Inventory:"ذخیره", Racks:"ریکونه", Purchases:"پېرودنې", Categories:"وېشني", "Pharmacy Operations":"د درملتون عملیات", "Workflow Engine":"د کاري بهیر انجن", Prescriptions:"نسخې", Suppliers:"عرضه کوونکي", Customers:"پېرودونکي", Calculator:"حسابګر", "Custom Macros":"ځانګړي ماکروز", Reports:"راپورونه", Settings:"تنظیمات", Main:"اصلي", People:"خلک", Insights:"لیدنې" }
+};
+for (const [code, translations] of Object.entries(NAV_TRANSLATIONS)) Object.assign(COMMON[code] || (COMMON[code] = {}), translations);
+
 const originals = new WeakMap<Text,string>();
 const originalAttrs = new WeakMap<Element, Record<string,string>>();
 const ATTRS = ["placeholder","title","aria-label"];
