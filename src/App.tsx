@@ -9,6 +9,7 @@ import { VoiceSearchOverlay } from "./components/VoiceSearchOverlay";
 import { ActivityBadgeOverlay } from "./components/ActivityBadgeOverlay";
 import { ExternalLinkFixes } from "./components/ExternalLinkFixes";
 import { installLanguageObserver } from "./lib/language";
+import { installExtendedLanguageRuntime } from "./lib/language-runtime";
 
 type ErrorState = { error: Error | null };
 class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorState> {
@@ -24,6 +25,7 @@ export default function App() {
   const [router] = useState(() => getRouter());
   const queryClient = getQueryClient();
   useEffect(() => installLanguageObserver(), []);
+  useEffect(() => installExtendedLanguageRuntime(), []);
   useEffect(() => { const saved = localStorage.getItem("medicore.theme"); if (saved === "dark") document.documentElement.classList.add("dark"); }, []);
   useEffect(() => { const api = bridge(); if (!api) return; const off = api.app.onSaveAndQuit(async () => { const ok = await useProjectStore.getState().save(); await api.app.saveCompleted(ok); }); return off; }, []);
   return <AppErrorBoundary><QueryClientProvider client={queryClient}><RouterProvider router={router} /><PasswordPromptHost /><VoiceSearchOverlay /><ActivityBadgeOverlay /><ExternalLinkFixes /></QueryClientProvider></AppErrorBoundary>;
