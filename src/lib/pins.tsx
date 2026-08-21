@@ -32,57 +32,28 @@ function applyTabLabel(el: HTMLElement, label: string) { const nodes = tabLabelN
 export function ItemMenuHost() {
   const navigate = useNavigate(); const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [target, setTarget] = useState<MenuTarget | null>(null); const [at, setAt] = useState<Point>({ x: 0, y: 0 }); const [renaming, setRenaming] = useState(false); const [name, setName] = useState(""); const settings = useProjectStore((s) => s.data?.settings); const user = useSession((s) => s.user); const isAdmin = user?.role === "admin"; const canPin = isAdmin || user?.permissions.pinPanel === true; const settingsRef = useRef(settings); settingsRef.current = settings;
-
   useEffect(() => {
     openFn = (t, p) => { setTarget(t); setAt(p); setRenaming(false); setName(settingsRef.current?.tabRenames?.[t.tabKey ?? t.id] ?? ""); };
     const onTabContext = (e: MouseEvent) => {
       const raw = (e.target as HTMLElement)?.closest?.("[role=tab], [data-tab-navigation]") as HTMLElement | null;
-      const el = raw ?? (pathname === "/app/workflows" ? Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) => /^(Suggested next|Intent Queue|History|Workflow Builder)/.test((b.textContent || "").trim())) : null);
+      const clickedButton = (e.target as HTMLElement)?.closest?.("button") as HTMLElement | null;
+      const workflowTab = pathname === "/app/workflows" && clickedButton && /^(Suggested next|Intent Queue|History|Workflow Builder)/.test((clickedButton.textContent || "").replace(/\s+/g, " ").trim()) ? clickedButton : null;
+      const el = raw ?? workflowTab;
       if (!el || el.closest("aside")) return;
       const label = (el.textContent || el.getAttribute("aria-label") || "Tab").replace(/\s+/g, " ").trim();
       const value = el.getAttribute("data-value") || el.getAttribute("value") || el.getAttribute("data-tab-navigation") || label;
       const tabKey = tabRenameKey(pathname, value);
-      e.preventDefault(); e.stopPropagation();
-      openFn?.({ id: tabKey, label, kind: "nav-tab", to: pathname, canRename: true, element: el, tabKey } as MenuTarget, { x: e.clientX, y: e.clientY });
+      e.preventDefault(); e.stopPropagation(); openFn?.({ id: tabKey, label, kind: "nav-tab", to: pathname, canRename: true, element: el, tabKey } as MenuTarget, { x: e.clientX, y: e.clientY });
     };
-    document.addEventListener("contextmenu", onTabContext, true);
-    return () => { openFn = null; document.removeEventListener("contextmenu", onTabContext, true); };
+    document.addEventListener("contextmenu", onTabContext, true); return () => { openFn = null; document.removeEventListener("contextmenu", onTabContext, true); };
   }, [pathname]);
-
-  useEffect(() => {
-    if (!target) return;
-    const close = () => setTarget(null);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("resize", close); window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); };
-  }, [target]);
-
+  useEffect(() => { if (!target) return; const close = () => setTarget(null); const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; window.addEventListener("resize", close); window.addEventListener("keydown", onKey); return () => { window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); }; }, [target]);
   if (!target || !settings) return null;
-  const pinned = isPinned(settings, target.id); const left = Math.min(at.x, Math.max(8, window.innerWidth - MENU_W - 8)); const top = Math.min(at.y, Math.max(8, window.innerHeight - 360));
-  const isNav = target.kind === "nav" && !!target.to && NAV.some((n) => n.to === target.to); const isTab = target.kind === "nav-tab";
+  const pinned = isPinned(settings, target.id); const left = Math.min(at.x, Math.max(8, window.innerWidth - MENU_W - 8)); const top = Math.min(at.y, Math.max(8, window.innerHeight - 360)); const isNav = target.kind === "nav" && !!target.to && NAV.some((n) => n.to === target.to); const isTab = target.kind === "nav-tab";
   function close() { setTarget(null); setRenaming(false); }
-  function doRename() {
-    const value = name.trim(); const key = target!.tabKey ?? target!.id; renameTab(key, value);
-    if (target!.element) applyTabLabel(target!.element, value || target!.label);
-    toast.success(value ? "Renamed" : "Original name restored"); close();
-  }
-  function move(direction: "forward" | "backward" | "top" | "bottom") {
-    if (isNav && isAdmin && target.to) { moveNavItem(target.to, direction); toast.success(direction === "top" ? "Moved to top" : direction === "bottom" ? "Moved to bottom" : direction === "forward" ? "Moved right" : "Moved left"); close(); return; }
-    if (isTab && target.element && (direction === "forward" || direction === "backward")) {
-      const el = target.element; const parent = el.parentElement; if (!parent) return;
-      if (direction === "forward") { const next = el.nextElementSibling; if (next) parent.insertBefore(next, el); }
-      else { const prev = el.previousElementSibling; if (prev) parent.insertBefore(el, prev); }
-      toast.success(direction === "forward" ? "Moved right" : "Moved left"); close();
-    }
-  }
-  function openTarget() {
-    const el = target!.element;
-    close();
-    requestAnimationFrame(() => {
-      if (el && el.isConnected) { el.click(); return; }
-      if (target!.to) void navigate({ to: target!.to as any }).catch(() => window.location.assign(target!.to!));
-    });
-  }
+  function doRename() { const value = name.trim(); const key = target!.tabKey ?? target!.id; renameTab(key, value); if (target!.element) applyTabLabel(target!.element, value || target!.label); toast.success(value ? "Renamed" : "Original name restored"); close(); }
+  function move(direction: "forward" | "backward" | "top" | "bottom") { if (isNav && isAdmin && target.to) { moveNavItem(target.to, direction); toast.success(direction === "top" ? "Moved to top" : direction === "bottom" ? "Moved to bottom" : direction === "forward" ? "Moved right" : "Moved left"); close(); return; } if (isTab && target.element && (direction === "forward" || direction === "backward")) { const el = target.element; const parent = el.parentElement; if (!parent) return; if (direction === "forward") { const next = el.nextElementSibling; if (next) parent.insertBefore(next, el); } else { const prev = el.previousElementSibling; if (prev) parent.insertBefore(el, prev); } toast.success(direction === "forward" ? "Moved right" : "Moved left"); close(); } }
+  function openTarget() { const el = target!.element; const to = target!.to; close(); requestAnimationFrame(() => { if (el && el.isConnected) { el.click(); return; } if (to) void navigate({ to: to as any }).catch(() => window.location.assign(to)); }); }
   function addToMacro() { if (!target.to) return; try { sessionStorage.setItem("medipro:macro-prefill-route", target.to); } catch {} close(); requestAnimationFrame(() => { void navigate({ to: "/app/macros" as any }).catch(() => window.location.assign("/app/macros")); }); }
   return <div className="fixed inset-0 z-[100]" onMouseDown={() => close()} onContextMenu={(e) => { e.preventDefault(); close(); }}><div role="menu" style={{ left, top, width: MENU_W }} onMouseDown={(e) => e.stopPropagation()} className="absolute rounded-md border bg-popover p-1 text-popover-foreground shadow-elevated"><div className="truncate px-2 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">{target.label}</div>{target.to && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={openTarget}><ExternalLink className="h-4 w-4" /> Open</button>}{canPin && (isNav || isTab) && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { const nowPinned = togglePin(target); toast.success(nowPinned ? "Pinned to bottom panel" : "Unpinned"); close(); }}>{pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}{pinned ? "Unpin" : "Pin to bottom panel"}</button>}{target.canRename && isAdmin && !renaming && <button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => setRenaming(true)}><Pencil className="h-4 w-4" /> Rename</button>}{renaming && <div className="border-t p-2"><Input value={name} autoFocus placeholder={target.label} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doRename(); }} className="h-8 text-sm" /><div className="mt-2 flex gap-2"><Button size="sm" className="h-7 flex-1 text-xs" onClick={doRename}>Save</Button><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRenaming(false)}><X className="h-3.5 w-3.5" /></Button></div><p className="mt-1 text-[10px] text-muted-foreground">Blank restores the original name.</p></div>}{isNav && isAdmin && !renaming && <div className="mt-1 border-t pt-1"><p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Move navigation item</p><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("backward")}><ArrowUp className="h-4 w-4" /> Move left</button><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("forward")}><ArrowDown className="h-4 w-4" /> Move right</button><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("top")}><ChevronsUp className="h-4 w-4" /> Move to top</button><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("bottom")}><ChevronsDown className="h-4 w-4" /> Move to bottom</button></div>}{isTab && isAdmin && !renaming && <div className="mt-1 border-t pt-1"><p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Move tab</p><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("backward")}><ArrowUp className="h-4 w-4" /> Move left</button><button className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent" onClick={() => move("forward")}><ArrowDown className="h-4 w-4" /> Move right</button></div>}{(isNav || isTab) && isAdmin && <button className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-2 text-left text-sm hover:bg-accent" onClick={addToMacro}><Zap className="h-4 w-4" /> Add to Custom Macro</button>}{!canPin && <p className="px-2 py-1.5 text-xs text-muted-foreground">Pinning is disabled for your account.</p>}{target.canRename && !isAdmin && <p className="px-2 py-1 text-[11px] text-muted-foreground">Renaming and tab ordering are admin-only.</p>}</div></div>;
 }
