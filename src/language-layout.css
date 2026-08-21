@@ -1,0 +1,23 @@
+/*
+ * The pharmacy UI intentionally stays LTR for every supported language.
+ * Urdu is translated, but changing the language must not mirror/reorder
+ * the application layout, sidebars, cards, buttons, grids, or flex rows.
+ */
+html[data-language-dir="rtl"],
+html[data-language-dir="rtl"] body,
+html[data-language-dir="rtl"] #root {
+  direction: ltr !important;
+}
+
+/* Urdu text can still be entered/read naturally in text controls without
+ * changing the direction of the surrounding application layout. */
+html[data-language-dir="rtl"] input,
+html[data-language-dir="rtl"] textarea {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Keep UI alignment stable when components use logical text alignment. */
+html[data-language-dir="rtl"] [dir="rtl"] {
+  direction: ltr;
+}
