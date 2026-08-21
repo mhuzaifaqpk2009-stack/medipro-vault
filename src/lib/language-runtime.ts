@@ -23,8 +23,6 @@ const COMMON: Record<string, Record<string, string>> = {
   th:{"Sign out":"ออกจากระบบ","Sign in":"เข้าสู่ระบบ","Add":"เพิ่ม","New":"ใหม่","Edit":"แก้ไข","Delete":"ลบ","Search":"ค้นหา","Save":"บันทึก","Cancel":"ยกเลิก","Open":"เปิด","Close":"ปิด","Help":"ช่วยเหลือ","Notifications":"การแจ้งเตือน","Messages":"ข้อความ","Send":"ส่ง","Loading":"กำลังโหลด"}
 };
 
-// Navigation labels were previously missing from the runtime dictionary, so
-// some sidebar items stayed in English after changing the application language.
 const NAV_TRANSLATIONS: Record<string, Record<string, string>> = {
   ur: { Dashboard:"ڈیش بورڈ", "Sales (POS)":"فروخت (POS)", Bills:"بلز", Messages:"پیغامات", Medicines:"ادویات", Inventory:"انوینٹری", Racks:"ریکس", Purchases:"خریداری", Categories:"زمرہ جات", "Pharmacy Operations":"فارمیسی آپریشنز", "Workflow Engine":"ورک فلو انجن", Prescriptions:"نسخے", Suppliers:"سپلائرز", Customers:"گاہک", Calculator:"کیلکولیٹر", "Custom Macros":"حسبِ ضرورت میکروز", Reports:"رپورٹس", Settings:"ترتیبات", Main:"مین", People:"لوگ", Insights:"جائزہ" },
   ar: { Dashboard:"لوحة التحكم", "Sales (POS)":"المبيعات (POS)", Bills:"الفواتير", Messages:"الرسائل", Medicines:"الأدوية", Inventory:"المخزون", Racks:"الرفوف", Purchases:"المشتريات", Categories:"الفئات", "Pharmacy Operations":"عمليات الصيدلية", "Workflow Engine":"محرك سير العمل", Prescriptions:"الوصفات الطبية", Suppliers:"الموردون", Customers:"العملاء", Calculator:"الحاسبة", "Custom Macros":"وحدات ماكرو مخصصة", Reports:"التقارير", Settings:"الإعدادات", Main:"الرئيسية", People:"الأشخاص", Insights:"الإحصاءات" },
@@ -37,8 +35,27 @@ const originals = new WeakMap<Text,string>();
 const originalAttrs = new WeakMap<Element, Record<string,string>>();
 const ATTRS = ["placeholder","title","aria-label"];
 export function installExtendedLanguageRuntime(){
-  const apply=()=>{ const code=localStorage.getItem("medicore.language")||"en"; if(code==="en") return; const dict=COMMON[code]||{}; const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n:Node|null; while(n=walker.nextNode()){ const node=n as Text; if(!originals.has(node)) originals.set(node,node.nodeValue||""); const original=originals.get(node)||""; const clean=original.trim(); if(!clean||clean.length>180) continue; const translated=dict[clean]; if(translated) node.nodeValue=original.replace(clean,translated); }
-    document.querySelectorAll<HTMLElement>("*").forEach(el=>{ const saved=originalAttrs.get(el)||{}; for(const attr of ATTRS){ const value=el.getAttribute(attr); if(value!==null && saved[attr]===undefined) saved[attr]=value; const original=saved[attr]; if(original && dict[original]) el.setAttribute(attr,dict[original]); } if(Object.keys(saved).length) originalAttrs.set(el,saved); });
+  const apply=()=>{
+    const code=localStorage.getItem("medicore.language")||"en";
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n:Node|null;
+    while(n=walker.nextNode()){
+      const node=n as Text;
+      if(!originals.has(node)) originals.set(node,node.nodeValue||"");
+      const original=originals.get(node)||"";
+      if(code==="en"){ if(node.nodeValue!==original) node.nodeValue=original; continue; }
+      const clean=original.trim(); if(!clean||clean.length>180) continue;
+      const translated=(COMMON[code]||{})[clean]; if(translated) node.nodeValue=original.replace(clean,translated);
+    }
+    document.querySelectorAll<HTMLElement>("*").forEach(el=>{
+      const saved=originalAttrs.get(el)||{};
+      for(const attr of ATTRS){
+        const value=el.getAttribute(attr); if(value!==null && saved[attr]===undefined) saved[attr]=value;
+        const original=saved[attr];
+        if(original) el.setAttribute(attr,code==="en" ? original : ((COMMON[code]||{})[original] || original));
+      }
+      if(Object.keys(saved).length) originalAttrs.set(el,saved);
+    });
   };
-  const observer=new MutationObserver(()=>{ if((window as any).__medicoreExtendedLangBusy)return; (window as any).__medicoreExtendedLangBusy=true; requestAnimationFrame(()=>{try{apply()}finally{(window as any).__medicoreExtendedLangBusy=false}})}); observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:ATTRS}); apply(); return()=>observer.disconnect();
+  const observer=new MutationObserver(()=>{ if((window as any).__medicoreExtendedLangBusy)return; (window as any).__medicoreExtendedLangBusy=true; requestAnimationFrame(()=>{try{apply()}finally{(window as any).__medicoreExtendedLangBusy=false}})});
+  observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:ATTRS}); apply(); return()=>observer.disconnect();
 }
