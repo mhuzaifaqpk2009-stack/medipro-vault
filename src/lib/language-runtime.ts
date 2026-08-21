@@ -1,61 +1,49 @@
-const COMMON: Record<string, Record<string, string>> = {
-  ur:{"Sign out":"سائن آؤٹ","Sign in":"سائن اِن","Add":"شامل کریں","New":"نیا","Edit":"ترمیم","Delete":"حذف کریں","Search":"تلاش","Save":"محفوظ کریں","Cancel":"منسوخ","Open":"کھولیں","Close":"بند کریں","Help":"مدد","Notifications":"اطلاعات","Messages":"پیغامات","Send":"بھیجیں","Loading":"لوڈ ہو رہا ہے"},
-  ar:{"Sign out":"تسجيل الخروج","Sign in":"تسجيل الدخول","Add":"إضافة","New":"جديد","Edit":"تعديل","Delete":"حذف","Search":"بحث","Save":"حفظ","Cancel":"إلغاء","Open":"فتح","Close":"إغلاق","Help":"مساعدة","Notifications":"الإشعارات","Messages":"الرسائل","Send":"إرسال","Loading":"جار التحميل"},
-  hi:{"Sign out":"साइन आउट","Sign in":"साइन इन","Add":"जोड़ें","New":"नया","Edit":"संपादित करें","Delete":"हटाएँ","Search":"खोजें","Save":"सहेजें","Cancel":"रद्द करें","Open":"खोलें","Close":"बंद करें","Help":"मदद","Notifications":"सूचनाएँ","Messages":"संदेश","Send":"भेजें","Loading":"लोड हो रहा है"},
-  bn:{"Sign out":"সাইন আউট","Sign in":"সাইন ইন","Add":"যোগ করুন","New":"নতুন","Edit":"সম্পাদনা","Delete":"মুছুন","Search":"অনুসন্ধান","Save":"সংরক্ষণ","Cancel":"বাতিল","Open":"খুলুন","Close":"বন্ধ করুন","Help":"সহায়তা","Notifications":"বিজ্ঞপ্তি","Messages":"বার্তা","Send":"পাঠান","Loading":"লোড হচ্ছে"},
-  pa:{"Sign out":"ਸਾਈਨ ਆਉਟ","Sign in":"ਸਾਈਨ ਇਨ","Add":"ਸ਼ਾਮਲ ਕਰੋ","New":"ਨਵਾਂ","Edit":"ਸੋਧੋ","Delete":"ਮਿਟਾਓ","Search":"ਖੋਜੋ","Save":"ਸੁਰੱਖਿਅਤ ਕਰੋ","Cancel":"ਰੱਦ ਕਰੋ","Open":"ਖੋਲ੍ਹੋ","Close":"ਬੰਦ ਕਰੋ","Help":"ਮਦਦ","Notifications":"ਸੂਚਨਾਵਾਂ","Messages":"ਸੁਨੇਹੇ","Send":"ਭੇਜੋ","Loading":"ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ"},
-  fa:{"Sign out":"خروج","Sign in":"ورود","Add":"افزودن","New":"جدید","Edit":"ویرایش","Delete":"حذف","Search":"جستجو","Save":"ذخیره","Cancel":"لغو","Open":"باز کردن","Close":"بستن","Help":"راهنما","Notifications":"اعلان‌ها","Messages":"پیام‌ها","Send":"ارسال","Loading":"در حال بارگذاری"},
-  tr:{"Sign out":"Çıkış yap","Sign in":"Giriş yap","Add":"Ekle","New":"Yeni","Edit":"Düzenle","Delete":"Sil","Search":"Ara","Save":"Kaydet","Cancel":"İptal","Open":"Aç","Close":"Kapat","Help":"Yardım","Notifications":"Bildirimler","Messages":"Mesajlar","Send":"Gönder","Loading":"Yükleniyor"},
-  id:{"Sign out":"Keluar","Sign in":"Masuk","Add":"Tambah","New":"Baru","Edit":"Edit","Delete":"Hapus","Search":"Cari","Save":"Simpan","Cancel":"Batal","Open":"Buka","Close":"Tutup","Help":"Bantuan","Notifications":"Notifikasi","Messages":"Pesan","Send":"Kirim","Loading":"Memuat"},
-  ms:{"Sign out":"Log keluar","Sign in":"Log masuk","Add":"Tambah","New":"Baharu","Edit":"Edit","Delete":"Padam","Search":"Cari","Save":"Simpan","Cancel":"Batal","Open":"Buka","Close":"Tutup","Help":"Bantuan","Notifications":"Pemberitahuan","Messages":"Mesej","Send":"Hantar","Loading":"Memuatkan"},
-  es:{"Sign out":"Cerrar sesión","Sign in":"Iniciar sesión","Add":"Añadir","New":"Nuevo","Edit":"Editar","Delete":"Eliminar","Search":"Buscar","Save":"Guardar","Cancel":"Cancelar","Open":"Abrir","Close":"Cerrar","Help":"Ayuda","Notifications":"Notificaciones","Messages":"Mensajes","Send":"Enviar","Loading":"Cargando"},
-  fr:{"Sign out":"Se déconnecter","Sign in":"Se connecter","Add":"Ajouter","New":"Nouveau","Edit":"Modifier","Delete":"Supprimer","Search":"Rechercher","Save":"Enregistrer","Cancel":"Annuler","Open":"Ouvrir","Close":"Fermer","Help":"Aide","Notifications":"Notifications","Messages":"Messages","Send":"Envoyer","Loading":"Chargement"},
-  de:{"Sign out":"Abmelden","Sign in":"Anmelden","Add":"Hinzufügen","New":"Neu","Edit":"Bearbeiten","Delete":"Löschen","Search":"Suchen","Save":"Speichern","Cancel":"Abbrechen","Open":"Öffnen","Close":"Schließen","Help":"Hilfe","Notifications":"Benachrichtigungen","Messages":"Nachrichten","Send":"Senden","Loading":"Wird geladen"},
-  it:{"Sign out":"Esci","Sign in":"Accedi","Add":"Aggiungi","New":"Nuovo","Edit":"Modifica","Delete":"Elimina","Search":"Cerca","Save":"Salva","Cancel":"Annulla","Open":"Apri","Close":"Chiudi","Help":"Aiuto","Notifications":"Notifiche","Messages":"Messaggi","Send":"Invia","Loading":"Caricamento"},
-  pt:{"Sign out":"Sair","Sign in":"Entrar","Add":"Adicionar","New":"Novo","Edit":"Editar","Delete":"Excluir","Search":"Pesquisar","Save":"Salvar","Cancel":"Cancelar","Open":"Abrir","Close":"Fechar","Help":"Ajuda","Notifications":"Notificações","Messages":"Mensagens","Send":"Enviar","Loading":"Carregando"},
-  ru:{"Sign out":"Выйти","Sign in":"Войти","Add":"Добавить","New":"Новый","Edit":"Изменить","Delete":"Удалить","Search":"Поиск","Save":"Сохранить","Cancel":"Отмена","Open":"Открыть","Close":"Закрыть","Help":"Помощь","Notifications":"Уведомления","Messages":"Сообщения","Send":"Отправить","Loading":"Загрузка"},
-  zh:{"Sign out":"退出","Sign in":"登录","Add":"添加","New":"新建","Edit":"编辑","Delete":"删除","Search":"搜索","Save":"保存","Cancel":"取消","Open":"打开","Close":"关闭","Help":"帮助","Notifications":"通知","Messages":"消息","Send":"发送","Loading":"加载中"},
-  ja:{"Sign out":"サインアウト","Sign in":"サインイン","Add":"追加","New":"新規","Edit":"編集","Delete":"削除","Search":"検索","Save":"保存","Cancel":"キャンセル","Open":"開く","Close":"閉じる","Help":"ヘルプ","Notifications":"通知","Messages":"メッセージ","Send":"送信","Loading":"読み込み中"},
-  ko:{"Sign out":"로그아웃","Sign in":"로그인","Add":"추가","New":"새로 만들기","Edit":"편집","Delete":"삭제","Search":"검색","Save":"저장","Cancel":"취소","Open":"열기","Close":"닫기","Help":"도움말","Notifications":"알림","Messages":"메시지","Send":"보내기","Loading":"로드 중"},
-  ps:{"Sign out":"وتل","Sign in":"ننوتل","Add":"زیاتول","New":"نوی","Edit":"سمول","Delete":"ړنګول","Search":"لټون","Save":"ساتل","Cancel":"لغوه","Open":"خلاصول","Close":"بندول","Help":"مرسته","Notifications":"خبرتیاوې","Messages":"پیغامونه","Send":"لېږل","Loading":"پورته کېږي"},
-  uk:{"Sign out":"Вийти","Sign in":"Увійти","Add":"Додати","New":"Новий","Edit":"Редагувати","Delete":"Видалити","Search":"Пошук","Save":"Зберегти","Cancel":"Скасувати","Open":"Відкрити","Close":"Закрити","Help":"Допомога","Notifications":"Сповіщення","Messages":"Повідомлення","Send":"Надіслати","Loading":"Завантаження"},
-  vi:{"Sign out":"Đăng xuất","Sign in":"Đăng nhập","Add":"Thêm","New":"Mới","Edit":"Chỉnh sửa","Delete":"Xóa","Search":"Tìm kiếm","Save":"Lưu","Cancel":"Hủy","Open":"Mở","Close":"Đóng","Help":"Trợ giúp","Notifications":"Thông báo","Messages":"Tin nhắn","Send":"Gửi","Loading":"Đang tải"},
-  th:{"Sign out":"ออกจากระบบ","Sign in":"เข้าสู่ระบบ","Add":"เพิ่ม","New":"ใหม่","Edit":"แก้ไข","Delete":"ลบ","Search":"ค้นหา","Save":"บันทึก","Cancel":"ยกเลิก","Open":"เปิด","Close":"ปิด","Help":"ช่วยเหลือ","Notifications":"การแจ้งเตือน","Messages":"ข้อความ","Send":"ส่ง","Loading":"กำลังโหลด"}
-};
+import { getLanguage, translateText, APP_LANGUAGES } from "@/lib/language";
 
-const NAV_TRANSLATIONS: Record<string, Record<string, string>> = {
-  ur: { Dashboard:"ڈیش بورڈ", "Sales (POS)":"فروخت (POS)", Bills:"بلز", Messages:"پیغامات", Medicines:"ادویات", Inventory:"انوینٹری", Racks:"ریکس", Purchases:"خریداری", Categories:"زمرہ جات", "Pharmacy Operations":"فارمیسی آپریشنز", "Workflow Engine":"ورک فلو انجن", Prescriptions:"نسخے", Suppliers:"سپلائرز", Customers:"گاہک", Calculator:"کیلکولیٹر", "Custom Macros":"حسبِ ضرورت میکروز", Reports:"رپورٹس", Settings:"ترتیبات", Main:"مین", People:"لوگ", Insights:"جائزہ" },
-  ar: { Dashboard:"لوحة التحكم", "Sales (POS)":"المبيعات (POS)", Bills:"الفواتير", Messages:"الرسائل", Medicines:"الأدوية", Inventory:"المخزون", Racks:"الرفوف", Purchases:"المشتريات", Categories:"الفئات", "Pharmacy Operations":"عمليات الصيدلية", "Workflow Engine":"محرك سير العمل", Prescriptions:"الوصفات الطبية", Suppliers:"الموردون", Customers:"العملاء", Calculator:"الحاسبة", "Custom Macros":"وحدات ماكرو مخصصة", Reports:"التقارير", Settings:"الإعدادات", Main:"الرئيسية", People:"الأشخاص", Insights:"الإحصاءات" },
-  hi: { Dashboard:"डैशबोर्ड", "Sales (POS)":"बिक्री (POS)", Bills:"बिल", Messages:"संदेश", Medicines:"दवाइयाँ", Inventory:"इन्वेंटरी", Racks:"रैक", Purchases:"खरीदारी", Categories:"श्रेणियाँ", "Pharmacy Operations":"फार्मेसी संचालन", "Workflow Engine":"वर्कफ़्लो इंजन", Prescriptions:"प्रिस्क्रिप्शन", Suppliers:"सप्लायर", Customers:"ग्राहक", Calculator:"कैलकुलेटर", "Custom Macros":"कस्टम मैक्रोज़", Reports:"रिपोर्ट", Settings:"सेटिंग्स", Main:"मुख्य", People:"लोग", Insights:"अंतर्दृष्टि" },
-  ps: { Dashboard:"ډشبورډ", "Sales (POS)":"پلور (POS)", Bills:"بیلونه", Messages:"پیغامونه", Medicines:"درمل", Inventory:"ذخیره", Racks:"ریکونه", Purchases:"پېرودنې", Categories:"وېشني", "Pharmacy Operations":"د درملتون عملیات", "Workflow Engine":"د کاري بهیر انجن", Prescriptions:"نسخې", Suppliers:"عرضه کوونکي", Customers:"پېرودونکي", Calculator:"حسابګر", "Custom Macros":"ځانګړي ماکروز", Reports:"راپورونه", Settings:"تنظیمات", Main:"اصلي", People:"خلک", Insights:"لیدنې" }
-};
-for (const [code, translations] of Object.entries(NAV_TRANSLATIONS)) Object.assign(COMMON[code] || (COMMON[code] = {}), translations);
+const originals = new WeakMap<Text, string>();
+const originalAttrs = new WeakMap<Element, Record<string, string>>();
+const ATTRS = ["placeholder", "title", "aria-label"] as const;
 
-const originals = new WeakMap<Text,string>();
-const originalAttrs = new WeakMap<Element, Record<string,string>>();
-const ATTRS = ["placeholder","title","aria-label"];
-export function installExtendedLanguageRuntime(){
-  const apply=()=>{
-    const code=localStorage.getItem("medicore.language")||"en";
-    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT); let n:Node|null;
-    while(n=walker.nextNode()){
-      const node=n as Text;
-      if(!originals.has(node)) originals.set(node,node.nodeValue||"");
-      const original=originals.get(node)||"";
-      if(code==="en"){ if(node.nodeValue!==original) node.nodeValue=original; continue; }
-      const clean=original.trim(); if(!clean||clean.length>180) continue;
-      const translated=(COMMON[code]||{})[clean]; if(translated) node.nodeValue=original.replace(clean,translated);
+function applyLanguage() {
+  const code = getLanguage();
+  const lang = APP_LANGUAGES.find((item) => item.code === code) || APP_LANGUAGES[0];
+  document.documentElement.lang = lang.code;
+  document.documentElement.dir = lang.dir || "ltr";
+  document.documentElement.dataset.languageDir = lang.dir || "ltr";
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) nodes.push(node as Text);
+
+  for (const textNode of nodes) {
+    if (!originals.has(textNode)) originals.set(textNode, textNode.nodeValue || "");
+    const original = originals.get(textNode) || "";
+    if (!original.trim() || original.length > 500) continue;
+    textNode.nodeValue = translateText(original, code);
+  }
+
+  document.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    const saved = originalAttrs.get(element) || {};
+    for (const attr of ATTRS) {
+      const value = element.getAttribute(attr);
+      if (value !== null && saved[attr] === undefined) saved[attr] = value;
+      const original = saved[attr];
+      if (original !== undefined) element.setAttribute(attr, translateText(original, code));
     }
-    document.querySelectorAll<HTMLElement>("*").forEach(el=>{
-      const saved=originalAttrs.get(el)||{};
-      for(const attr of ATTRS){
-        const value=el.getAttribute(attr); if(value!==null && saved[attr]===undefined) saved[attr]=value;
-        const original=saved[attr];
-        if(original) el.setAttribute(attr,code==="en" ? original : ((COMMON[code]||{})[original] || original));
-      }
-      if(Object.keys(saved).length) originalAttrs.set(el,saved);
+    if (Object.keys(saved).length) originalAttrs.set(element, saved);
+  });
+}
+
+export function installExtendedLanguageRuntime() {
+  const observer = new MutationObserver(() => {
+    if ((window as any).__medicoreExtendedLangBusy) return;
+    (window as any).__medicoreExtendedLangBusy = true;
+    requestAnimationFrame(() => {
+      try { applyLanguage(); } finally { (window as any).__medicoreExtendedLangBusy = false; }
     });
-  };
-  const observer=new MutationObserver(()=>{ if((window as any).__medicoreExtendedLangBusy)return; (window as any).__medicoreExtendedLangBusy=true; requestAnimationFrame(()=>{try{apply()}finally{(window as any).__medicoreExtendedLangBusy=false}})});
-  observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:ATTRS}); apply(); return()=>observer.disconnect();
+  });
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: [...ATTRS] });
+  applyLanguage();
+  return () => observer.disconnect();
 }
