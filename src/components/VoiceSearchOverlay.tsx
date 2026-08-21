@@ -15,7 +15,41 @@ export function VoiceSearchOverlay() {
   useEffect(() => { positionButton(); const fn = () => positionButton(); window.addEventListener("resize", fn); window.addEventListener("scroll", fn, true); return () => { window.removeEventListener("resize", fn); window.removeEventListener("scroll", fn, true); }; }, [target]);
   useEffect(() => () => { try { recognitionRef.current?.abort(); } catch {} }, []);
   const close = () => { try { recognitionRef.current?.stop(); } catch {} recognitionRef.current = null; setListening(false); setOpen(false); setError(""); };
-  const start = () => { const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; if (!Speech) { setError("Voice recognition is not available in this application. Enable Windows speech recognition or use a supported Chromium speech service."); return; } transcriptRef.current = ""; setTranscript(""); setError(""); const r = new Speech(); recognitionRef.current = r; const code = localStorage.getItem("medicore.language") || "en"; r.lang = VOICE_LOCALES[code] || "en-US"; r.continuous = true; r.interimResults = true; r.onstart = () => setListening(true); r.onerror = (e: any) => { setListening(false); setError(e?.error ? `Voice recognition: ${e.error}` : "Voice recognition could not start."); }; r.onend = () => setListening(false); r.onresult = (event: any) => { let finalText = transcriptRef.current; let interim = ""; for (let i = event.resultIndex; i < event.results.length; i += 1) { const text = event.results[i]?.[0]?.transcript || ""; if (event.results[i]?.isFinal) finalText = `${finalText} ${text}`.trim(); else interim += text; } transcriptRef.current = finalText; setTranscript(`${finalText} ${interim}`.trim()); }; try { r.start(); } catch (e) { setError("Voice recognition could not start. Try again."); } };
+  const start = async () => {
+    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Speech) { setError("Voice recognition is not available in this application. Please use a supported browser speech service."); return; }
+    transcriptRef.current = ""; setTranscript(""); setError("");
+    try {
+      // Request microphone access first. Electron otherwise reports the
+      // SpeechRecognition failure as the unhelpful `not-allowed` error.
+      if (navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    } catch (e: any) {
+      const name = String(e?.name || "");
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        setError("Microphone permission was denied. Allow microphone access for Huzaifa Pharmacy in Windows settings and try again.");
+      } else {
+        setError("Microphone could not be opened. Check that a microphone is connected and available.");
+      }
+      return;
+    }
+    const r = new Speech(); recognitionRef.current = r;
+    const code = localStorage.getItem("medicore.language") || "en";
+    r.lang = VOICE_LOCALES[code] || "en-US"; r.continuous = true; r.interimResults = true;
+    r.onstart = () => setListening(true);
+    r.onerror = (e: any) => {
+      setListening(false);
+      const reason = String(e?.error || "");
+      if (reason === "not-allowed") setError("Microphone access was blocked by the speech service. If microphone permission is already allowed, this Electron build cannot use Chromium Web Speech recognition; use the browser version or enable a native speech backend.");
+      else if (reason === "network") setError("Speech recognition service is unavailable. Check your internet connection and try again.");
+      else setError(reason ? `Voice recognition: ${reason}` : "Voice recognition could not start.");
+    };
+    r.onend = () => setListening(false);
+    r.onresult = (event: any) => { let finalText = transcriptRef.current; let interim = ""; for (let i = event.resultIndex; i < event.results.length; i += 1) { const text = event.results[i]?.[0]?.transcript || ""; if (event.results[i]?.isFinal) finalText = `${finalText} ${text}`.trim(); else interim += text; } transcriptRef.current = finalText; setTranscript(`${finalText} ${interim}`.trim()); };
+    try { r.start(); } catch { setError("Voice recognition could not start. Try again."); }
+  };
   const stop = () => { try { recognitionRef.current?.stop(); } catch {} recognitionRef.current = null; setListening(false); const value = transcriptRef.current.trim() || transcript.trim(); const currentTarget = targetRef.current; if (value && currentTarget) setInputValue(currentTarget, value); setOpen(false); currentTarget?.focus(); };
   if (!target) return null;
   return <>
